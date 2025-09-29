@@ -154,6 +154,7 @@ extern "C" void app_main(void)
     register_setAllExpIO();
     register_setxxxResOut();
     register_getExpMask();
+    register_fuelResFuncs();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
