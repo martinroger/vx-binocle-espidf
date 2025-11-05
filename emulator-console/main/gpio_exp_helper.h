@@ -42,7 +42,7 @@ esp_err_t ret = ESP_OK;
     {
         expanders[0]->multiPinMode(0xFFFF,OUTPUT);
         expanders[0]->multiDigitalWrite(0xFFFF,LOW);
-        expanders[0]->multiDigitalWrite(0xC120,HIGH);
+        expanders[0]->multiDigitalWrite(0xC121,HIGH); // Probably needs to be updated ?
         expanders[0]->printStatus();
     }
     

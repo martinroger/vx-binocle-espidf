@@ -182,11 +182,11 @@ static int set_ignition(int argc, char **argv)
 
     if (setActHL_args.level->count > 0)
     {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set to %s \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -195,7 +195,7 @@ static int set_ignition(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled to %s \n", nickname, !internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -842,11 +842,11 @@ static int set_backlight(int argc, char **argv)
 
     if (setActHL_args.level->count > 0)
     {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set to %s \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -855,7 +855,7 @@ static int set_backlight(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled to %s \n", nickname, !internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -1360,7 +1360,7 @@ static int incFuelResLevel(int argc, char **argv)
 static int decFuelResLevel(int argc, char **argv)
 {
     // Reset if already at minimum value
-    if (fuelResLevel <= 19)
+    if (fuelResLevel <= 1)
     {
         printf("Resistance level already at min, resetting resistor network configuration\n");
         fuelResLevel = 1;

@@ -313,7 +313,7 @@ static int setCoolant(int argc, char **argv)
 
 static void register_setCoolant(void)
 {
-    setCoolant_args.temperature = arg_dbl1(NULL, NULL, "<temperature>", "Integral temperature in °C");
+    setCoolant_args.temperature = arg_dbl1(NULL, NULL, "<temperature>", "Float temperature in °C");
     setCoolant_args.end = arg_end(3);
 
     const esp_console_cmd_t cmd = {
