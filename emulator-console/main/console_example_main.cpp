@@ -109,7 +109,7 @@ extern "C" void app_main(void)
     /* Prompt to be printed before each line.
      * This can be customized, made dynamic, etc.
      */
-    repl_config.prompt = PROMPT_STR ">";
+    repl_config.prompt = PROMPT_STR "#";
     repl_config.max_cmdline_length = CONFIG_CONSOLE_MAX_COMMAND_LINE_LENGTH;
 
     initialize_nvs();
