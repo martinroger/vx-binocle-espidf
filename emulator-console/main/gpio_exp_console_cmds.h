@@ -1387,12 +1387,12 @@ static int decFuelResLevel(int argc, char **argv)
         return 1;
 
     // Set the pins of the mask
-    if (expanders[1]->multiDigitalWrite(fuelResMasks[fuelResLevel], HIGH) == false)
+    if (expanders[1]->multiDigitalWrite(fuelResMasks[fuelResLevel-1], HIGH) == false)
         return 1;
 
     // Publishes the mask and values
-    printf("Mask set on resistance network : 0x%x \n",fuelResMasks[fuelResLevel]);
-    printf("Level set : %u \t Expected resistance \t%.1f Ohm\n", fuelResLevel, fuelResValues[fuelResLevel]);
+    printf("Mask set on resistance network : 0x%x \n",fuelResMasks[fuelResLevel-1]);
+    printf("Level set : %u \t Expected resistance \t%.1f Ohm\n", fuelResLevel, fuelResValues[fuelResLevel-1]);
 
     return 0;
 }
