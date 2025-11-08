@@ -143,9 +143,12 @@ extern "C" void app_main(void)
     register_set_channel_freq();
     register_getChannelsInfo();
     register_setCoolant();
+    register_getCoolant();
     register_setRPM();
+    register_getRPM();
     register_setSpeedKPH();
     register_setSpeedMPH();
+    register_getSpeed();
 
     register_setExpIO();
     register_printExpStatus();
@@ -154,6 +157,7 @@ extern "C" void app_main(void)
     register_setAllExpIO();
     register_setxxxResOut();
     register_getExpMask();
+    register_setExpMask();
     register_fuelResFuncs();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)

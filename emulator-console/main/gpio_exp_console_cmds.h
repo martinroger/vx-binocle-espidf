@@ -1488,3 +1488,74 @@ static void register_getExpMask(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
 }
 #pragma endregion
+
+#pragma region setExpMask
+// Basic set single IO output
+static struct
+{
+    struct arg_int *exp_id;
+    struct arg_int *mask;
+    struct arg_end *end;
+} setExpMask_args;
+
+/// @brief Set a specific expander's current pin mask
+/// @param argc Expander ID as input and mask
+/// @param argv
+/// @return
+static int setExpMask(int argc, char **argv)
+{
+    int nerrors = arg_parse(argc, argv, (void **)&setExpMask_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setExpMask_args.end, argv[0]);
+        return 1;
+    }
+    assert(setExpMask_args.exp_id->count == 1);
+    assert(setExpMask_args.mask->count > 0);
+    assert(setExpMask_args.exp_id->ival[0] > -1);
+    assert(setExpMask_args.mask->ival[0] <= 0xFFFF);
+
+    // Check this expander exists
+    if (expanders[setExpMask_args.exp_id->ival[0]] == nullptr)
+    {
+        printf("Not a valid expander ID\n");
+        return 1;
+    }
+
+    // Force GPIO output mode
+    printf("Forcing all GPIO in output mode.\n");
+    if (expanders[setExpMask_args.exp_id->ival[0]]->multiPinMode(0xFFFF, OUTPUT) == false)
+        return 1;
+
+    // Reset all pins to low
+    if (expanders[setExpMask_args.exp_id->ival[0]]->multiDigitalWrite(0xFFFF, LOW) == false)
+        return 1;
+
+    // Set the pins of the mask
+    if (expanders[setExpMask_args.exp_id->ival[0]]->multiDigitalWrite(setExpMask_args.mask->ival[0], HIGH) == false)
+        return 1;
+    
+
+    // Feedback
+    printf("Expander %u mask: %x\n", setExpMask_args.exp_id->ival[0], setExpMask_args.exp_id->ival[0]);
+    return 0;
+}
+
+/// @brief Register the setExpMask function
+/// @param
+static void register_setExpMask(void)
+{
+    setExpMask_args.exp_id = arg_int1(NULL, NULL, "0..2", "Expander ID");
+    setExpMask_args.mask = arg_int1(NULL, NULL, NULL,"Mask");
+    setExpMask_args.end = arg_end(3);
+
+    const esp_console_cmd_t cmd = {
+        .command = "setExpMask",
+        .help = "Set the current pin mask of a given expander",
+        .hint = NULL,
+        .func = &setExpMask,
+        .argtable = &setExpMask_args};
+
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+#pragma endregion

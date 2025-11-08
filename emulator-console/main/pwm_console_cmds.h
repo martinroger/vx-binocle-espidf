@@ -241,12 +241,14 @@ static void register_getChannelsInfo()
 }
 
 // Coolant temperature SET function
-
+#pragma region Coolant temperature
 static struct
 {
     struct arg_dbl *temperature;
     struct arg_end *end;
 } setCoolant_args;
+
+static double actual_temperature;
 
 static int setCoolant(int argc, char **argv)
 {
@@ -304,7 +306,7 @@ static int setCoolant(int argc, char **argv)
     vTaskDelay(pdMS_TO_TICKS(100));
     double actual_duty = (100.0 * ledc_get_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)(target_channel))) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     // uint32_t actual_duty = (100*ledc_get_duty(LEDC_LOW_SPEED_MODE,target_channel)) / ((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]);
-    double actual_temperature = COEFF_DUTY_TO_COOLANT_DEGC_M * actual_duty + COEFF_DUTY_TO_COOLANT_DEGC_P;
+    actual_temperature = COEFF_DUTY_TO_COOLANT_DEGC_M * actual_duty + COEFF_DUTY_TO_COOLANT_DEGC_P;
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     printf("Coolant channel %lu set to target duty %.2f pc at frequency %luHz, actual temperature %.2f\n", (uint32_t)target_channel, actual_duty, actual_freq, actual_temperature);
 
@@ -326,6 +328,34 @@ static void register_setCoolant(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
 }
 
+// Get coolant temperature
+static int getCoolant(int argc, char **argv)
+{
+    const ledc_channel_t target_channel = LEDC_CHANNEL_0;
+    
+    double actual_duty = (100.0 * ledc_get_duty(LEDC_LOW_SPEED_MODE, (ledc_channel_t)(target_channel))) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
+    // uint32_t actual_duty = (100*ledc_get_duty(LEDC_LOW_SPEED_MODE,target_channel)) / ((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]);
+    actual_temperature = COEFF_DUTY_TO_COOLANT_DEGC_M * actual_duty + COEFF_DUTY_TO_COOLANT_DEGC_P;
+    
+    printf("%.2f\n",actual_temperature);
+    return 0;
+}
+
+static void register_getCoolant(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "getCoolant",
+        .help = "Get coolant temperature (actual)",
+        .hint = NULL,
+        .func = &getCoolant,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
+
+#pragma endregion
+
+#pragma region RPM
 // RPM SET function
 static struct
 {
@@ -560,6 +590,27 @@ static int decRPM(int argc, char **argv)
     return 0;
 }
 
+static int getRPM(int argc, char **argv) 
+{
+    const ledc_channel_t target_channel = LEDC_CHANNEL_1;
+    uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
+    uint32_t actual_RPM = (uint32_t)(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
+    current_rpm = actual_RPM;
+    printf("%lu\n",current_rpm);
+    return 0;
+}
+
+static void register_getRPM(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "getRPM",
+        .help = "Get RPM (actual)",
+        .hint = NULL,
+        .func = &getRPM,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
 static void register_setRPM(void)
 {
     setRPM_args.rpm = arg_int1(NULL, NULL, "<rpm>", "Revolutions per minute");
@@ -594,6 +645,8 @@ static void register_setRPM(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&decCmd));
 }
 
+#pragma endregion
+
 // Set Speed function
 
 #define MAX_SPEED_KPH 271
@@ -606,6 +659,8 @@ static struct
 
 static double current_speed_kph = 0.0;
 static double current_speed_mph = 0.0;
+
+#pragma region KPH Speed
 
 static int setSpeedKPH(int argc, char **argv)
 {
@@ -864,6 +919,10 @@ static void register_setSpeedKPH(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&decCmd));
 }
 
+#pragma endregion
+
+#pragma region MPH Speed
+
 static int setSpeedMPH(int argc, char **argv)
 {
     int nerrors = arg_parse(argc, argv, (void **)&setSpeed_args);
@@ -1120,3 +1179,32 @@ static void register_setSpeedMPH(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&incCmd));
     ESP_ERROR_CHECK(esp_console_cmd_register(&decCmd));
 }
+
+#pragma endregion
+#pragma region getSpeed
+// getSpeed
+
+static int getSpeed(int argc, char ** argv)
+{
+    const ledc_channel_t target_channel = LEDC_CHANNEL_2;
+    uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
+    double actual_speed_kph = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
+    double actual_speed_mph = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
+    current_speed_kph = actual_speed_kph;
+    current_speed_mph = actual_speed_mph;
+    printf("%.1f|%.1f",current_speed_kph,current_speed_mph);
+    return 0;
+}
+
+static void register_getSpeed(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "getSpeed",
+        .help = "Get speeds (actual)",
+        .hint = NULL,
+        .func = &getSpeed,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
+#pragma endregion
