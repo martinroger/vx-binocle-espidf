@@ -398,7 +398,7 @@ static int setRPM(int argc, char **argv)
     printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     current_rpm = actual_RPM;
     return 0;
@@ -476,7 +476,7 @@ static int incRPM(int argc, char **argv)
     printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     current_rpm = actual_RPM;
     return 0;
@@ -554,7 +554,7 @@ static int decRPM(int argc, char **argv)
     printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     current_rpm = actual_RPM;
     return 0;
@@ -595,6 +595,9 @@ static void register_setRPM(void)
 }
 
 // Set Speed function
+
+#define MAX_SPEED_KPH 271
+#define MAX_SPEED_MPH 168
 static struct
 {
     struct arg_dbl *speed;
@@ -620,10 +623,10 @@ static int setSpeedKPH(int argc, char **argv)
     double target_speed = (setSpeed_args.speed->dval[0]);
 
     // Run checks on the issued speed value
-    if (target_speed > 300)
+    if (target_speed > MAX_SPEED_KPH)
     {
-        printf("Target Speed is over 300, clamping to maximum value.\n");
-        target_speed = 300;
+        printf("Target Speed is over %u, clamping to maximum value.\n",MAX_SPEED_KPH);
+        target_speed = MAX_SPEED_KPH;
     }
     if (target_speed < 0)
     {
@@ -668,7 +671,7 @@ static int setSpeedKPH(int argc, char **argv)
     current_speed_kph = actual_speed;
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     return 0;
 }
@@ -697,10 +700,10 @@ static int incSpeedKPH(int argc, char **argv)
     }
 
     // Run checks on the issued speed value
-    if (target_speed > 300)
+    if (target_speed > MAX_SPEED_KPH)
     {
-        printf("Target Speed is over 300, clamping to maximum value.\n");
-        target_speed = 300;
+        printf("Target Speed is over %u, clamping to maximum value.\n",MAX_SPEED_KPH);
+        target_speed = MAX_SPEED_KPH;
     }
     if (target_speed < 0)
     {
@@ -745,7 +748,7 @@ static int incSpeedKPH(int argc, char **argv)
     current_speed_kph = actual_speed;
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     return 0;
 }
@@ -774,10 +777,10 @@ static int decSpeedKPH(int argc, char **argv)
     }
 
     // Run checks on the issued speed value
-    if (target_speed > 300)
+    if (target_speed > MAX_SPEED_KPH)
     {
-        printf("Target Speed is over 300, clamping to maximum value.\n");
-        target_speed = 300;
+        printf("Target Speed is over %u, clamping to maximum value.\n",MAX_SPEED_KPH);
+        target_speed = MAX_SPEED_KPH;
     }
     if (target_speed < 0)
     {
@@ -822,7 +825,7 @@ static int decSpeedKPH(int argc, char **argv)
     current_speed_kph = actual_speed;
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     return 0;
 }
@@ -877,10 +880,10 @@ static int setSpeedMPH(int argc, char **argv)
     double target_speed = (setSpeed_args.speed->dval[0]);
 
     // Run checks on the issued speed value
-    if (target_speed > 190)
+    if (target_speed > MAX_SPEED_MPH)
     {
-        printf("Target Speed is over 190, clamping to maximum value.\n");
-        target_speed = 190;
+        printf("Target Speed is over %u, clamping to maximum value.\n",MAX_SPEED_MPH);
+        target_speed = MAX_SPEED_MPH;
     }
     if (target_speed < 0)
     {
@@ -924,7 +927,7 @@ static int setSpeedMPH(int argc, char **argv)
     printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     current_speed_mph = actual_speed;
     return 0;
@@ -954,10 +957,10 @@ static int incSpeedMPH(int argc, char **argv)
     }
 
     // Run checks on the issued speed value
-    if (target_speed > 190)
+    if (target_speed > MAX_SPEED_MPH)
     {
-        printf("Target Speed is over 190, clamping to maximum value.\n");
-        target_speed = 190;
+        printf("Target Speed is over %u, clamping to maximum value.\n",MAX_SPEED_MPH);
+        target_speed = MAX_SPEED_MPH;
     }
     if (target_speed < 0)
     {
@@ -1002,7 +1005,7 @@ static int incSpeedMPH(int argc, char **argv)
     current_speed_mph = actual_speed;
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     return 0;
 }
@@ -1031,10 +1034,10 @@ static int decSpeedMPH(int argc, char **argv)
     }
 
     // Run checks on the issued speed value
-    if (target_speed > 190)
+    if (target_speed > MAX_SPEED_MPH)
     {
-        printf("Target Speed is over 190, clamping to maximum value.\n");
-        target_speed = 190;
+        printf("Target Speed is over %u, clamping to maximum value.\n",MAX_SPEED_MPH);
+        target_speed = MAX_SPEED_MPH;
     }
     if (target_speed < 0)
     {
@@ -1079,7 +1082,7 @@ static int decSpeedMPH(int argc, char **argv)
     current_speed_mph = actual_speed;
     if (actual_freq != target_frequency)
     {
-        printf("CAUTION : Artifact on achievable, target and actual are different.\n");
+        printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     return 0;
 }
