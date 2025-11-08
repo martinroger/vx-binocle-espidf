@@ -186,7 +186,7 @@ static int set_ignition(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -195,7 +195,7 @@ static int set_ignition(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, !internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, !internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -230,7 +230,7 @@ static int set_hi_beams(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -239,7 +239,7 @@ static int set_hi_beams(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -274,7 +274,7 @@ static int set_alternator(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -283,7 +283,7 @@ static int set_alternator(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -318,7 +318,7 @@ static int set_brake(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -327,7 +327,7 @@ static int set_brake(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -362,7 +362,7 @@ static int set_parking_brake(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -371,7 +371,7 @@ static int set_parking_brake(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -406,7 +406,7 @@ static int set_oil_low(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -415,7 +415,7 @@ static int set_oil_low(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -450,7 +450,7 @@ static int set_airbag(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -459,7 +459,7 @@ static int set_airbag(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -494,7 +494,7 @@ static int set_CEL(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -503,7 +503,7 @@ static int set_CEL(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -538,7 +538,7 @@ static int set_right_turn(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -547,7 +547,7 @@ static int set_right_turn(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -582,7 +582,7 @@ static int set_left_turn(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -591,7 +591,7 @@ static int set_left_turn(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -626,7 +626,7 @@ static int set_ABS(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -635,7 +635,7 @@ static int set_ABS(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -670,7 +670,7 @@ static int set_door(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -679,7 +679,7 @@ static int set_door(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -714,7 +714,7 @@ static int set_coolant_low(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -723,7 +723,7 @@ static int set_coolant_low(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -758,7 +758,7 @@ static int set_button(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -767,7 +767,7 @@ static int set_button(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -802,7 +802,7 @@ static int set_alarm(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -811,7 +811,7 @@ static int set_alarm(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -846,7 +846,7 @@ static int set_backlight(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set to %s \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set OUTPUT to %s \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
     }
     else
     {
@@ -855,7 +855,7 @@ static int set_backlight(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s toggled to %s \n", nickname, !internalST ? "HIGH" : "LOW");
+        printf("%s toggled OUTPUT to %s \n", nickname, !internalST ? "HIGH" : "LOW");
     }
     return 0;
 }
@@ -1031,7 +1031,7 @@ static int setAllExpIO(int argc, char **argv)
         return 1;
     // Feedback
     printf("GPIOs on expander %u set to %s \n", setAllExpIO_args.exp_id->ival[0], setAllExpIO_args.level->ival[0] == 1 ? "HIGH" : "LOW");
-    expanders[setAllExpIO_args.exp_id->ival[0]]->printStatus();
+    //expanders[setAllExpIO_args.exp_id->ival[0]]->printStatus();
     return 0;
 }
 
