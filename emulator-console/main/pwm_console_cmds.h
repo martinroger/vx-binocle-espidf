@@ -724,6 +724,7 @@ static int setSpeedKPH(int argc, char **argv)
     double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
     printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_kph = actual_speed;
+    current_speed_mph = actual_speed/1.60934;
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -801,6 +802,7 @@ static int incSpeedKPH(int argc, char **argv)
     double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
     printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_kph = actual_speed;
+    current_speed_mph = actual_speed/1.60934;
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -878,6 +880,7 @@ static int decSpeedKPH(int argc, char **argv)
     double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
     printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_kph = actual_speed;
+    current_speed_mph = actual_speed/1.60934;
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -989,6 +992,7 @@ static int setSpeedMPH(int argc, char **argv)
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
     }
     current_speed_mph = actual_speed;
+    current_speed_kph = actual_speed*1.60934;
     return 0;
 }
 
@@ -1062,6 +1066,8 @@ static int incSpeedMPH(int argc, char **argv)
     double actual_speed = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
     printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_mph = actual_speed;
+    current_speed_kph = actual_speed*1.60934;
+
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -1139,6 +1145,7 @@ static int decSpeedMPH(int argc, char **argv)
     double actual_speed = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
     printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_mph = actual_speed;
+    current_speed_kph = actual_speed*1.60934;
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -1192,7 +1199,7 @@ static int getSpeed(int argc, char ** argv)
     double actual_speed_mph = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
     current_speed_kph = actual_speed_kph;
     current_speed_mph = actual_speed_mph;
-    printf("%.1f|%.1f",current_speed_kph,current_speed_mph);
+    printf("%.1f|%.1f\n",current_speed_kph,current_speed_mph);
     return 0;
 }
 
