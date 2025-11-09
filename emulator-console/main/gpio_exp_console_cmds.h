@@ -155,15 +155,18 @@ static struct
     struct arg_end *end;
 } setActHL_args;
 
+static bool internalSTs[16] = {false};
+
 /// @brief Set ignition to the target level, or toggles it
 /// @param argc
 /// @param argv
 /// @return
 static int set_ignition(int argc, char **argv)
 {
-    static bool internalST = false;
+    //static bool internalSTs[PIN] = false;
     uint8_t PIN = 15;
     const char *nickname = "Ignition";
+    // Prototype from this point
     int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
     if (nerrors != 0)
     {
@@ -186,16 +189,18 @@ static int set_ignition(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set OUTPUT to %s \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
     }
     else
     {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
         {
             return 1;
         }
-        printf("%s toggled OUTPUT to %s \n", nickname, !internalST ? "HIGH" : "LOW");
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
     }
     return 0;
 }
@@ -206,9 +211,10 @@ static int set_ignition(int argc, char **argv)
 /// @return
 static int set_hi_beams(int argc, char **argv)
 {
-    static bool internalST = false;
+    //static bool internalSTs[PIN] = false;
     uint8_t PIN = 14;
     const char *nickname = "Hi beams";
+    // Prototype from this point
     int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
     if (nerrors != 0)
     {
@@ -216,622 +222,7 @@ static int set_hi_beams(int argc, char **argv)
         return 1;
     }
     assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
 
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set alternator to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_alternator(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 13;
-    const char *nickname = "Alternator";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set brake to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_brake(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 0;
-    const char *nickname = "Low brake level";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set parking brake to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_parking_brake(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 1;
-    const char *nickname = "Parking brake";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the low oil pressure to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_oil_low(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 2;
-    const char *nickname = "Oil pressure low";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the airbag to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_airbag(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 3;
-    const char *nickname = "Airbag";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the Check Engine Light to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_CEL(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 4;
-    const char *nickname = "CEL";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the right turn indicator to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_right_turn(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 11;
-    const char *nickname = "Right Turn";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the left turn indicator to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_left_turn(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 12;
-    const char *nickname = "Left Turn";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the ABS turn indicator to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_ABS(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 10;
-    const char *nickname = "ABS";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the door to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_door(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 9;
-    const char *nickname = "Door";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the coolant low to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_coolant_low(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 8;
-    const char *nickname = "Coolant Low";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the button to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_button(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 7;
-    const char *nickname = "button";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set alarm to the target level or toggle (also can be the alarm/RPM shift)
-/// @param argc
-/// @param argv
-/// @return
-static int set_alarm(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 6;
-    const char *nickname = "alarm";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
-    if (setActHL_args.level->count > 0)
-        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
-
-    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
-    {
-        return 1;
-    }
-
-    if (setActHL_args.level->count > 0)
-    {
-        if (expanders[0]->digitalWrite(PIN, !(setActHL_args.level->ival[0])) == false)
-        {
-            return 1;
-        }
-        printf("%s set OUTPUT to %s \n", nickname, !(setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
-    }
-    else
-    {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
-        {
-            return 1;
-        }
-        printf("%s toggled OUTPUT to %s \n", nickname, internalST ? "HIGH" : "LOW");
-    }
-    return 0;
-}
-
-/// @brief Set the backlight/low beam to the target level, or toggle
-/// @param argc
-/// @param argv
-/// @return
-static int set_backlight(int argc, char **argv)
-{
-    static bool internalST = false;
-    uint8_t PIN = 5;
-    const char *nickname = "Backlight";
-    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
-    if (nerrors != 0)
-    {
-        arg_print_errors(stderr, setActHL_args.end, argv[0]);
-        return 1;
-    }
-    assert(setActHL_args.level->count < 2);
     if (setActHL_args.level->count > 0)
         assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
 
@@ -846,16 +237,690 @@ static int set_backlight(int argc, char **argv)
         {
             return 1;
         }
-        printf("%s set OUTPUT to %s \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW");
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
     }
     else
     {
-        internalST = expanders[0]->digitalRead(PIN);
-        if (expanders[0]->digitalWrite(PIN, !internalST) == false)
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
         {
             return 1;
         }
-        printf("%s toggled OUTPUT to %s \n", nickname, !internalST ? "HIGH" : "LOW");
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set alternator to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_alternator(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 13;
+    const char *nickname = "Alternator";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set brake to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_brake(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 0;
+    const char *nickname = "Low brake level";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set parking brake to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_parking_brake(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 1;
+    const char *nickname = "Parking brake";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the low oil pressure to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_oil_low(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 2;
+    const char *nickname = "Oil pressure low";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the airbag to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_airbag(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 3;
+    const char *nickname = "Airbag";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the Check Engine Light to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_CEL(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 4;
+    const char *nickname = "CEL";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the right turn indicator to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_right_turn(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 11;
+    const char *nickname = "Right Turn";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the left turn indicator to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_left_turn(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 12;
+    const char *nickname = "Left Turn";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the ABS turn indicator to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_ABS(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 10;
+    const char *nickname = "ABS";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the door to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_door(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 9;
+    const char *nickname = "Door";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the coolant low to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_coolant_low(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 8;
+    const char *nickname = "Coolant Low";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the button to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_button(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 7;
+    const char *nickname = "button";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set alarm to the target level or toggle (also can be the alarm/RPM shift)
+/// @param argc
+/// @param argv
+/// @return
+static int set_alarm(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 6;
+    const char *nickname = "alarm";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
+    }
+    return 0;
+}
+
+/// @brief Set the backlight/low beam to the target level, or toggle
+/// @param argc
+/// @param argv
+/// @return
+static int set_backlight(int argc, char **argv)
+{
+    //static bool internalSTs[PIN] = false;
+    uint8_t PIN = 5;
+    const char *nickname = "Backlight";
+    // Prototype from this point
+    int nerrors = arg_parse(argc, argv, (void **)&setActHL_args);
+    if (nerrors != 0)
+    {
+        arg_print_errors(stderr, setActHL_args.end, argv[0]);
+        return 1;
+    }
+    assert(setActHL_args.level->count < 2);
+
+    if (setActHL_args.level->count > 0)
+        assert(setActHL_args.level->ival[0] < 2 && setActHL_args.level->ival[0] > -1);
+
+    if (expanders[0]->pinMode(PIN, OUTPUT) == false)
+    {
+        return 1;
+    }
+
+    if (setActHL_args.level->count > 0)
+    {
+        if (expanders[0]->digitalWrite(PIN, (setActHL_args.level->ival[0])) == false)
+        {
+            return 1;
+        }
+        printf("%s set LL INPUT to %s, mask %lx \n", nickname, (setActHL_args.level->ival[0]) ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = (setActHL_args.level->ival[0]);
+    }
+    else
+    {
+        internalSTs[PIN] = expanders[0]->digitalRead(PIN);
+        if (expanders[0]->digitalWrite(PIN, !internalSTs[PIN]) == false)
+        {
+            return 1;
+        }
+        printf("%s toggled LL INPUT to %s, mask %lx \n", nickname, !internalSTs[PIN] ? "HIGH" : "LOW",(uint32_t)(expanders[0]->multiDigitalRead(0xFFFF)));
+        internalSTs[PIN] = !internalSTs[PIN];
     }
     return 0;
 }
@@ -1537,7 +1602,7 @@ static int setExpMask(int argc, char **argv)
     
 
     // Feedback
-    printf("Expander %u mask: %x\n", setExpMask_args.exp_id->ival[0], setExpMask_args.exp_id->ival[0]);
+    printf("Expander %u mask: %04x\n", setExpMask_args.exp_id->ival[0], setExpMask_args.mask->ival[0]);
     return 0;
 }
 
