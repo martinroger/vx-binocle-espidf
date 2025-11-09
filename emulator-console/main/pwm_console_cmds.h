@@ -397,9 +397,11 @@ static int setRPM(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing RPM channel.\n");
+        printf("Target frequency is below 3Hz, pausing RPM channel, actual RPM 0 revs.\n");
+        current_rpm = 0;
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_1);
-        active_timers[1] = false;
+        active_timers[(int)target_channel] = false;
         return 0;
     }
 
@@ -425,7 +427,7 @@ static int setRPM(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     uint32_t actual_RPM = (uint32_t)(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
-    printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
+    printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu revs\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -475,9 +477,11 @@ static int incRPM(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing RPM channel.\n");
+        printf("Target frequency is below 3Hz, pausing RPM channel, actual RPM 0 revs.\n");
+        current_rpm = 0;
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_1);
-        active_timers[1] = false;
+        active_timers[(int)target_channel] = false;
         return 0;
     }
 
@@ -503,7 +507,7 @@ static int incRPM(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     uint32_t actual_RPM = (uint32_t)(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
-    printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
+    printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu revs\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -553,9 +557,11 @@ static int decRPM(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing RPM channel.\n");
+        printf("Target frequency is below 3Hz, pausing RPM channel, actual RPM 0 revs.\n");
+        current_rpm = 0;
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_1);
-        active_timers[1] = false;
+        active_timers[(int)target_channel] = false;
         return 0;
     }
 
@@ -581,7 +587,7 @@ static int decRPM(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     uint32_t actual_RPM = (uint32_t)(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
-    printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
+    printf("RPM channel %lu set to target duty %.2f pc at actual frequency %lu Hz, actual RPM %lu revs\n", (uint32_t)target_channel, target_duty, actual_freq, actual_RPM);
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -593,9 +599,16 @@ static int decRPM(int argc, char **argv)
 static int getRPM(int argc, char **argv) 
 {
     const ledc_channel_t target_channel = LEDC_CHANNEL_1;
-    uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
-    uint32_t actual_RPM = (uint32_t)(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
-    current_rpm = actual_RPM;
+    if (active_timers[(int)target_channel])
+    {
+        uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
+        uint32_t actual_RPM = (uint32_t)(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
+        current_rpm = actual_RPM;
+    }
+    else
+    {
+        current_rpm = 0; // Not really necessary
+    }
     printf("%lu\n",current_rpm);
     return 0;
 }
@@ -694,7 +707,10 @@ static int setSpeedKPH(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing speed channel.\n");
+        printf("Target frequency is below 3Hz, pausing speed channel, expected speed 0 kph.\n");
+        current_speed_kph = 0;
+        current_speed_mph = 0;
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
         active_timers[2] = false;
         return 0;
@@ -722,7 +738,7 @@ static int setSpeedKPH(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
-    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
+    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f kph\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_kph = actual_speed;
     current_speed_mph = actual_speed/1.60934;
     if (actual_freq != target_frequency)
@@ -772,7 +788,10 @@ static int incSpeedKPH(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing speed channel.\n");
+        printf("Target frequency is below 3Hz, pausing speed channel, expected speed 0 kph.\n");
+        current_speed_kph = 0;
+        current_speed_mph = 0;
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
         active_timers[2] = false;
         return 0;
@@ -800,7 +819,7 @@ static int incSpeedKPH(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
-    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
+    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f kph\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_kph = actual_speed;
     current_speed_mph = actual_speed/1.60934;
     if (actual_freq != target_frequency)
@@ -850,7 +869,10 @@ static int decSpeedKPH(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing speed channel.\n");
+        printf("Target frequency is below 3Hz, pausing speed channel, expected speed 0 kph.\n");
+        current_speed_kph = 0;
+        current_speed_mph = 0;
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
         active_timers[2] = false;
         return 0;
@@ -878,7 +900,7 @@ static int decSpeedKPH(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
-    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
+    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f kph\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_kph = actual_speed;
     current_speed_mph = actual_speed/1.60934;
     if (actual_freq != target_frequency)
@@ -958,7 +980,10 @@ static int setSpeedMPH(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing speed channel.\n");
+        printf("Target frequency is below 3Hz, pausing speed channel, expected speed 0 mph.\n");
+        current_speed_kph = 0;
+        current_speed_mph = 0;
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
         active_timers[2] = false;
         return 0;
@@ -986,7 +1011,7 @@ static int setSpeedMPH(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     double actual_speed = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
-    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
+    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f mph\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     if (actual_freq != target_frequency)
     {
         printf("CAUTION : Artefact on achievable, target and actual are different.\n");
@@ -1036,8 +1061,11 @@ static int incSpeedMPH(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing speed channel.\n");
+        printf("Target frequency is below 3Hz, pausing speed channel, expected speed 0 mph.\n");
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
+        current_speed_kph = 0;
+        current_speed_mph = 0;
         active_timers[2] = false;
         return 0;
     }
@@ -1064,7 +1092,7 @@ static int incSpeedMPH(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     double actual_speed = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
-    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
+    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f mph\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_mph = actual_speed;
     current_speed_kph = actual_speed*1.60934;
 
@@ -1115,7 +1143,10 @@ static int decSpeedMPH(int argc, char **argv)
 
     if (target_frequency < 3)
     {
-        printf("Target frequency is below 3Hz, pausing speed channel.\n");
+        printf("Target frequency is below 3Hz, pausing speed channel, expected speed 0 mph.\n");
+        current_speed_kph = 0;
+        current_speed_mph = 0;
+        
         ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
         active_timers[2] = false;
         return 0;
@@ -1143,7 +1174,7 @@ static int decSpeedMPH(int argc, char **argv)
     // uint32_t actual_duty = 1 + (100 * ledc_get_duty(LEDC_LOW_SPEED_MODE, target_channel)) / (((uint32_t)1 << duty_resolutions_bit[(uint32_t)target_channel]) - 1);
     uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
     double actual_speed = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
-    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
+    printf("Speed channel %lu set to target duty %.2f pc at actual frequency %lu, expected speed %.2f mph\n", (uint32_t)target_channel, target_duty, actual_freq, actual_speed);
     current_speed_mph = actual_speed;
     current_speed_kph = actual_speed*1.60934;
     if (actual_freq != target_frequency)
@@ -1194,11 +1225,19 @@ static void register_setSpeedMPH(void)
 static int getSpeed(int argc, char ** argv)
 {
     const ledc_channel_t target_channel = LEDC_CHANNEL_2;
-    uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
-    double actual_speed_kph = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
-    double actual_speed_mph = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
-    current_speed_kph = actual_speed_kph;
-    current_speed_mph = actual_speed_mph;
+    if (active_timers[(int)target_channel])
+    {
+        uint32_t actual_freq = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)target_channel);
+        double actual_speed_kph = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_KPH_P);
+        double actual_speed_mph = (COEFF_FREQ_TO_SPEED_MPH_M * (double)actual_freq + COEFF_FREQ_TO_SPEED_MPH_P);
+        current_speed_kph = actual_speed_kph;
+        current_speed_mph = actual_speed_mph;
+    }
+    else
+    {
+        current_speed_kph = 0;
+        current_speed_mph = 0;
+    }
     printf("%.1f|%.1f\n",current_speed_kph,current_speed_mph);
     return 0;
 }
