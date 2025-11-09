@@ -1089,7 +1089,7 @@ static int setLowResOut(int argc, char **argv)
     {
         outputMask = (outputMask << 1) | 1;
     }
-    printf("Mask : %lu\n", outputMask);
+    printf("Mask : 0x%lx\n", outputMask);
 
     // Force GPIO output mode
     printf("Forcing all GPIO in output mode.\n");
@@ -1143,7 +1143,7 @@ static int setHighResOut(int argc, char **argv)
     }
 
     outputMask = (outputMask << 8);
-    printf("Mask : %lu\n", outputMask);
+    printf("Mask : 0x%lx\n", outputMask);
 
     // Force GPIO output mode
     printf("Forcing all GPIO in output mode.\n");
