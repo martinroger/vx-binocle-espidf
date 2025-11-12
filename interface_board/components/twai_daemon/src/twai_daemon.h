@@ -9,13 +9,12 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
-
-#ifndef CAN_RX
-#define CAN_RX 3
+#ifndef CONFIG_CAN_RX
+#define CONFIG_CAN_RX 3
 #endif
 
-#ifndef CAN_TX
-#define CAN_TX 2
+#ifndef CONFIG_CAN_TX
+#define CONFIG_CAN_TX 2
 #endif
 
 #ifndef CAN_RX_POLL_MS

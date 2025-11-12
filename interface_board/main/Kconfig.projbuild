@@ -1,4 +1,23 @@
 menu "Interface board configuration"
+
+    menu "Interrupt GPIOs"
+        config BUTTON_IRQ_GPIO
+            int "BUTTON interrupt GPIO"
+            default 10
+        config FULL_BEAMS_IRQ_GPIO
+            int "Full/Hi beams interrupt GPIO"
+            default 11
+            
+    endmenu
+
+    menu "5V Control"
+        config 5V_EN_GPIO
+            int "5V enable GPIO"
+            default 48
+        config 5V_AUX_EN_GPIO
+            int "5V Auxiliary enable GPIO"
+            default 47
+    endmenu
     
     menu "I²C configuration"
         config SDA_PIN
@@ -19,6 +38,28 @@ menu "Interface board configuration"
             help
                 Sets the default address for the ADC. 
                 0x48 for a ADS1115 without address bits set.
+        
+        config SET_HIGH_CAL_GPIO
+            int "GPIO to set high caliber sense resistor for channel A"
+            default 15
+
+        config FUEL_LEVEL_SENSE_ADC_CHANNEL
+            int "ADC channel for the fuel level sensing"
+            default 0
+        
+        config BATTERY_VOLT_SENSE_ADC_CHANNEL
+            int "ADC channel for the battery voltage sensing"
+            default 1
+
+        # choice ADC_DATA_RATE
+        #     prompt "Choose target conversion data rate"
+        #     config ADS111X_DATA_RATE_8
+        #         bool "ADS111X_DATA_RATE_8"
+        #     config ADS111X_DATA_RATE_16
+        #         bool "ADS111X_DATA_RATE_16"
+        #     config ADS111X_DATA_RATE_128
+        #         bool "ADS111X_DATA_RATE_128"
+        # endchoice
         
         config ADC_TO_SMA_POLLING_RATE_MS
             int "Polling interval to add an element to the SMA"
@@ -80,6 +121,10 @@ menu "Interface board configuration"
     endmenu
 
     menu "MCPWM configuration"
+        config PWM_DETECT_TIMEOUT
+            int "Timeout in ms for which 0Hz and 0% will be declared for a PWM signal"
+            default 1000
+
         config LOOP_LOG_MCPWM
             bool "Read MCPWM values in main loop."
             default true
@@ -97,7 +142,7 @@ menu "Interface board configuration"
             default 9 
     endmenu
 
-    menu "CAN interface parameters"
+    menu "CAN frames parameters"
         config SLOW_METRICS_PKG_RATE_MS
             int "Slow metrics package and queue rate in ms"
             default 500
@@ -127,6 +172,48 @@ menu "Interface board configuration"
             default 5
             help
                 Default is 5ms
+    endmenu
+
+    menu "Display control"
+        menu "Left Display"
+            config LD_GP0_IO
+                int "Display boot GPIO"
+                default 21
+            
+            config LD_ALIVE_IO
+                int "Display alive signal GPIO"
+                default 20 
+            
+            config LD_TXD_IO
+                int "Display TXD GPIO"
+                default 13
+            
+            config LD_RXD_IO
+                int "Display RXD GPIO"
+                default 14
+            
+
+        endmenu
+        menu "Right Display"
+            config RD_GP0_IO
+                int "Display boot GPIO"
+                default 40
+            
+            config RD_ALIVE_IO
+                int "Display alive signal GPIO"
+                default 2 
+            
+            config RD_TXD_IO
+                int "Display TXD GPIO"
+                default 42
+            
+            config RD_RXD_IO
+                int "Display RXD GPIO"
+                default 41
+            
+                
+        endmenu
+        
     endmenu
 
 endmenu

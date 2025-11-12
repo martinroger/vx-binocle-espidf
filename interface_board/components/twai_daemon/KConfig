@@ -1,0 +1,9 @@
+menu "TWAI Daemon"
+    config CAN_TX
+        int "CAN Transceiver TX GPIO"
+        default 39
+
+    config CAN_RX
+        int "CAN Transceiver RX GPIO"
+        default 38
+endmenu

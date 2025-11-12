@@ -32,8 +32,8 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
 
     twai_general_config_t g_config = {
         .mode = TWAI_MODE_NORMAL,
-        .tx_io = (gpio_num_t)CAN_TX,
-        .rx_io = (gpio_num_t)CAN_RX,
+        .tx_io = (gpio_num_t)CONFIG_CAN_TX,
+        .rx_io = (gpio_num_t)CONFIG_CAN_RX,
         .clkout_io = TWAI_IO_UNUSED,
         .bus_off_io = TWAI_IO_UNUSED,
         .tx_queue_len = 16,

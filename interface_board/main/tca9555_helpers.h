@@ -46,7 +46,7 @@ static void IRAM_ATTR tca_int_handler(void *arg)
 
 esp_err_t initialize_io_expanders()
 {
-    // Semaphore to protect the raw reading from the
+    // Semaphore to protect the raw reading from the expander
     exp_act_hilo_semaphore = xSemaphoreCreateBinary();
     if (exp_act_hilo_semaphore == NULL)
     {

@@ -52,26 +52,26 @@ void base_slow_metrics_PKG(void *pvParameters)
         // SMAs should already be protected, and some of the MCPWM logic can be brought in here.
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_SLOW_METRICS_PKG_RATE_MS));
         compute_freq_dut(&pwm_cap_coolant);
-        float coolant_degC = 100.0*pwm_cap_coolant.duty_cycle*COEFF_DUTY_TO_COOLANT_DEGC_M+COEFF_DUTY_TO_COOLANT_DEGC_P;
-        if(coolant_degC<70) coolant_degC = 70;
-        if(coolant_degC>130) coolant_degC = 130;
-        ESP_LOGI(TAG, "Coolant: %.2f - %.1f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle,coolant_degC);
-
-        
-
+        float coolant_degC = 100.0 * pwm_cap_coolant.duty_cycle * COEFF_DUTY_TO_COOLANT_DEGC_M + COEFF_DUTY_TO_COOLANT_DEGC_P;
+        if (coolant_degC < 70)
+            coolant_degC = 70;
+        if (coolant_degC > 130)
+            coolant_degC = 130;
+        ESP_LOGI(TAG, "Coolant: %.2f - %.1f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle, coolant_degC);
 
         float fuel_level_raw = sma_get_avg(adc_channels[0].sma);
-        float fuel_level_v = fuel_level_raw*ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        float fuel_level_pc = COEFF_FUEL_V_TO_PC_M*fuel_level_v+COEFF_FUEL_V_TO_PC_P;
-        if(fuel_level_pc>100.0) fuel_level_pc = 100;
-        if(fuel_level_pc<0) fuel_level_pc = 0;
+        float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float fuel_level_pc = COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P;
+        if (fuel_level_pc > 100.0)
+            fuel_level_pc = 100;
+        if (fuel_level_pc < 0)
+            fuel_level_pc = 0;
 
         float lv_raw = sma_get_avg(adc_channels[1].sma);
-        float lv_raw_v = lv_raw*ads111x_gain_values[ADS111X_GAIN_4V096]/ADS111X_MAX_VALUE;
-        float lv_v = lv_raw_v*COEFF_V_TO_LV_M+COEFF_V_TO_LV_P;
+        float lv_raw_v = lv_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float lv_v = lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P;
 
-        ESP_LOGI(TAG, "Fuel : %.2f - %.2fV - %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw,fuel_level_v, fuel_level_pc,lv_raw,lv_raw_v,lv_v);
-        
+        ESP_LOGI(TAG, "Fuel : %.2f - %.2fV - %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
 
         binocan_base_slow_metrics.coolant_temp = binocan_base_slow_metrics_coolant_temp_encode(coolant_degC);
         binocan_base_slow_metrics.fuel_level_pc = binocan_base_slow_metrics_fuel_level_pc_encode(fuel_level_pc);
@@ -104,9 +104,9 @@ void base_fast_metrics_PKG(void *pvParameters)
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_FAST_METRICS_PKG_RATE_MS));
         compute_freq_dut(&pwm_cap_rpm);
         compute_freq_dut(&pwm_cap_speed);
-        float rpm = COEFF_FREQ_TO_RPM_M*pwm_cap_rpm.frequency+COEFF_FREQ_TO_RPM_P;
-        float speed = COEFF_FREQ_TO_SPEED_KPH_M*pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P;
-        ESP_LOGI(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle,rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle,speed);
+        float rpm = COEFF_FREQ_TO_RPM_M * pwm_cap_rpm.frequency + COEFF_FREQ_TO_RPM_P;
+        float speed = COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P;
+        ESP_LOGI(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
 
         binocan_base_fast_metrics.rpm = binocan_base_fast_metrics_rpm_encode(rpm);
         binocan_base_fast_metrics.speed_kph = binocan_base_fast_metrics_speed_kph_encode(speed);
@@ -181,7 +181,7 @@ void base_active_hilo_PKG(void *pvParameters)
                 binocan_base_active_hi_lo.over_temperature_tt = binocan_base_active_hi_lo_over_temperature_tt_encode(0); // Placeholder, no sensor
                 binocan_base_active_hi_lo.fuel_low_tt = binocan_base_active_hi_lo_fuel_low_tt_encode(0);                 // Placeholder, no sensor
                 binocan_base_active_hi_lo_pack(tx_msg.data, &binocan_base_active_hi_lo, BINOCAN_BASE_ACTIVE_HI_LO_LENGTH);
-                
+
                 if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
                 {
                     ESP_LOGW(TAG, "Could not queue active hi/lo message in queue");
@@ -275,7 +275,7 @@ extern "C" void app_main(void)
     {
         vTaskDelay(pdMS_TO_TICKS(5000));
         // Only used to log MCPWM output
-#ifdef CONFIG_LOOP_LOG_MCPWM
+/* #ifdef CONFIG_LOOP_LOG_MCPWM
         vTaskDelay(pdMS_TO_TICKS(LOG_INTERVAL_MS));
         compute_freq_dut(&pwm_cap_coolant);
         compute_freq_dut(&pwm_cap_rpm);
@@ -291,6 +291,6 @@ extern "C" void app_main(void)
         pwm_cap_rpm.period_ticks = 0;
         pwm_cap_speed.deltaT = 0;
         pwm_cap_speed.period_ticks = 0;
-#endif
+#endif */
     }
 }
