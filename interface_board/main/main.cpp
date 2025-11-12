@@ -331,14 +331,14 @@ extern "C" void app_main(void)
     {
         ESP_LOGW(TAG,"Impossible to initialize 5V outputs. Continuing");
     }
-    // if (enable_5V() != ESP_OK)
-    // {
-    //     ESP_LOGW(TAG,"Could not fire up main 5V output. Continuing.");
-    // }
-    // if (enable_5V_AUX() != ESP_OK)
-    // {
-    //     ESP_LOGW(TAG,"Could not fire up secondary 5V output. Continuing.");
-    // }
+    if (enable_5V() != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not fire up main 5V output. Continuing.");
+    }
+    if (enable_5V_AUX() != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not fire up secondary 5V output. Continuing.");
+    }
     
     // Start TWAI 
     if (initCAN(NULL) != ESP_OK)
