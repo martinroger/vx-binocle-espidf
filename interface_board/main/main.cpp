@@ -20,6 +20,8 @@
 #endif
 #define TAG "MAIN"
 
+
+#pragma region 5V management
 // 5V control functions
 esp_err_t init_5V_ctrl(void)
 {
@@ -42,25 +44,54 @@ esp_err_t init_5V_ctrl(void)
 
 esp_err_t enable_5V(void)
 {
-    return ESP_OK;
+    esp_err_t ret = ESP_FAIL;
+    ESP_LOGD(TAG,"Enabling 5V output.");
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO,1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not enable 5V output, continuing.");
+    }
+    return ret;
 }
 
 esp_err_t enable_5V_AUX(void)
 {
-    return ESP_OK;
+    esp_err_t ret = ESP_FAIL;
+    ESP_LOGD(TAG,"Enabling 5V auxiliary output.");
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,1);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not enable 5V auxiliary output, continuing.");
+    }
+    return ret;
 }
 
 esp_err_t disable_5V(void)
 {
-    return ESP_OK;
+    esp_err_t ret = ESP_FAIL;
+    ESP_LOGD(TAG,"Disabling 5V output.");
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO,0);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not disable 5V output, continuing.");
+    }
+    return ret;
 }
 
 esp_err_t disable_5V_AUX(void)
 {
-    return ESP_OK;
+    esp_err_t ret = ESP_FAIL;
+    ESP_LOGD(TAG,"Disabling 5V auxiliary output.");
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,0);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not disable 5V auxiliary output, continuing.");
+    }
+    return ret;
 }
+#pragma endregion
 
-
+#pragma region MCPWM declarations
 // PWM stats structures for coolant, rpm and speed captures
 static volatile pwm_info_t pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed = {.pos_edge_ts = 0, .prev_pos_edge_ts = 0, .period_ticks = 0, .neg_edge_ts = 0, .deltaT = 0};
 
@@ -68,7 +99,9 @@ static volatile pwm_info_t pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed = {.pos_e
 mcpwm_cap_channel_handle_t cap_chan_coolant = NULL;
 mcpwm_cap_channel_handle_t cap_chan_rpm = NULL;
 mcpwm_cap_channel_handle_t cap_chan_speed = NULL;
+#pragma endregion
 
+#pragma region FreeRTOS tasks for CAN packaging
 // FreeRTOS handles
 TaskHandle_t base_slow_metrics_PKG_hdl;
 TaskHandle_t base_fast_metrics_PKG_hdl;
@@ -91,7 +124,7 @@ void base_slow_metrics_PKG(void *pvParameters)
     while (true)
     {
         // SMAs should already be protected, and some of the MCPWM logic can be brought in here.
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_SLOW_METRICS_PKG_RATE_MS));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_SLOW_METRICS_PKG_RATE_MS)); // Waits for notification or one cyclic for frame message
         compute_freq_dut(&pwm_cap_coolant);
         float coolant_degC = 100.0 * pwm_cap_coolant.duty_cycle * COEFF_DUTY_TO_COOLANT_DEGC_M + COEFF_DUTY_TO_COOLANT_DEGC_P;
         if (coolant_degC < 70)
@@ -252,9 +285,59 @@ void base_active_hilo_PKG(void *pvParameters)
     }
 }
 
+#pragma endregion
+
+#pragma region Main App
 extern "C" void app_main(void)
 {
-    // Start TWAI first
+    #pragma region Escape sequence
+    // Still in placeholder setup
+    ESP_LOGI(TAG,"Setting up escape sequence detection.");
+    esp_err_t ret = ESP_FAIL;
+    ret = gpio_set_direction((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO,GPIO_MODE_INPUT);
+    ret = gpio_set_direction((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO,GPIO_MODE_INPUT);
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO,GPIO_PULLUP_ONLY); //Non inverted
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO,GPIO_PULLUP_ONLY); // Inverted
+    ret = gpio_pullup_en((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO);
+    ret = gpio_pullup_en((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO);
+    ESP_LOGI(TAG,"Escape sequence GPIOs set.");
+    if (gpio_get_level((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO) == 0 && gpio_get_level((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO) == 0)
+    {
+        ESP_LOGI(TAG,"Escape sequence detected, starting debounce countdown");
+        int64_t start_esc_seq_ts = esp_timer_get_time();
+        while (gpio_get_level((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO) == 0 && gpio_get_level((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO) == 0)
+        {
+            if (esp_timer_get_time()-start_esc_seq_ts > 1000 * 1000)
+            {
+                ESP_LOGW(TAG,"Escape sequence successfully completed, recording current OTA partition ID.");
+                // Record current active OTA partition ID
+                ESP_LOGW(TAG,"Setting target boot partition to factory app (updater)");
+                // Set target boot partition to factory
+                ESP_LOGW(TAG,"Rebooting.");
+                // Rebooting
+                break;
+            }   
+        }
+    }
+    #pragma endregion
+    
+    
+    #pragma region Setup Sequence
+    // Start 5V Channels
+    if (init_5V_ctrl() != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Impossible to initialize 5V outputs. Continuing");
+    }
+    if (enable_5V() != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not fire up main 5V output. Continuing.");
+    }
+    if (enable_5V_AUX() != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not fire up secondary 5V output. Continuing.");
+    }
+    
+    // Start TWAI 
     if (initCAN(NULL) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialize TWAI daemon, aborting...");
@@ -299,7 +382,7 @@ extern "C" void app_main(void)
     // Set up the packaging and queuing tasks
     if (xTaskCreate(base_active_hilo_PKG, "B_AHL_PKG", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create base AHL package task");
+        ESP_LOGE(TAG, "Could not create base ActHiLo package task");
         return;
     }
     if (xTaskCreate(base_slow_metrics_PKG, "B_SLO_M_PKG", 4096, NULL, 3, &base_slow_metrics_PKG_hdl) != pdPASS)
@@ -312,6 +395,8 @@ extern "C" void app_main(void)
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
         return;
     }
+
+    #pragma endregion
 
     while (1)
     {
@@ -336,3 +421,5 @@ extern "C" void app_main(void)
 #endif */
     }
 }
+
+#pragma endregion
