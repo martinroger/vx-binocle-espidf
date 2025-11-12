@@ -19,6 +19,7 @@ typedef struct
     uint32_t period_ticks;     // Period in ticks between two positive edges
     uint32_t neg_edge_ts;      // Tick timestamp of the last negative edge
     uint32_t deltaT;           // Tick difference between the last negative and positive edge
+    uint32_t pulse_counter;
     float duty_cycle = 0.0;
     float frequency = 0.0;
 } pwm_info_t;
@@ -76,6 +77,8 @@ static bool IRAM_ATTR mcpwm_capture_cb_generic(mcpwm_cap_channel_handle_t cap_ch
         target_pwm_signal->pos_edge_ts = edata->cap_value;
         // Get the number of ticks of one period
         target_pwm_signal->period_ticks = target_pwm_signal->pos_edge_ts - target_pwm_signal->prev_pos_edge_ts;
+        // Increase the pulse counter
+        target_pwm_signal->pulse_counter++;
     }
     else if (edata->cap_edge == MCPWM_CAP_EDGE_NEG) // Event data is a negative edge
     {

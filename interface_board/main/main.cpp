@@ -8,6 +8,9 @@
 #include "mcpwm_capture_helpers.h"
 #include "coefficients.h"
 
+#include "nvs_storage.h"
+#include "odometer.h"
+
 #include "twai_daemon.h"
 #include "binocan.h"
 
@@ -328,20 +331,60 @@ extern "C" void app_main(void)
     {
         ESP_LOGW(TAG,"Impossible to initialize 5V outputs. Continuing");
     }
-    if (enable_5V() != ESP_OK)
-    {
-        ESP_LOGW(TAG,"Could not fire up main 5V output. Continuing.");
-    }
-    if (enable_5V_AUX() != ESP_OK)
-    {
-        ESP_LOGW(TAG,"Could not fire up secondary 5V output. Continuing.");
-    }
+    // if (enable_5V() != ESP_OK)
+    // {
+    //     ESP_LOGW(TAG,"Could not fire up main 5V output. Continuing.");
+    // }
+    // if (enable_5V_AUX() != ESP_OK)
+    // {
+    //     ESP_LOGW(TAG,"Could not fire up secondary 5V output. Continuing.");
+    // }
     
     // Start TWAI 
     if (initCAN(NULL) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialize TWAI daemon, aborting...");
         return;
+    }
+
+    // Initialize NVS and try to read persisted u32 values: odometer_m and trip_m
+    {
+        esp_err_t nvs_err = nvs_init_flash();
+        if (nvs_err != ESP_OK) 
+        {
+            ESP_LOGW(TAG, "NVS init failed (%d). Continuing without persisted odometer/trip.", nvs_err);
+        } 
+        else 
+        {
+            bool found = false;
+            odometer_m = odometer_get(&found);
+            if (found) 
+            {
+                ESP_LOGI(TAG, "NVS: odometer_m = %u m", odometer_m);
+            } 
+            else 
+            {
+                ESP_LOGI(TAG, "NVS: odometer_m not found");
+                if (odometer_set(odometer_m)!=ESP_OK)
+                {
+                    ESP_LOGE(TAG,"Could not set odometer in NVS!");
+                }
+            }
+
+            trip_m = trip_get(&found);
+            if (found) 
+            {
+                ESP_LOGI(TAG, "NVS: trip_m = %u m", trip_m);
+            } 
+            else 
+            {
+                ESP_LOGI(TAG, "NVS: trip_m not found");
+                if (trip_set(trip_m)!=ESP_OK)
+                {
+                    ESP_LOGE(TAG,"Could not set trip in NVS!");
+                }
+            }
+        }
     }
 
     // Set up the capture channels
