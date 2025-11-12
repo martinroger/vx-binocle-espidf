@@ -20,6 +20,47 @@
 #endif
 #define TAG "MAIN"
 
+// 5V control functions
+esp_err_t init_5V_ctrl(void)
+{
+    esp_err_t ret = ESP_FAIL;
+    ESP_LOGI(TAG,"Initializing 5V and 5V Aux control pins");
+    ret = gpio_set_direction((gpio_num_t)CONFIG_5V_EN_GPIO,GPIO_MODE_INPUT_OUTPUT);
+    ret = gpio_set_direction((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,GPIO_MODE_INPUT_OUTPUT);
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_5V_EN_GPIO,GPIO_PULLDOWN_ONLY);
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,GPIO_PULLDOWN_ONLY);
+    ret = gpio_pulldown_en((gpio_num_t)CONFIG_5V_EN_GPIO);
+    ret = gpio_pulldown_en((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO,0);
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,0);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG,"Issue setting up control pins for 5V outputs");
+    }
+    return ret;
+}
+
+esp_err_t enable_5V(void)
+{
+    return ESP_OK;
+}
+
+esp_err_t enable_5V_AUX(void)
+{
+    return ESP_OK;
+}
+
+esp_err_t disable_5V(void)
+{
+    return ESP_OK;
+}
+
+esp_err_t disable_5V_AUX(void)
+{
+    return ESP_OK;
+}
+
+
 // PWM stats structures for coolant, rpm and speed captures
 static volatile pwm_info_t pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed = {.pos_edge_ts = 0, .prev_pos_edge_ts = 0, .period_ticks = 0, .neg_edge_ts = 0, .deltaT = 0};
 
@@ -144,22 +185,23 @@ void base_active_hilo_PKG(void *pvParameters)
 
             if (xSemaphoreTake(exp_act_hilo_semaphore, pdMS_TO_TICKS(1)) == pdTRUE)
             {
-                active_hi_lo_grp.AH_ignition = read_bitmask(raw, EXP_IO_0_BITMASK);
-                active_hi_lo_grp.AH_hi_beams = read_bitmask(raw, EXP_IO_1_BITMASK);
-                active_hi_lo_grp.AL_alternator = read_bitmask(raw, EXP_IO_2_BITMASK);
-                active_hi_lo_grp.AL_brake_low = read_bitmask(raw, EXP_IO_3_BITMASK);
-                active_hi_lo_grp.AL_parking_brake = read_bitmask(raw, EXP_IO_4_BITMASK);
-                active_hi_lo_grp.AL_oil_pressure = read_bitmask(raw, EXP_IO_5_BITMASK);
-                active_hi_lo_grp.AL_airbag = read_bitmask(raw, EXP_IO_6_BITMASK);
-                active_hi_lo_grp.AL_CEL = read_bitmask(raw, EXP_IO_7_BITMASK);
-                active_hi_lo_grp.AH_right_turn = read_bitmask(raw, EXP_IO_8_BITMASK);
-                active_hi_lo_grp.AH_left_turn = read_bitmask(raw, EXP_IO_9_BITMASK);
-                active_hi_lo_grp.AL_ABS = read_bitmask(raw, EXP_IO_10_BITMASK);
-                active_hi_lo_grp.AL_door = read_bitmask(raw, EXP_IO_11_BITMASK);
-                active_hi_lo_grp.AL_coolant_low = read_bitmask(raw, EXP_IO_12_BITMASK);
-                active_hi_lo_grp.AL_button = read_bitmask(raw, EXP_IO_13_BITMASK);
-                active_hi_lo_grp.AH_B07 = read_bitmask(raw, EXP_IO_14_BITMASK);
-                active_hi_lo_grp.AH_backlight = read_bitmask(raw, EXP_IO_15_BITMASK);
+                active_hi_lo_grp.AL_brake_low = read_bitmask(raw, EXP_IO_0_BITMASK);
+                active_hi_lo_grp.AL_parking_brake = read_bitmask(raw, EXP_IO_1_BITMASK);
+                active_hi_lo_grp.AH_ignition = !read_bitmask(raw, EXP_IO_2_BITMASK);    // Inverted
+                active_hi_lo_grp.AL_oil_pressure = read_bitmask(raw, EXP_IO_3_BITMASK);
+                active_hi_lo_grp.AL_airbag = read_bitmask(raw, EXP_IO_4_BITMASK);
+                active_hi_lo_grp.AL_CEL = read_bitmask(raw, EXP_IO_5_BITMASK);
+                active_hi_lo_grp.AH_backlight = !read_bitmask(raw, EXP_IO_6_BITMASK);   // Inverted
+                active_hi_lo_grp.AH_B07 = !read_bitmask(raw, EXP_IO_7_BITMASK);         // Inverted
+                active_hi_lo_grp.AH_hi_beams = !read_bitmask(raw, EXP_IO_8_BITMASK);    // Inverted
+                active_hi_lo_grp.AL_button = read_bitmask(raw, EXP_IO_9_BITMASK);
+                active_hi_lo_grp.AL_alternator = read_bitmask(raw, EXP_IO_10_BITMASK);
+                active_hi_lo_grp.AL_coolant_low = !read_bitmask(raw, EXP_IO_11_BITMASK);// Inverted
+                active_hi_lo_grp.AH_left_turn = !read_bitmask(raw, EXP_IO_12_BITMASK);  // Inverted
+                active_hi_lo_grp.AL_door = read_bitmask(raw, EXP_IO_13_BITMASK);
+                active_hi_lo_grp.AH_right_turn = !read_bitmask(raw, EXP_IO_14_BITMASK); //Inverted
+                active_hi_lo_grp.AL_ABS = read_bitmask(raw, EXP_IO_15_BITMASK);
+                
 
                 binocan_base_active_hi_lo.ignition_ah_st = binocan_base_active_hi_lo_ignition_ah_st_encode(active_hi_lo_grp.AH_ignition);
                 binocan_base_active_hi_lo.hi_beams_ah_tt = binocan_base_active_hi_lo_hi_beams_ah_tt_encode(active_hi_lo_grp.AH_hi_beams);
@@ -187,7 +229,7 @@ void base_active_hilo_PKG(void *pvParameters)
                     ESP_LOGW(TAG, "Could not queue active hi/lo message in queue");
                 }
 
-                // Normally here we package to the CAN queue
+                // For debugging purposes
                 ESP_LOGI(TAG, "Ignition: %s", active_hi_lo_grp.AH_ignition ? "ON" : "OFF");
                 ESP_LOGI(TAG, "Hi beams: %s", active_hi_lo_grp.AH_hi_beams ? "ON" : "OFF");
                 ESP_LOGI(TAG, "Alternator: %s", active_hi_lo_grp.AL_alternator ? "ON" : "OFF");
@@ -215,7 +257,7 @@ extern "C" void app_main(void)
     // Start TWAI first
     if (initCAN(NULL) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not initialize TWAI daemon, quitting...");
+        ESP_LOGE(TAG, "Could not initialize TWAI daemon, aborting...");
         return;
     }
 
