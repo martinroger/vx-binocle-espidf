@@ -32,12 +32,20 @@ struct board_ST
     uint8_t internal_ST = 0x00;
     bool LD_CHECK_ALIVE_ST = false;
     bool RD_CHECK_ALIVE_ST = false;
+    bool lowFuel = false;
+    bool overTemp = false;
 } interface_board_st;
 
 
 #pragma endregion
 
 #pragma region GPIO interrupts
+
+// Button ISR. Starts a timer on falling edge, mutes itself and resets trip_m after 500ms, whence the timer reenables the ISR.
+static void button_isr_handler(void *arg)
+{
+
+}
 
 #pragma endregion
 
@@ -176,6 +184,7 @@ void base_slow_metrics_PKG(void *pvParameters)
             coolant_degC = 70;
         if (coolant_degC > 130)
             coolant_degC = 130;
+        interface_board_st.overTemp = (coolant_degC >= 106 ? true : false );
         // Comment in for debug
         ESP_LOGD(TAG, "Coolant: %.2f - %.1f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle, coolant_degC);
 
@@ -186,6 +195,7 @@ void base_slow_metrics_PKG(void *pvParameters)
             fuel_level_pc = 100;
         if (fuel_level_pc < 0)
             fuel_level_pc = 0;
+        interface_board_st.lowFuel = (fuel_level_pc < 20 ? true : false);
 
         float lv_raw = sma_get_avg(adc_channels[1].sma);
         float lv_raw_v = lv_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
@@ -300,8 +310,8 @@ void base_active_hilo_PKG(void *pvParameters)
                 binocan_base_active_hi_lo.alarm_ah = binocan_base_active_hi_lo_alarm_ah_encode(active_hi_lo_grp.AH_alarm);
                 binocan_base_active_hi_lo.backlight_ah = binocan_base_active_hi_lo_backlight_ah_encode(active_hi_lo_grp.AH_backlight);
                 // Virtual tell tales
-                binocan_base_active_hi_lo.over_temperature_tt = binocan_base_active_hi_lo_over_temperature_tt_encode(0); // Placeholder, no sensor
-                binocan_base_active_hi_lo.fuel_low_tt = binocan_base_active_hi_lo_fuel_low_tt_encode(0);                 // Placeholder, no sensor
+                binocan_base_active_hi_lo.over_temperature_tt = binocan_base_active_hi_lo_over_temperature_tt_encode(interface_board_st.overTemp); 
+                binocan_base_active_hi_lo.fuel_low_tt = binocan_base_active_hi_lo_fuel_low_tt_encode(interface_board_st.lowFuel);                 
                 binocan_base_active_hi_lo_pack(tx_msg.data, &binocan_base_active_hi_lo, BINOCAN_BASE_ACTIVE_HI_LO_LENGTH);
 
                 if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
@@ -584,6 +594,40 @@ extern "C" void app_main(void)
         interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
         // return;
     }
+
+#pragma region Register Button ISR
+    if(gpio_set_intr_type((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO,GPIO_INTR_ANYEDGE) != ESP_OK)
+    {
+        ESP_LOGW(TAG,"Could not set Button IO interrupt type");
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+    }
+    else
+    {
+        ret = gpio_install_isr_service(ESP_INTR_FLAG_LEVEL3);
+        switch (ret)
+        {
+        case ESP_ERR_INVALID_STATE:
+            ESP_LOGW(TAG,"ISR Service already started");
+            break;
+        case ESP_OK:
+            ESP_LOGD(TAG,"ISR Service starting");
+            break;
+        default:
+            ESP_LOGE(TAG,"Could not start ISR service.");
+            interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+            break;
+        }
+        if(ret == ESP_OK || ret== ESP_ERR_INVALID_STATE)
+        {
+            if(gpio_isr_handler_add((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO,button_isr_handler,NULL) != ESP_OK)
+            {
+                ESP_LOGE(TAG,"Could not add ISR handler for button to service");
+                interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+            }
+        }
+    }
+
+#pragma endregion
 
 #pragma endregion
     interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_OK_CHOICE;
