@@ -5,6 +5,7 @@
 #include "driver/mcpwm_prelude.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 #include "mcpwm_capture_helpers.h"
 #include "coefficients.h"
 
@@ -36,17 +37,54 @@ struct board_ST
     bool overTemp = false;
 } interface_board_st;
 
-
 #pragma endregion
 
 #pragma region GPIO interrupts
 
 // Button ISR. Starts a timer on falling edge, mutes itself and resets trip_m after 500ms, whence the timer reenables the ISR.
-static void button_isr_handler(void *arg)
-{
+// Timer used to confirm long press / debounce and perform trip reset
+static TimerHandle_t trip_reset_timer = NULL;
 
+// Timer callback runs in timer task context (not ISR)
+static void trip_reset_timer_cb(TimerHandle_t xTimer)
+{
+    // If button still low, reset trip
+    if (gpio_get_level((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO) == 0)
+    {
+        ESP_LOGI(TAG, "Button long-press detected: resetting trip_m to 0");
+        trip_m = 0;
+        if (trip_set(trip_m) != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Could not set trip_m in NVS");
+            interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        }
+    }
+
+    // Re-enable GPIO interrupt so future presses are detected
+    gpio_intr_enable((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO);
 }
 
+// ISR: disable further interrupts and start the confirmation timer
+static void button_isr_handler(void *arg)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+    // Disable further interrupts on this pin while we debounce / confirm
+    gpio_intr_disable((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO);
+
+    if (trip_reset_timer != NULL)
+    {
+        // Start one-shot timer for 500ms from ISR
+        if (xTimerStartFromISR(trip_reset_timer, &xHigherPriorityTaskWoken) != pdPASS)
+        {
+            ESP_EARLY_LOGW(TAG, "Could not start trip reset timer from ISR");
+            // re-enable interrupt to avoid missing future presses
+            gpio_intr_enable((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO);
+        }
+    }
+
+    portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
+}
 #pragma endregion
 
 #pragma region 5V management
@@ -184,7 +222,7 @@ void base_slow_metrics_PKG(void *pvParameters)
             coolant_degC = 70;
         if (coolant_degC > 130)
             coolant_degC = 130;
-        interface_board_st.overTemp = (coolant_degC >= 106 ? true : false );
+        interface_board_st.overTemp = (coolant_degC >= 106 ? true : false);
         // Comment in for debug
         ESP_LOGD(TAG, "Coolant: %.2f - %.1f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle, coolant_degC);
 
@@ -310,8 +348,8 @@ void base_active_hilo_PKG(void *pvParameters)
                 binocan_base_active_hi_lo.alarm_ah = binocan_base_active_hi_lo_alarm_ah_encode(active_hi_lo_grp.AH_alarm);
                 binocan_base_active_hi_lo.backlight_ah = binocan_base_active_hi_lo_backlight_ah_encode(active_hi_lo_grp.AH_backlight);
                 // Virtual tell tales
-                binocan_base_active_hi_lo.over_temperature_tt = binocan_base_active_hi_lo_over_temperature_tt_encode(interface_board_st.overTemp); 
-                binocan_base_active_hi_lo.fuel_low_tt = binocan_base_active_hi_lo_fuel_low_tt_encode(interface_board_st.lowFuel);                 
+                binocan_base_active_hi_lo.over_temperature_tt = binocan_base_active_hi_lo_over_temperature_tt_encode(interface_board_st.overTemp);
+                binocan_base_active_hi_lo.fuel_low_tt = binocan_base_active_hi_lo_fuel_low_tt_encode(interface_board_st.lowFuel);
                 binocan_base_active_hi_lo_pack(tx_msg.data, &binocan_base_active_hi_lo, BINOCAN_BASE_ACTIVE_HI_LO_LENGTH);
 
                 if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
@@ -389,7 +427,7 @@ void base_odometer_PKG(void *pvParameters)
 }
 
 /// @brief Gathering and packaging task for the internal state indicators
-/// @param pvParameters 
+/// @param pvParameters
 void interface_brd_ST_PKG(void *pvParameters)
 {
     binocan_interface_brd_st_t binocan_interface_brd_st;
@@ -398,33 +436,33 @@ void interface_brd_ST_PKG(void *pvParameters)
         .identifier = BINOCAN_INTERFACE_BRD_ST_FRAME_ID,
         .data_length_code = BINOCAN_INTERFACE_BRD_ST_LENGTH};
 
-    gpio_set_direction((gpio_num_t)CONFIG_LD_ALIVE_IO,GPIO_MODE_INPUT);
-    gpio_set_pull_mode((gpio_num_t)CONFIG_LD_ALIVE_IO,GPIO_PULLDOWN_ONLY);
+    gpio_set_direction((gpio_num_t)CONFIG_LD_ALIVE_IO, GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)CONFIG_LD_ALIVE_IO, GPIO_PULLDOWN_ONLY);
     gpio_pulldown_en((gpio_num_t)CONFIG_LD_ALIVE_IO);
 
-    gpio_set_direction((gpio_num_t)CONFIG_RD_ALIVE_IO,GPIO_MODE_INPUT);
-    gpio_set_pull_mode((gpio_num_t)CONFIG_RD_ALIVE_IO,GPIO_PULLDOWN_ONLY);
+    gpio_set_direction((gpio_num_t)CONFIG_RD_ALIVE_IO, GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)CONFIG_RD_ALIVE_IO, GPIO_PULLDOWN_ONLY);
     gpio_pulldown_en((gpio_num_t)CONFIG_RD_ALIVE_IO);
 
     while (true)
     {
-        ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(BINOCAN_INTERFACE_BRD_ST_CYCLE_TIME_MS));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_INTERFACE_BRD_ST_CYCLE_TIME_MS));
 
-        interface_board_st.LD_CHECK_ALIVE_ST=gpio_get_level((gpio_num_t)CONFIG_LD_ALIVE_IO);
-        interface_board_st.RD_CHECK_ALIVE_ST=gpio_get_level((gpio_num_t)CONFIG_RD_ALIVE_IO);
-        interface_board_st.EN_5_V_AUX_ST=gpio_get_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
-        interface_board_st.EN_5_V_ST=gpio_get_level((gpio_num_t)CONFIG_5V_EN_GPIO);
-        
+        interface_board_st.LD_CHECK_ALIVE_ST = gpio_get_level((gpio_num_t)CONFIG_LD_ALIVE_IO);
+        interface_board_st.RD_CHECK_ALIVE_ST = gpio_get_level((gpio_num_t)CONFIG_RD_ALIVE_IO);
+        interface_board_st.EN_5_V_AUX_ST = gpio_get_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
+        interface_board_st.EN_5_V_ST = gpio_get_level((gpio_num_t)CONFIG_5V_EN_GPIO);
+
         binocan_interface_brd_st.en_5_v_aux_st = binocan_interface_brd_st_en_5_v_aux_st_encode(interface_board_st.EN_5_V_AUX_ST);
         binocan_interface_brd_st.en_5_v_st = binocan_interface_brd_st_en_5_v_st_encode(interface_board_st.EN_5_V_ST);
         binocan_interface_brd_st.itfc_board_st = binocan_interface_brd_st_itfc_board_st_encode(interface_board_st.internal_ST);
         binocan_interface_brd_st.ld_check_alive_st = binocan_interface_brd_st_ld_check_alive_st_encode(interface_board_st.LD_CHECK_ALIVE_ST);
         binocan_interface_brd_st.rd_check_alive_st = binocan_interface_brd_st_rd_check_alive_st_encode(interface_board_st.RD_CHECK_ALIVE_ST);
-        binocan_interface_brd_st_pack(tx_msg.data,&binocan_interface_brd_st,BINOCAN_INTERFACE_BRD_ST_LENGTH);
+        binocan_interface_brd_st_pack(tx_msg.data, &binocan_interface_brd_st, BINOCAN_INTERFACE_BRD_ST_LENGTH);
 
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1))!=pdTRUE)
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG,"Could not queue internal state message in queue");
+            ESP_LOGW(TAG, "Could not queue internal state message in queue");
         }
     }
 }
@@ -595,10 +633,18 @@ extern "C" void app_main(void)
         // return;
     }
 
-#pragma region Register Button ISR
-    if(gpio_set_intr_type((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO,GPIO_INTR_ANYEDGE) != ESP_OK)
+#pragma region Register Button ISR and timer
+    // Create the trip reset debounce/confirmation timer (one-shot 500 ms)
+    trip_reset_timer = xTimerCreate("trip_rst", pdMS_TO_TICKS(500), pdFALSE, NULL, trip_reset_timer_cb);
+    if (trip_reset_timer == NULL)
     {
-        ESP_LOGW(TAG,"Could not set Button IO interrupt type");
+        ESP_LOGW(TAG, "Could not create trip reset timer; button long-press will not reset trip");
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+    }
+
+    if (gpio_set_intr_type((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, GPIO_INTR_NEGEDGE) != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Could not set Button IO interrupt type");
         interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
     }
     else
@@ -607,21 +653,21 @@ extern "C" void app_main(void)
         switch (ret)
         {
         case ESP_ERR_INVALID_STATE:
-            ESP_LOGW(TAG,"ISR Service already started");
+            ESP_LOGW(TAG, "ISR Service already started");
             break;
         case ESP_OK:
-            ESP_LOGD(TAG,"ISR Service starting");
+            ESP_LOGD(TAG, "ISR Service starting");
             break;
         default:
-            ESP_LOGE(TAG,"Could not start ISR service.");
+            ESP_LOGE(TAG, "Could not start ISR service.");
             interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
             break;
         }
-        if(ret == ESP_OK || ret== ESP_ERR_INVALID_STATE)
+        if (ret == ESP_OK || ret == ESP_ERR_INVALID_STATE)
         {
-            if(gpio_isr_handler_add((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO,button_isr_handler,NULL) != ESP_OK)
+            if (gpio_isr_handler_add((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, button_isr_handler, NULL) != ESP_OK)
             {
-                ESP_LOGE(TAG,"Could not add ISR handler for button to service");
+                ESP_LOGE(TAG, "Could not add ISR handler for button to service");
                 interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
             }
         }
