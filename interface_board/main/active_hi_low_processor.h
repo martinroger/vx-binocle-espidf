@@ -41,7 +41,7 @@ bool AL_ABS = false;
 bool AL_door = false;
 bool AL_coolant_low = false;
 bool AL_button = false;
-bool AH_B07 = false;
+bool AH_alarm = false;
 bool AH_backlight = false;
 } active_hi_lo_grp;
 

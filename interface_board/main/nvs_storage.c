@@ -4,11 +4,11 @@
 
 esp_err_t nvs_init_flash(void)
 {
-    esp_err_t nvs_err = nvs_flash_init();
+    esp_err_t nvs_err = nvs_flash_init_partition("nvs_odo");
     if (nvs_err == ESP_ERR_NVS_NO_FREE_PAGES || nvs_err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        esp_err_t e = nvs_flash_erase();
+        esp_err_t e = nvs_flash_erase_partition("nvs_odo");
         if (e != ESP_OK) return e;
-        nvs_err = nvs_flash_init();
+        nvs_err = nvs_flash_init_partition("nvs_odo");
     }
     return nvs_err;
 }
@@ -16,7 +16,7 @@ esp_err_t nvs_init_flash(void)
 esp_err_t nvs_get_u32_optional(const char *ns, const char *key, uint32_t *out_val, bool *found)
 {
     nvs_handle_t h;
-    esp_err_t ret = nvs_open(ns, NVS_READONLY, &h);
+    esp_err_t ret = nvs_open_from_partition("nvs_odo",ns, NVS_READONLY, &h);
     if (ret != ESP_OK)
         return ret;
     esp_err_t g = nvs_get_u32(h, key, out_val);
@@ -36,7 +36,7 @@ esp_err_t nvs_get_u32_optional(const char *ns, const char *key, uint32_t *out_va
 esp_err_t nvs_set_u32_value(const char *ns, const char *key, uint32_t val)
 {
     nvs_handle_t h;
-    esp_err_t ret = nvs_open(ns, NVS_READWRITE, &h);
+    esp_err_t ret = nvs_open_from_partition("nvs_odo",ns, NVS_READWRITE, &h);
     if (ret != ESP_OK)
         return ret;
     ret = nvs_set_u32(h, key, val);
@@ -49,7 +49,7 @@ esp_err_t nvs_set_u32_value(const char *ns, const char *key, uint32_t val)
 esp_err_t nvs_update_u32_if_different(const char *ns, const char *key, uint32_t new_val, bool *updated_out)
 {
     nvs_handle_t h;
-    esp_err_t ret = nvs_open(ns, NVS_READWRITE, &h);
+    esp_err_t ret = nvs_open_from_partition("nvs_odo",ns, NVS_READWRITE, &h);
     if (ret != ESP_OK)
         return ret;
 

@@ -23,24 +23,43 @@
 #endif
 #define TAG "MAIN"
 
+#pragma region Global variables
+// Should be extended to more ?
+struct board_ST
+{
+    bool EN_5_V_ST = false;
+    bool EN_5_V_AUX_ST = false;
+    uint8_t internal_ST = 0x00;
+    bool LD_CHECK_ALIVE_ST = false;
+    bool RD_CHECK_ALIVE_ST = false;
+} interface_board_st;
+
+
+#pragma endregion
+
+#pragma region GPIO interrupts
+
+#pragma endregion
 
 #pragma region 5V management
 // 5V control functions
 esp_err_t init_5V_ctrl(void)
 {
     esp_err_t ret = ESP_FAIL;
-    ESP_LOGI(TAG,"Initializing 5V and 5V Aux control pins");
-    ret = gpio_set_direction((gpio_num_t)CONFIG_5V_EN_GPIO,GPIO_MODE_INPUT_OUTPUT);
-    ret = gpio_set_direction((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,GPIO_MODE_INPUT_OUTPUT);
-    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_5V_EN_GPIO,GPIO_PULLDOWN_ONLY);
-    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,GPIO_PULLDOWN_ONLY);
+    ESP_LOGI(TAG, "Initializing 5V and 5V Aux control pins");
+    ret = gpio_set_direction((gpio_num_t)CONFIG_5V_EN_GPIO, GPIO_MODE_INPUT_OUTPUT);
+    ret = gpio_set_direction((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, GPIO_MODE_INPUT_OUTPUT);
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_5V_EN_GPIO, GPIO_PULLDOWN_ONLY);
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, GPIO_PULLDOWN_ONLY);
     ret = gpio_pulldown_en((gpio_num_t)CONFIG_5V_EN_GPIO);
     ret = gpio_pulldown_en((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
-    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO,0);
-    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,0);
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 0);
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 0);
+    interface_board_st.EN_5_V_AUX_ST = false;
+    interface_board_st.EN_5_V_ST = false;
     if (ret != ESP_OK)
     {
-        ESP_LOGE(TAG,"Issue setting up control pins for 5V outputs");
+        ESP_LOGE(TAG, "Issue setting up control pins for 5V outputs");
     }
     return ret;
 }
@@ -48,11 +67,16 @@ esp_err_t init_5V_ctrl(void)
 esp_err_t enable_5V(void)
 {
     esp_err_t ret = ESP_FAIL;
-    ESP_LOGD(TAG,"Enabling 5V output.");
-    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO,1);
+    ESP_LOGD(TAG, "Enabling 5V output.");
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 1);
     if (ret != ESP_OK)
     {
-        ESP_LOGW(TAG,"Could not enable 5V output, continuing.");
+        interface_board_st.EN_5_V_ST = false;
+        ESP_LOGW(TAG, "Could not enable 5V output, continuing.");
+    }
+    else
+    {
+        interface_board_st.EN_5_V_ST = true;
     }
     return ret;
 }
@@ -60,11 +84,16 @@ esp_err_t enable_5V(void)
 esp_err_t enable_5V_AUX(void)
 {
     esp_err_t ret = ESP_FAIL;
-    ESP_LOGD(TAG,"Enabling 5V auxiliary output.");
-    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,1);
+    ESP_LOGD(TAG, "Enabling 5V auxiliary output.");
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 1);
     if (ret != ESP_OK)
     {
-        ESP_LOGW(TAG,"Could not enable 5V auxiliary output, continuing.");
+        interface_board_st.EN_5_V_AUX_ST = false;
+        ESP_LOGW(TAG, "Could not enable 5V auxiliary output, continuing.");
+    }
+    else
+    {
+        interface_board_st.EN_5_V_AUX_ST = true;
     }
     return ret;
 }
@@ -72,11 +101,16 @@ esp_err_t enable_5V_AUX(void)
 esp_err_t disable_5V(void)
 {
     esp_err_t ret = ESP_FAIL;
-    ESP_LOGD(TAG,"Disabling 5V output.");
-    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO,0);
+    ESP_LOGD(TAG, "Disabling 5V output.");
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 0);
     if (ret != ESP_OK)
     {
-        ESP_LOGW(TAG,"Could not disable 5V output, continuing.");
+        interface_board_st.EN_5_V_ST = true;
+        ESP_LOGW(TAG, "Could not disable 5V output, continuing.");
+    }
+    else
+    {
+        interface_board_st.EN_5_V_ST = false;
     }
     return ret;
 }
@@ -84,11 +118,16 @@ esp_err_t disable_5V(void)
 esp_err_t disable_5V_AUX(void)
 {
     esp_err_t ret = ESP_FAIL;
-    ESP_LOGD(TAG,"Disabling 5V auxiliary output.");
-    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO,0);
+    ESP_LOGD(TAG, "Disabling 5V auxiliary output.");
+    ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 0);
     if (ret != ESP_OK)
     {
-        ESP_LOGW(TAG,"Could not disable 5V auxiliary output, continuing.");
+        interface_board_st.EN_5_V_AUX_ST = true;
+        ESP_LOGW(TAG, "Could not disable 5V auxiliary output, continuing.");
+    }
+    else
+    {
+        interface_board_st.EN_5_V_AUX_ST = false;
     }
     return ret;
 }
@@ -108,6 +147,9 @@ mcpwm_cap_channel_handle_t cap_chan_speed = NULL;
 // FreeRTOS handles
 TaskHandle_t base_slow_metrics_PKG_hdl;
 TaskHandle_t base_fast_metrics_PKG_hdl;
+// exp_act_hilo_proc_task_hdl for active high lows is already defined in tca9555_helpers because of interrupt wrapping
+TaskHandle_t base_odometer_PKG_hdl;
+TaskHandle_t interface_brd_ST_PKG_hdl;
 
 /// @brief Packaging task for base_slow_metrics
 /// @param pvParameters
@@ -223,21 +265,20 @@ void base_active_hilo_PKG(void *pvParameters)
             {
                 active_hi_lo_grp.AL_brake_low = read_bitmask(raw, EXP_IO_0_BITMASK);
                 active_hi_lo_grp.AL_parking_brake = read_bitmask(raw, EXP_IO_1_BITMASK);
-                active_hi_lo_grp.AH_ignition = !read_bitmask(raw, EXP_IO_2_BITMASK);    // Inverted
+                active_hi_lo_grp.AH_ignition = !read_bitmask(raw, EXP_IO_2_BITMASK); // Inverted
                 active_hi_lo_grp.AL_oil_pressure = read_bitmask(raw, EXP_IO_3_BITMASK);
                 active_hi_lo_grp.AL_airbag = read_bitmask(raw, EXP_IO_4_BITMASK);
                 active_hi_lo_grp.AL_CEL = read_bitmask(raw, EXP_IO_5_BITMASK);
-                active_hi_lo_grp.AH_backlight = !read_bitmask(raw, EXP_IO_6_BITMASK);   // Inverted
-                active_hi_lo_grp.AH_B07 = !read_bitmask(raw, EXP_IO_7_BITMASK);         // Inverted
-                active_hi_lo_grp.AH_hi_beams = !read_bitmask(raw, EXP_IO_8_BITMASK);    // Inverted
+                active_hi_lo_grp.AH_backlight = !read_bitmask(raw, EXP_IO_6_BITMASK); // Inverted
+                active_hi_lo_grp.AH_alarm = !read_bitmask(raw, EXP_IO_7_BITMASK);     // Inverted
+                active_hi_lo_grp.AH_hi_beams = !read_bitmask(raw, EXP_IO_8_BITMASK);  // Inverted
                 active_hi_lo_grp.AL_button = read_bitmask(raw, EXP_IO_9_BITMASK);
                 active_hi_lo_grp.AL_alternator = read_bitmask(raw, EXP_IO_10_BITMASK);
-                active_hi_lo_grp.AL_coolant_low = !read_bitmask(raw, EXP_IO_11_BITMASK);// Inverted
-                active_hi_lo_grp.AH_left_turn = !read_bitmask(raw, EXP_IO_12_BITMASK);  // Inverted
+                active_hi_lo_grp.AL_coolant_low = !read_bitmask(raw, EXP_IO_11_BITMASK); // Inverted
+                active_hi_lo_grp.AH_left_turn = !read_bitmask(raw, EXP_IO_12_BITMASK);   // Inverted
                 active_hi_lo_grp.AL_door = read_bitmask(raw, EXP_IO_13_BITMASK);
-                active_hi_lo_grp.AH_right_turn = !read_bitmask(raw, EXP_IO_14_BITMASK); //Inverted
+                active_hi_lo_grp.AH_right_turn = !read_bitmask(raw, EXP_IO_14_BITMASK); // Inverted
                 active_hi_lo_grp.AL_ABS = read_bitmask(raw, EXP_IO_15_BITMASK);
-                
 
                 binocan_base_active_hi_lo.ignition_ah_st = binocan_base_active_hi_lo_ignition_ah_st_encode(active_hi_lo_grp.AH_ignition);
                 binocan_base_active_hi_lo.hi_beams_ah_tt = binocan_base_active_hi_lo_hi_beams_ah_tt_encode(active_hi_lo_grp.AH_hi_beams);
@@ -253,7 +294,7 @@ void base_active_hilo_PKG(void *pvParameters)
                 binocan_base_active_hi_lo.door_al_tt = binocan_base_active_hi_lo_door_al_tt_encode(active_hi_lo_grp.AL_door);
                 binocan_base_active_hi_lo.coolant_low_al_tt = binocan_base_active_hi_lo_coolant_low_al_tt_encode(active_hi_lo_grp.AL_coolant_low);
                 binocan_base_active_hi_lo.button_al = binocan_base_active_hi_lo_button_al_encode(active_hi_lo_grp.AL_button);
-                binocan_base_active_hi_lo.b07_ah = binocan_base_active_hi_lo_b07_ah_encode(active_hi_lo_grp.AH_B07);
+                binocan_base_active_hi_lo.alarm_ah = binocan_base_active_hi_lo_alarm_ah_encode(active_hi_lo_grp.AH_alarm);
                 binocan_base_active_hi_lo.backlight_ah = binocan_base_active_hi_lo_backlight_ah_encode(active_hi_lo_grp.AH_backlight);
                 // Virtual tell tales
                 binocan_base_active_hi_lo.over_temperature_tt = binocan_base_active_hi_lo_over_temperature_tt_encode(0); // Placeholder, no sensor
@@ -280,10 +321,95 @@ void base_active_hilo_PKG(void *pvParameters)
                 ESP_LOGI(TAG, "Door: %s", active_hi_lo_grp.AL_door ? "ON" : "OFF");
                 ESP_LOGI(TAG, "Low coolant: %s", active_hi_lo_grp.AL_coolant_low ? "ON" : "OFF");
                 ESP_LOGI(TAG, "Button: %s", active_hi_lo_grp.AL_button ? "ON" : "OFF");
-                ESP_LOGI(TAG, "B07: %s", active_hi_lo_grp.AH_B07 ? "ON" : "OFF");
+                ESP_LOGI(TAG, "Alarm: %s", active_hi_lo_grp.AH_alarm ? "ON" : "OFF");
                 ESP_LOGI(TAG, "Backlight: %s", active_hi_lo_grp.AH_backlight ? "ON" : "OFF");
                 xSemaphoreGive(exp_act_hilo_semaphore);
             }
+        }
+    }
+}
+
+/// @brief Packaging task for the odometer and trip
+/// @param pvParameters
+void base_odometer_PKG(void *pvParameters)
+{
+    binocan_base_odometer_t binocan_base_odometer;
+    binocan_base_odometer_init(&binocan_base_odometer);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_BASE_ODOMETER_FRAME_ID,
+        .data_length_code = BINOCAN_BASE_ODOMETER_LENGTH};
+
+    uint32_t pulse_m = 0;
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_BASE_ODOMETER_CYCLE_TIME_MS));
+        // Check if number of pulses exceed 100m, if yes update trip_m and odometer_m to their new values, and propagate to NVS and CAN, if not just repeat values over CAN and do nothing on NVS side
+        pulse_m = COEFF_PULSES_TO_METER * pwm_cap_speed.pulse_counter;
+
+        if (pulse_m > 100)
+        {
+            pwm_cap_speed.pulse_counter = 0;
+            odometer_m += pulse_m;
+            trip_m += pulse_m;
+            if (odometer_set(odometer_m) != ESP_OK)
+            {
+                ESP_LOGW(TAG, "Could not set odometer_m in NVS");
+            }
+            if (trip_set(trip_m) != ESP_OK)
+            {
+                ESP_LOGW(TAG, "Could not set trip_m in NVS");
+            }
+            binocan_base_odometer.odometer_km = binocan_base_odometer_odometer_km_encode((float)(odometer_m / 1000));
+            binocan_base_odometer.odo_rem_m = binocan_base_odometer_odo_rem_m_encode((float)(odometer_m % 1000));
+            binocan_base_odometer.trip_km = binocan_base_odometer_trip_km_encode((float)(trip_m / 1000));
+            binocan_base_odometer.trip_rem_m = binocan_base_odometer_trip_rem_m_encode((float)(trip_m % 1000));
+            binocan_base_odometer_pack(tx_msg.data, &binocan_base_odometer, BINOCAN_BASE_ODOMETER_LENGTH);
+        }
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(TAG, "Could not queue odometer message in queue");
+        }
+    }
+}
+
+/// @brief Gathering and packaging task for the internal state indicators
+/// @param pvParameters 
+void interface_brd_ST_PKG(void *pvParameters)
+{
+    binocan_interface_brd_st_t binocan_interface_brd_st;
+    binocan_interface_brd_st_init(&binocan_interface_brd_st);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_INTERFACE_BRD_ST_FRAME_ID,
+        .data_length_code = BINOCAN_INTERFACE_BRD_ST_LENGTH};
+
+    gpio_set_direction((gpio_num_t)CONFIG_LD_ALIVE_IO,GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)CONFIG_LD_ALIVE_IO,GPIO_PULLDOWN_ONLY);
+    gpio_pulldown_en((gpio_num_t)CONFIG_LD_ALIVE_IO);
+
+    gpio_set_direction((gpio_num_t)CONFIG_RD_ALIVE_IO,GPIO_MODE_INPUT);
+    gpio_set_pull_mode((gpio_num_t)CONFIG_RD_ALIVE_IO,GPIO_PULLDOWN_ONLY);
+    gpio_pulldown_en((gpio_num_t)CONFIG_RD_ALIVE_IO);
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(BINOCAN_INTERFACE_BRD_ST_CYCLE_TIME_MS));
+
+        interface_board_st.LD_CHECK_ALIVE_ST=gpio_get_level((gpio_num_t)CONFIG_LD_ALIVE_IO);
+        interface_board_st.RD_CHECK_ALIVE_ST=gpio_get_level((gpio_num_t)CONFIG_RD_ALIVE_IO);
+        interface_board_st.EN_5_V_AUX_ST=gpio_get_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
+        interface_board_st.EN_5_V_ST=gpio_get_level((gpio_num_t)CONFIG_5V_EN_GPIO);
+        
+        binocan_interface_brd_st.en_5_v_aux_st = binocan_interface_brd_st_en_5_v_aux_st_encode(interface_board_st.EN_5_V_AUX_ST);
+        binocan_interface_brd_st.en_5_v_st = binocan_interface_brd_st_en_5_v_st_encode(interface_board_st.EN_5_V_ST);
+        binocan_interface_brd_st.itfc_board_st = binocan_interface_brd_st_itfc_board_st_encode(interface_board_st.internal_ST);
+        binocan_interface_brd_st.ld_check_alive_st = binocan_interface_brd_st_ld_check_alive_st_encode(interface_board_st.LD_CHECK_ALIVE_ST);
+        binocan_interface_brd_st.rd_check_alive_st = binocan_interface_brd_st_rd_check_alive_st_encode(interface_board_st.RD_CHECK_ALIVE_ST);
+        binocan_interface_brd_st_pack(tx_msg.data,&binocan_interface_brd_st,BINOCAN_INTERFACE_BRD_ST_LENGTH);
+
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1))!=pdTRUE)
+        {
+            ESP_LOGW(TAG,"Could not queue internal state message in queue");
         }
     }
 }
@@ -293,54 +419,56 @@ void base_active_hilo_PKG(void *pvParameters)
 #pragma region Main App
 extern "C" void app_main(void)
 {
-    #pragma region Escape sequence
+
+    interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_INIT_CHOICE; // Move to Init state
+
+#pragma region Escape sequence
     // Still in placeholder setup
-    ESP_LOGI(TAG,"Setting up escape sequence detection.");
+    ESP_LOGI(TAG, "Setting up escape sequence detection.");
     esp_err_t ret = ESP_FAIL;
-    ret = gpio_set_direction((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO,GPIO_MODE_INPUT);
-    ret = gpio_set_direction((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO,GPIO_MODE_INPUT);
-    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO,GPIO_PULLUP_ONLY); //Non inverted
-    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO,GPIO_PULLUP_ONLY); // Inverted
+    ret = gpio_set_direction((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, GPIO_MODE_INPUT);
+    ret = gpio_set_direction((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO, GPIO_MODE_INPUT);
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, GPIO_PULLUP_ONLY);     // Non inverted
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO, GPIO_PULLUP_ONLY); // Inverted
     ret = gpio_pullup_en((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO);
     ret = gpio_pullup_en((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO);
-    ESP_LOGI(TAG,"Escape sequence GPIOs set.");
+    ESP_LOGI(TAG, "Escape sequence GPIOs set.");
     if (gpio_get_level((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO) == 0 && gpio_get_level((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO) == 0)
     {
-        ESP_LOGI(TAG,"Escape sequence detected, starting debounce countdown");
+        ESP_LOGI(TAG, "Escape sequence detected, starting debounce countdown");
         int64_t start_esc_seq_ts = esp_timer_get_time();
         while (gpio_get_level((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO) == 0 && gpio_get_level((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO) == 0)
         {
-            if (esp_timer_get_time()-start_esc_seq_ts > 1000 * 1000)
+            if (esp_timer_get_time() - start_esc_seq_ts > 1000 * 1000)
             {
-                ESP_LOGW(TAG,"Escape sequence successfully completed, recording current OTA partition ID.");
+                ESP_LOGW(TAG, "Escape sequence successfully completed, recording current OTA partition ID.");
                 // Record current active OTA partition ID
-                ESP_LOGW(TAG,"Setting target boot partition to factory app (updater)");
+                ESP_LOGW(TAG, "Setting target boot partition to factory app (updater)");
                 // Set target boot partition to factory
-                ESP_LOGW(TAG,"Rebooting.");
+                ESP_LOGW(TAG, "Rebooting.");
                 // Rebooting
                 break;
-            }   
+            }
         }
     }
-    #pragma endregion
-    
-    
-    #pragma region Setup Sequence
+#pragma endregion
+
+#pragma region Setup Sequence
     // Start 5V Channels
     if (init_5V_ctrl() != ESP_OK)
     {
-        ESP_LOGW(TAG,"Impossible to initialize 5V outputs. Continuing");
+        ESP_LOGW(TAG, "Impossible to initialize 5V outputs. Continuing");
     }
     if (enable_5V() != ESP_OK)
     {
-        ESP_LOGW(TAG,"Could not fire up main 5V output. Continuing.");
+        ESP_LOGW(TAG, "Could not fire up main 5V output. Continuing.");
     }
     if (enable_5V_AUX() != ESP_OK)
     {
-        ESP_LOGW(TAG,"Could not fire up secondary 5V output. Continuing.");
+        ESP_LOGW(TAG, "Could not fire up secondary 5V output. Continuing.");
     }
-    
-    // Start TWAI 
+
+    // Start TWAI
     if (initCAN(NULL) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialize TWAI daemon, aborting...");
@@ -348,41 +476,39 @@ extern "C" void app_main(void)
     }
 
     // Initialize NVS and try to read persisted u32 values: odometer_m and trip_m
+    esp_err_t nvs_err = nvs_init_flash();
+    if (nvs_err != ESP_OK)
     {
-        esp_err_t nvs_err = nvs_init_flash();
-        if (nvs_err != ESP_OK) 
+        ESP_LOGW(TAG, "NVS init failed (%d). Continuing without persisted odometer/trip.", nvs_err);
+    }
+    else
+    {
+        bool found = false;
+        odometer_m = odometer_get(&found);
+        if (found)
         {
-            ESP_LOGW(TAG, "NVS init failed (%d). Continuing without persisted odometer/trip.", nvs_err);
-        } 
-        else 
+            ESP_LOGI(TAG, "NVS: odometer_m = %u m", odometer_m);
+        }
+        else
         {
-            bool found = false;
-            odometer_m = odometer_get(&found);
-            if (found) 
+            ESP_LOGI(TAG, "NVS: odometer_m not found");
+            if (odometer_set(odometer_m) != ESP_OK)
             {
-                ESP_LOGI(TAG, "NVS: odometer_m = %u m", odometer_m);
-            } 
-            else 
-            {
-                ESP_LOGI(TAG, "NVS: odometer_m not found");
-                if (odometer_set(odometer_m)!=ESP_OK)
-                {
-                    ESP_LOGE(TAG,"Could not set odometer in NVS!");
-                }
+                ESP_LOGE(TAG, "Could not set odometer in NVS!");
             }
+        }
 
-            trip_m = trip_get(&found);
-            if (found) 
+        trip_m = trip_get(&found);
+        if (found)
+        {
+            ESP_LOGI(TAG, "NVS: trip_m = %u m", trip_m);
+        }
+        else
+        {
+            ESP_LOGI(TAG, "NVS: trip_m not found");
+            if (trip_set(trip_m) != ESP_OK)
             {
-                ESP_LOGI(TAG, "NVS: trip_m = %u m", trip_m);
-            } 
-            else 
-            {
-                ESP_LOGI(TAG, "NVS: trip_m not found");
-                if (trip_set(trip_m)!=ESP_OK)
-                {
-                    ESP_LOGE(TAG,"Could not set trip in NVS!");
-                }
+                ESP_LOGE(TAG, "Could not set trip in NVS!");
             }
         }
     }
@@ -438,30 +564,35 @@ extern "C" void app_main(void)
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
         return;
     }
+    if (xTaskCreate(base_odometer_PKG, "B_ODO_PKG", 4096, NULL, 3, &base_odometer_PKG_hdl) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Could not create base odometer package task");
+        return;
+    }
 
-    #pragma endregion
-
+#pragma endregion
+    interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_OK_CHOICE;
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(5000));
         // Only used to log MCPWM output
-/* #ifdef CONFIG_LOOP_LOG_MCPWM
-        vTaskDelay(pdMS_TO_TICKS(LOG_INTERVAL_MS));
-        compute_freq_dut(&pwm_cap_coolant);
-        compute_freq_dut(&pwm_cap_rpm);
-        compute_freq_dut(&pwm_cap_speed);
-        ESP_LOGI(TAG, "Coolant:\t %.2f Hz, %.1f%% \t|\tRPM:\t %.2f Hz, %.1f%% \t|\tSpeed:\t %.2f Hz, %.1f%%",
-                 pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0,
-                 pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle * 100.0,
-                 pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle * 100.0);
+        /* #ifdef CONFIG_LOOP_LOG_MCPWM
+                vTaskDelay(pdMS_TO_TICKS(LOG_INTERVAL_MS));
+                compute_freq_dut(&pwm_cap_coolant);
+                compute_freq_dut(&pwm_cap_rpm);
+                compute_freq_dut(&pwm_cap_speed);
+                ESP_LOGI(TAG, "Coolant:\t %.2f Hz, %.1f%% \t|\tRPM:\t %.2f Hz, %.1f%% \t|\tSpeed:\t %.2f Hz, %.1f%%",
+                         pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0,
+                         pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle * 100.0,
+                         pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle * 100.0);
 
-        pwm_cap_coolant.deltaT = 0;
-        pwm_cap_coolant.period_ticks = 0;
-        pwm_cap_rpm.deltaT = 0;
-        pwm_cap_rpm.period_ticks = 0;
-        pwm_cap_speed.deltaT = 0;
-        pwm_cap_speed.period_ticks = 0;
-#endif */
+                pwm_cap_coolant.deltaT = 0;
+                pwm_cap_coolant.period_ticks = 0;
+                pwm_cap_rpm.deltaT = 0;
+                pwm_cap_rpm.period_ticks = 0;
+                pwm_cap_speed.deltaT = 0;
+                pwm_cap_speed.period_ticks = 0;
+        #endif */
     }
 }
 
