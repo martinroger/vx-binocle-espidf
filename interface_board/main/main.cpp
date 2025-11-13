@@ -176,7 +176,8 @@ void base_slow_metrics_PKG(void *pvParameters)
             coolant_degC = 70;
         if (coolant_degC > 130)
             coolant_degC = 130;
-        ESP_LOGI(TAG, "Coolant: %.2f - %.1f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle, coolant_degC);
+        // Comment in for debug
+        ESP_LOGD(TAG, "Coolant: %.2f - %.1f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle, coolant_degC);
 
         float fuel_level_raw = sma_get_avg(adc_channels[0].sma);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
@@ -190,7 +191,8 @@ void base_slow_metrics_PKG(void *pvParameters)
         float lv_raw_v = lv_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float lv_v = lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P;
 
-        ESP_LOGI(TAG, "Fuel : %.2f - %.2fV - %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
+        // Comment in for debug
+        ESP_LOGD(TAG, "Fuel : %.2f - %.2fV - %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
 
         binocan_base_slow_metrics.coolant_temp = binocan_base_slow_metrics_coolant_temp_encode(coolant_degC);
         binocan_base_slow_metrics.fuel_level_pc = binocan_base_slow_metrics_fuel_level_pc_encode(fuel_level_pc);
@@ -225,7 +227,7 @@ void base_fast_metrics_PKG(void *pvParameters)
         compute_freq_dut(&pwm_cap_speed);
         float rpm = COEFF_FREQ_TO_RPM_M * pwm_cap_rpm.frequency + COEFF_FREQ_TO_RPM_P;
         float speed = COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P;
-        ESP_LOGI(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
+        ESP_LOGD(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
 
         binocan_base_fast_metrics.rpm = binocan_base_fast_metrics_rpm_encode(rpm);
         binocan_base_fast_metrics.speed_kph = binocan_base_fast_metrics_speed_kph_encode(speed);
@@ -257,6 +259,7 @@ void base_active_hilo_PKG(void *pvParameters)
         if (tca95x5_port_read(&tca_slave, &raw) != ESP_OK)
         {
             ESP_LOGE(TAG, "Impossible to fetch register from expander");
+            interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
         }
         else
         {
@@ -307,22 +310,22 @@ void base_active_hilo_PKG(void *pvParameters)
                 }
 
                 // For debugging purposes
-                ESP_LOGI(TAG, "Ignition: %s", active_hi_lo_grp.AH_ignition ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Hi beams: %s", active_hi_lo_grp.AH_hi_beams ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Alternator: %s", active_hi_lo_grp.AL_alternator ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Brake low level: %s", active_hi_lo_grp.AL_brake_low ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Parking brake: %s", active_hi_lo_grp.AL_parking_brake ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Oil alarm: %s", active_hi_lo_grp.AL_oil_pressure ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Airbag: %s", active_hi_lo_grp.AL_airbag ? "ON" : "OFF");
-                ESP_LOGI(TAG, "CEL: %s", active_hi_lo_grp.AL_CEL ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Right turn: %s", active_hi_lo_grp.AH_right_turn ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Left turn: %s", active_hi_lo_grp.AH_left_turn ? "ON" : "OFF");
-                ESP_LOGI(TAG, "ABS: %s", active_hi_lo_grp.AL_ABS ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Door: %s", active_hi_lo_grp.AL_door ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Low coolant: %s", active_hi_lo_grp.AL_coolant_low ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Button: %s", active_hi_lo_grp.AL_button ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Alarm: %s", active_hi_lo_grp.AH_alarm ? "ON" : "OFF");
-                ESP_LOGI(TAG, "Backlight: %s", active_hi_lo_grp.AH_backlight ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Ignition: %s", active_hi_lo_grp.AH_ignition ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Hi beams: %s", active_hi_lo_grp.AH_hi_beams ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Alternator: %s", active_hi_lo_grp.AL_alternator ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Brake low level: %s", active_hi_lo_grp.AL_brake_low ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Parking brake: %s", active_hi_lo_grp.AL_parking_brake ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Oil alarm: %s", active_hi_lo_grp.AL_oil_pressure ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Airbag: %s", active_hi_lo_grp.AL_airbag ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "CEL: %s", active_hi_lo_grp.AL_CEL ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Right turn: %s", active_hi_lo_grp.AH_right_turn ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Left turn: %s", active_hi_lo_grp.AH_left_turn ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "ABS: %s", active_hi_lo_grp.AL_ABS ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Door: %s", active_hi_lo_grp.AL_door ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Low coolant: %s", active_hi_lo_grp.AL_coolant_low ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Button: %s", active_hi_lo_grp.AL_button ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Alarm: %s", active_hi_lo_grp.AH_alarm ? "ON" : "OFF");
+                // ESP_LOGI(TAG, "Backlight: %s", active_hi_lo_grp.AH_backlight ? "ON" : "OFF");
                 xSemaphoreGive(exp_act_hilo_semaphore);
             }
         }
@@ -355,10 +358,12 @@ void base_odometer_PKG(void *pvParameters)
             if (odometer_set(odometer_m) != ESP_OK)
             {
                 ESP_LOGW(TAG, "Could not set odometer_m in NVS");
+                interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
             }
             if (trip_set(trip_m) != ESP_OK)
             {
                 ESP_LOGW(TAG, "Could not set trip_m in NVS");
+                interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
             }
             binocan_base_odometer.odometer_km = binocan_base_odometer_odometer_km_encode((float)(odometer_m / 1000));
             binocan_base_odometer.odo_rem_m = binocan_base_odometer_odo_rem_m_encode((float)(odometer_m % 1000));
@@ -517,17 +522,20 @@ extern "C" void app_main(void)
     if (set_capture_channel(cap_chan_coolant, (gpio_num_t)CONFIG_COOLANT_PWM_CAP_GPIO, &pwm_cap_coolant) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set Coolant capture channel");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
     if (set_capture_channel(cap_chan_rpm, (gpio_num_t)CONFIG_RPM_PWM_CAP_GPIO, &pwm_cap_rpm) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set RPM capture channel");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
     if (set_capture_channel(cap_chan_speed, (gpio_num_t)CONFIG_SPEED_PWM_CAP_GPIO, &pwm_cap_speed) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set Speed capture channel");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
 
     // Set up the IO Expander
@@ -535,39 +543,46 @@ extern "C" void app_main(void)
     if (i2cdev_init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start I²C bus");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
     if (initialize_adc_processor() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start ADC processor");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
     if (initialize_exp_active_hi_lo_proc() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start ActHiLo processor");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
 
     // Set up the packaging and queuing tasks
     if (xTaskCreate(base_active_hilo_PKG, "B_AHL_PKG", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base ActHiLo package task");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
     if (xTaskCreate(base_slow_metrics_PKG, "B_SLO_M_PKG", 4096, NULL, 3, &base_slow_metrics_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base slow metrics package task");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
     if (xTaskCreate(base_fast_metrics_PKG, "B_FST_M_PKG", 4096, NULL, 3, &base_fast_metrics_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
     if (xTaskCreate(base_odometer_PKG, "B_ODO_PKG", 4096, NULL, 3, &base_odometer_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base odometer package task");
-        return;
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return;
     }
 
 #pragma endregion
