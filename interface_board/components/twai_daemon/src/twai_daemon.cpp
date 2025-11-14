@@ -29,7 +29,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
 #else
     uint32_t alerts_to_enable = TWAI_ALERT_NONE;
 #endif
-
+    
     twai_general_config_t g_config = {
         .mode = TWAI_MODE_NORMAL,
         .tx_io = (gpio_num_t)CONFIG_CAN_TX,

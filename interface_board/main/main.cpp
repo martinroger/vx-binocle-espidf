@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include <string.h> // Required for version and SHA extraction
+// #include <string.h> // Required for version and SHA extraction
 // #include "gpio_defs.h"
 #include "esp_log.h"
 #include "driver/ledc.h"
@@ -7,7 +7,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
-#include "esp_app_desc.h"
+// #include "esp_app_desc.h"
+#include "version_parser.h"
 #include "mcpwm_capture_helpers.h"
 #include "coefficients.h"
 
@@ -37,12 +38,10 @@ struct board_ST
     bool RD_CHECK_ALIVE_ST = false;
     bool lowFuel = false;
     bool overTemp = false;
-    char* version;
-    char* commit_sha;
-    bool dirty = true;
+    parsed_app_meta_t* app_metadata;
 } interface_board_st;
 
-const esp_app_desc_t *app_metadata;
+// const esp_app_desc_t *app_metadata;
 
 #pragma endregion
 
@@ -482,53 +481,22 @@ extern "C" void app_main(void)
 
     interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_INIT_CHOICE; // Move to Init state
 
-    #pragma region App metadata parse
-    app_metadata = (esp_app_get_description());
-    ESP_LOGI("APPDESC", "Magic Word %lx", app_metadata->magic_word);
-    ESP_LOGI("APPDESC", "Secure version %lx", app_metadata->secure_version);
-    ESP_LOGI("APPDESC", "Version %s", app_metadata->version);
-    ESP_LOGI("APPDESC", "Project name : %s", app_metadata->project_name);
-    
-    const char* full_version = app_metadata->version;
-    // Find the last occurrence of '-'
-    const char* git_info_start = strrchr(full_version, '-');
-    
-    if (git_info_start != NULL) {
-        // Increment the pointer to skip the hyphen
-        const char* git_sha_and_status = git_info_start + 1;
-        
-        // Check for the "dirty" status
-        bool is_dirty = (strstr(git_sha_and_status, "-d") != NULL); //Might be truncated
-        
-        // Log the results
-        ESP_LOGI(TAG, "Full Version String: %s", full_version);
-        ESP_LOGI(TAG, "Git Commit (SHA + Status): %s", git_sha_and_status);
-        ESP_LOGI(TAG,"Is dirty ? %u",is_dirty);
-        
-        // Example of separating the components
-        if (is_dirty) {
-            // If dirty, the SHA is the part before '-dirty'
-            size_t sha_len = strlen(git_sha_and_status) - strlen("-dirty");
-            char short_sha[8]; // Short SHA is usually 7-10 chars
-            
-            // Copy the SHA portion
-            strncpy(short_sha, git_sha_and_status, sha_len);
-            short_sha[sha_len] = '\0'; // Null-terminate the string
-            
-            ESP_LOGW(TAG, "Status: **DIRTY** (Uncommitted changes exist)");
-            ESP_LOGW(TAG, "Short SHA: %s", short_sha);
-            
-        } else {
-            // If clean, the entire segment is the SHA
-            ESP_LOGI(TAG, "Status: **CLEAN** (No uncommitted changes)");
-            ESP_LOGI(TAG, "Short SHA: %s", git_sha_and_status);
+#pragma region App metadata parse
+    // Allocate memory for app_metadata and fill it by reference
+    interface_board_st.app_metadata = (parsed_app_meta_t *)malloc(sizeof(parsed_app_meta_t));
+    if (interface_board_st.app_metadata)
+    {
+        esp_err_t meta_err = parse_app_metadata(interface_board_st.app_metadata);
+        if (meta_err != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Failed to parse app metadata");
         }
-        
-    } else {
-        // This usually happens if the project is not under Git control
-        ESP_LOGE(TAG, "Could not find git information in version string: %s", full_version);
     }
-    vTaskDelay(pdMS_TO_TICKS(30000)); //Only for debug
+    else
+    {
+        ESP_LOGE(TAG, "Failed to allocate memory for app_metadata");
+    }
+    // vTaskDelay(pdMS_TO_TICKS(30000)); // Only for debug
 
 #pragma endregion
 
