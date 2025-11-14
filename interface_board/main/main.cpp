@@ -38,7 +38,7 @@ struct board_ST
     bool RD_CHECK_ALIVE_ST = false;
     bool lowFuel = false;
     bool overTemp = false;
-    parsed_app_meta_t* app_metadata;
+    parsed_app_meta_t *app_metadata;
 } interface_board_st;
 
 // const esp_app_desc_t *app_metadata;
