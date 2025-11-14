@@ -22,11 +22,11 @@ menu "Interface board configuration"
     menu "I²C configuration"
         config SDA_PIN
             int "SDA GPIO for I2C"
-            default 12
+            default 3
 
         config SCL_PIN
             int "SCL GPIO for I2C"
-            default 13
+            default 9
 
     endmenu
 
@@ -96,7 +96,7 @@ menu "Interface board configuration"
 
         config EXP_INT_PIN
             int "Interrupt pin for primary expander"
-            default 11
+            default 7
             help
                 Interrupt pin for the primary expander. Might be reversed logic!
 
@@ -116,7 +116,7 @@ menu "Interface board configuration"
             default 0x20
             help
                 Sets the default address value for the primary GPIO expander. 
-                0x20 for a PCF8574 with A0->A2 = 0.
+                0x20 for a TCA9555 with A0->A2 = 0.
 
     endmenu
 
@@ -127,19 +127,19 @@ menu "Interface board configuration"
 
         config LOOP_LOG_MCPWM
             bool "Read MCPWM values in main loop."
-            default true
+            default false
 
         config COOLANT_PWM_CAP_GPIO
             int "GPIO for the capture of the coolant PWM"
-            default 7
+            default 4
 
         config RPM_PWM_CAP_GPIO
             int "GPIO for the capture of the RPM pulses"
-            default 8
+            default 6
 
         config SPEED_PWM_CAP_GPIO
             int "GPIO for the capture of the speed PWM"
-            default 9 
+            default 5 
     endmenu
 
     menu "CAN frames parameters"
