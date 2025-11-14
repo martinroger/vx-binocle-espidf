@@ -182,7 +182,7 @@ menu "Interface board configuration"
             
             config LD_ALIVE_IO
                 int "Display alive signal GPIO"
-                default 20 
+                default 12 
             
             config LD_TXD_IO
                 int "Display TXD GPIO"

@@ -608,6 +608,12 @@ extern "C" void app_main(void)
     }
 
     // Set up the packaging and queuing tasks
+    if (xTaskCreate(interface_brd_ST_PKG,"ITFC_ST_PKG",4096,NULL,3,&interface_brd_ST_PKG_hdl)!= pdPASS)
+    {
+        ESP_LOGE(TAG,"Could not create interface state package task");
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        //return;
+    }
     if (xTaskCreate(base_active_hilo_PKG, "B_AHL_PKG", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base ActHiLo package task");
