@@ -39,6 +39,26 @@ VAL_TABLE_ ActHiLo_ST 1 "ON" 0 "OFF" ;
 VAL_TABLE_ Binary_ST 1 "ON" 0 "OFF" ;
 
 
+BO_ 1925 RD_UDS_RESP: 8 right_display
+
+BO_ 1924 RD_UDS_REQ: 8 Vector__XXX
+
+BO_ 1923 LD_UDS_RESP: 8 left_display
+
+BO_ 1922 LD_UDS_REQ: 8 Vector__XXX
+
+BO_ 1921 ITFC_UDS_RESP: 8 interface_board
+
+BO_ 1920 ITFC_UDS_REQ: 8 Vector__XXX
+
+BO_ 304 interface_board_version: 8 interface_board
+ SG_ ITFC_version_patch m0 : 24|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ ITFC_version_minor m0 : 16|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ ITFC_version_major m0 : 8|8@1+ (1,0) [0|255] "" Vector__XXX
+ SG_ ITFC_version_dirty m0 : 2|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ ITFC_version_commit m1 : 8|56@1+ (1,0) [0|7.20575940379279E+016] "" Vector__XXX
+ SG_ ITFC_version_MUX M : 0|2@1+ (1,0) [0|3] "" Vector__XXX
+
 BO_ 290 rd_brd_ST: 8 right_display
  SG_ RD_board_ST : 0|4@1+ (1,0) [0|15] ""  left_display
 
@@ -46,11 +66,15 @@ BO_ 289 ld_brd_ST: 8 left_display
  SG_ LD_board_ST : 0|4@1+ (1,0) [0|15] ""  right_display
 
 BO_ 288 interface_brd_ST: 8 interface_board
+ SG_ ITFC_EXP_ST : 2|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ EN_HI_R_SENSE_ST : 1|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ ITFC_ADC_ST : 3|1@1+ (1,0) [0|1] "" Vector__XXX
+ SG_ MCU_temperature : 17|7@1+ (1,0) [0|127] "degC" Vector__XXX
  SG_ RD_check_alive_ST : 7|1@1+ (1,0) [0|1] ""  left_display,right_display
  SG_ LD_check_alive_ST : 6|1@1+ (1,0) [0|1] ""  left_display,right_display
- SG_ ITFC_board_ST : 2|4@1+ (1,0) [0|15] ""  left_display,right_display
- SG_ EN_5V_ST : 1|1@1+ (1,0) [0|1] ""  left_display,right_display
- SG_ EN_5V_AUX_ST : 0|1@1+ (1,0) [0|1] ""  left_display,right_display
+ SG_ ITFC_board_ST : 13|3@1+ (1,0) [0|7] ""  left_display,right_display
+ SG_ EN_5V_ST : 5|1@1+ (1,0) [0|1] ""  left_display,right_display
+ SG_ EN_5V_AUX_ST : 4|1@1+ (1,0) [0|1] ""  left_display,right_display
 
 BO_ 273 base_odometer: 8 interface_board
  SG_ trip_rem_m : 36|4@1+ (100,0) [0|1500] "m"  left_display,right_display
@@ -99,6 +123,24 @@ BO_ 256 base_fast_metrics: 8 interface_board
 
 
 
+CM_ BO_ 1925 "UDS responses from the right display";
+CM_ BO_ 1924 "UDS requests to the right display";
+CM_ BO_ 1923 "UDS responses from the left display";
+CM_ BO_ 1922 "UDS requests to the left display";
+CM_ BO_ 1921 "UDS responses from the interface board";
+CM_ BO_ 1920 "UDS requests to the interface board";
+CM_ BO_ 304 "Interface board software version information";
+CM_ BO_ 290 "Right display board status
+";
+CM_ BO_ 289 "Left display board status
+";
+CM_ BO_ 288 "Interface board status
+";
+CM_ SG_ 288 ITFC_EXP_ST "Indicates if the IO expander on the interface board is in a valid (ON) or invalid (OFF) state.";
+CM_ SG_ 288 EN_HI_R_SENSE_ST "Reports status of the interface board Hi R sense enable toggle.";
+CM_ SG_ 288 ITFC_ADC_ST "Indicates if the ADC on the interface board is in a valid (ON) or invalid (OFF) state.";
+CM_ SG_ 288 MCU_temperature "Internal temperature of the MCU.";
+CM_ BO_ 273 "Odometer and trip information from interface board";
 CM_ BO_ 513 "Metrics related to chargecooling";
 CM_ SG_ 513 bitmask "Bitmask used to highlight unavailable signals in a standard message";
 CM_ SG_ 513 charge_coolant_temp_out "Charge coolant temperature out of the intake intercooler";
@@ -144,12 +186,26 @@ BA_DEF_DEF_  "GenMsgSendType" "Cyclic";
 BA_DEF_DEF_  "GenMsgCycleTime" 100;
 BA_DEF_DEF_  "MultiplexExtEnabled" "No";
 BA_DEF_DEF_  "BusType" "CAN";
+BA_ "GenMsgSendType" BO_ 1925 1;
+BA_ "GenMsgSendType" BO_ 1924 1;
+BA_ "GenMsgSendType" BO_ 1923 1;
+BA_ "GenMsgSendType" BO_ 1922 1;
+BA_ "GenMsgSendType" BO_ 1921 1;
+BA_ "GenMsgSendType" BO_ 1920 1;
+BA_ "GenMsgCycleTime" BO_ 304 1000;
+BA_ "GenMsgCycleTime" BO_ 290 200;
+BA_ "GenMsgCycleTime" BO_ 289 200;
+BA_ "GenMsgCycleTime" BO_ 288 200;
 BA_ "GenMsgCycleTime" BO_ 273 500;
-BA_ "GenMsgSendType" BO_ 257 4;
 BA_ "GenMsgCycleTime" BO_ 257 200;
+BA_ "GenMsgSendType" BO_ 257 4;
 BA_ "GenMsgCycleTime" BO_ 272 500;
+VAL_ 304 ITFC_version_MUX 1 "Commit ID" 0 "Base version tag and dirty flag" ;
 VAL_ 290 RD_board_ST 4 "Fault" 3 "Degraded" 2 "OK" 1 "Init" 0 "OFF" ;
 VAL_ 289 LD_board_ST 4 "Fault" 3 "Degraded" 2 "OK" 1 "Init" 0 "OFF" ;
+VAL_ 288 ITFC_EXP_ST 1 "ON" 0 "OFF" ;
+VAL_ 288 EN_HI_R_SENSE_ST 1 "ON" 0 "OFF" ;
+VAL_ 288 ITFC_ADC_ST 1 "ON" 0 "OFF" ;
 VAL_ 288 RD_check_alive_ST 1 "ON" 0 "OFF" ;
 VAL_ 288 LD_check_alive_ST 1 "ON" 0 "OFF" ;
 VAL_ 288 ITFC_board_ST 4 "Fault" 3 "Degraded" 2 "OK" 1 "Init" 0 "OFF" ;
