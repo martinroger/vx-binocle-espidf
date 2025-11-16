@@ -31,9 +31,13 @@
 // Should be extended to more ?
 struct board_ST
 {
+    bool EN_HI_R_SENSE_ST = false;
     bool EN_5_V_ST = false;
     bool EN_5_V_AUX_ST = false;
     uint8_t internal_ST = 0x00;
+    bool expander_ST = false;
+    bool adc_ST = false;
+    uint8_t mcu_temperature = 0;
     bool LD_CHECK_ALIVE_ST = false;
     bool RD_CHECK_ALIVE_ST = false;
     bool lowFuel = false;
@@ -202,6 +206,7 @@ TaskHandle_t base_fast_metrics_PKG_hdl;
 // exp_act_hilo_proc_task_hdl for active high lows is already defined in tca9555_helpers because of interrupt wrapping
 TaskHandle_t base_odometer_PKG_hdl;
 TaskHandle_t interface_brd_ST_PKG_hdl;
+TaskHandle_t interface_brd_version_PKG_hdl;
 
 /// @brief Packaging task for base_slow_metrics
 /// @param pvParameters
