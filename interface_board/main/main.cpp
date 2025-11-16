@@ -4,6 +4,7 @@
 #include "esp_log.h"
 #include "driver/ledc.h"
 #include "driver/mcpwm_prelude.h"
+#include "driver/temperature_sensor.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
@@ -37,7 +38,7 @@ struct board_ST
     uint8_t internal_ST = 0x00;
     bool expander_ST = false;
     bool adc_ST = false;
-    uint8_t mcu_temperature = 0;
+    float mcu_temperature = 0.0;
     bool LD_CHECK_ALIVE_ST = false;
     bool RD_CHECK_ALIVE_ST = false;
     bool lowFuel = false;
@@ -441,6 +442,11 @@ void base_odometer_PKG(void *pvParameters)
 /// @param pvParameters
 void interface_brd_ST_PKG(void *pvParameters)
 {
+    temperature_sensor_handle_t temp_sensor = NULL;
+    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10,85);
+    ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_install(&temp_sensor_config,&temp_sensor));
+    ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_enable(temp_sensor));
+    
     binocan_interface_brd_st_t binocan_interface_brd_st;
     binocan_interface_brd_st_init(&binocan_interface_brd_st);
     twai_message_t tx_msg = {
@@ -455,6 +461,7 @@ void interface_brd_ST_PKG(void *pvParameters)
     gpio_set_pull_mode((gpio_num_t)CONFIG_RD_ALIVE_IO, GPIO_PULLDOWN_ONLY);
     gpio_pulldown_en((gpio_num_t)CONFIG_RD_ALIVE_IO);
 
+
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_INTERFACE_BRD_ST_CYCLE_TIME_MS));
@@ -463,12 +470,16 @@ void interface_brd_ST_PKG(void *pvParameters)
         interface_board_st.RD_CHECK_ALIVE_ST = gpio_get_level((gpio_num_t)CONFIG_RD_ALIVE_IO);
         interface_board_st.EN_5_V_AUX_ST = gpio_get_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
         interface_board_st.EN_5_V_ST = gpio_get_level((gpio_num_t)CONFIG_5V_EN_GPIO);
+        interface_board_st.EN_HI_R_SENSE_ST = gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
+        ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_get_celsius(temp_sensor,&(interface_board_st.mcu_temperature)));
 
+        binocan_interface_brd_st.en_hi_r_sense_st = binocan_interface_brd_st_en_hi_r_sense_st_encode(interface_board_st.EN_HI_R_SENSE_ST);
         binocan_interface_brd_st.en_5_v_aux_st = binocan_interface_brd_st_en_5_v_aux_st_encode(interface_board_st.EN_5_V_AUX_ST);
         binocan_interface_brd_st.en_5_v_st = binocan_interface_brd_st_en_5_v_st_encode(interface_board_st.EN_5_V_ST);
         binocan_interface_brd_st.itfc_board_st = binocan_interface_brd_st_itfc_board_st_encode(interface_board_st.internal_ST);
         binocan_interface_brd_st.ld_check_alive_st = binocan_interface_brd_st_ld_check_alive_st_encode(interface_board_st.LD_CHECK_ALIVE_ST);
         binocan_interface_brd_st.rd_check_alive_st = binocan_interface_brd_st_rd_check_alive_st_encode(interface_board_st.RD_CHECK_ALIVE_ST);
+        binocan_interface_brd_st.mcu_temperature = binocan_interface_brd_st_mcu_temperature_encode(interface_board_st.mcu_temperature);
         binocan_interface_brd_st_pack(tx_msg.data, &binocan_interface_brd_st, BINOCAN_INTERFACE_BRD_ST_LENGTH);
 
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
@@ -478,6 +489,25 @@ void interface_brd_ST_PKG(void *pvParameters)
     }
 }
 
+void interface_brd_version_PKG(void *pvParameters)
+{
+    binocan_interface_board_version_t binocan_interface_board_version;
+    binocan_interface_board_version_init(&binocan_interface_board_version);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_INTERFACE_BOARD_VERSION_FRAME_ID,
+        .data_length_code = BINOCAN_INTERFACE_BOARD_VERSION_LENGTH};
+    
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_INTERFACE_BOARD_VERSION_CYCLE_TIME_MS));
+
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(TAG, "Could not queue internal state message in queue");
+        }
+    }
+    
+}
 #pragma endregion
 
 #pragma region Main App
