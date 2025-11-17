@@ -1221,7 +1221,7 @@ bool binocan_interface_board_version_itfc_version_major_is_in_range(uint8_t valu
  *
  * @return Encoded signal.
  */
-uint64_t binocan_interface_board_version_itfc_version_commit_encode(float value);
+uint64_t binocan_interface_board_version_itfc_version_commit_encode(double value);
 
 /**
  * Decode given signal by applying scaling and offset.

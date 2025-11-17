@@ -517,7 +517,7 @@ bool binocan_interface_board_version_itfc_version_major_is_in_range(uint8_t valu
     return (true);
 }
 
-uint64_t binocan_interface_board_version_itfc_version_commit_encode(float value)
+uint64_t binocan_interface_board_version_itfc_version_commit_encode(double value)
 {
     return (uint64_t)(value);
 }

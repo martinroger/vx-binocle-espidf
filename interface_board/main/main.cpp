@@ -1,5 +1,5 @@
 #include <stdio.h>
-// #include <string.h> // Required for version and SHA extraction
+#include <string.h> // Required for version and SHA extraction
 // #include "gpio_defs.h"
 #include "esp_log.h"
 #include "driver/ledc.h"
@@ -443,10 +443,10 @@ void base_odometer_PKG(void *pvParameters)
 void interface_brd_ST_PKG(void *pvParameters)
 {
     temperature_sensor_handle_t temp_sensor = NULL;
-    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20,100);
-    ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_install(&temp_sensor_config,&temp_sensor));
+    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100);
+    ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_install(&temp_sensor_config, &temp_sensor));
     ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_enable(temp_sensor));
-    
+
     binocan_interface_brd_st_t binocan_interface_brd_st;
     binocan_interface_brd_st_init(&binocan_interface_brd_st);
     twai_message_t tx_msg = {
@@ -461,7 +461,6 @@ void interface_brd_ST_PKG(void *pvParameters)
     gpio_set_pull_mode((gpio_num_t)CONFIG_RD_ALIVE_IO, GPIO_PULLDOWN_ONLY);
     gpio_pulldown_en((gpio_num_t)CONFIG_RD_ALIVE_IO);
 
-
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_INTERFACE_BRD_ST_CYCLE_TIME_MS));
@@ -471,7 +470,7 @@ void interface_brd_ST_PKG(void *pvParameters)
         interface_board_st.EN_5_V_AUX_ST = gpio_get_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
         interface_board_st.EN_5_V_ST = gpio_get_level((gpio_num_t)CONFIG_5V_EN_GPIO);
         interface_board_st.EN_HI_R_SENSE_ST = gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
-        ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_get_celsius(temp_sensor,&(interface_board_st.mcu_temperature)));
+        ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_get_celsius(temp_sensor, &(interface_board_st.mcu_temperature)));
 
         binocan_interface_brd_st.en_hi_r_sense_st = binocan_interface_brd_st_en_hi_r_sense_st_encode(interface_board_st.EN_HI_R_SENSE_ST);
         binocan_interface_brd_st.en_5_v_aux_st = binocan_interface_brd_st_en_5_v_aux_st_encode(interface_board_st.EN_5_V_AUX_ST);
@@ -491,22 +490,64 @@ void interface_brd_ST_PKG(void *pvParameters)
 
 void interface_brd_version_PKG(void *pvParameters)
 {
+    uint8_t message_mux = 0;
     binocan_interface_board_version_t binocan_interface_board_version;
     binocan_interface_board_version_init(&binocan_interface_board_version);
     twai_message_t tx_msg = {
         .identifier = BINOCAN_INTERFACE_BOARD_VERSION_FRAME_ID,
         .data_length_code = BINOCAN_INTERFACE_BOARD_VERSION_LENGTH};
-    
+
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_INTERFACE_BOARD_VERSION_CYCLE_TIME_MS));
+        // To be fair, all of the following could be done outside of the while loop...
+        // Switch the mux indicator
+        message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
+        // ESP_LOGI(TAG,"Mux: %u",message_mux);
+        switch (message_mux)
+        {
+        case BINOCAN_INTERFACE_BOARD_VERSION_ITFC_VERSION_MUX_BASE_VERSION_TAG_AND_DIRTY_FLAG_CHOICE:
+            binocan_interface_board_version.itfc_version_mux = binocan_interface_board_version_itfc_version_mux_encode(message_mux);
+            binocan_interface_board_version.itfc_version_major = binocan_interface_board_version_itfc_version_major_encode((uint8_t)(interface_board_st.app_metadata->base_version[0]));
+            binocan_interface_board_version.itfc_version_minor = binocan_interface_board_version_itfc_version_minor_encode((uint8_t)(interface_board_st.app_metadata->base_version[2]));
+            binocan_interface_board_version.itfc_version_patch = binocan_interface_board_version_itfc_version_patch_encode((uint8_t)(interface_board_st.app_metadata->base_version[4]));
+            binocan_interface_board_version.itfc_version_dirty = binocan_interface_board_version_itfc_version_dirty_encode((uint8_t)interface_board_st.app_metadata->is_dirty);
+            binocan_interface_board_version_pack(tx_msg.data, &binocan_interface_board_version, BINOCAN_INTERFACE_BOARD_VERSION_LENGTH);
+            break;
+        case BINOCAN_INTERFACE_BOARD_VERSION_ITFC_VERSION_MUX_COMMIT_ID_CHOICE:
+            binocan_interface_board_version.itfc_version_mux = binocan_interface_board_version_itfc_version_mux_encode(message_mux);
+            // Build a 64-bit value from up to 8 bytes of commitID and pass to the encode helper.
+            // This avoids memcpy into a numeric field and is lightweight.
+            if (interface_board_st.app_metadata && interface_board_st.app_metadata->commitID)
+            {
+                // ESP_LOGI(TAG,"Commit is valid");
+                uint64_t commit_val = 0;
+                size_t src_len = interface_board_st.app_metadata->commit_len;
+                if (src_len > 8)
+                    src_len = 8;
+                for (size_t i = 0; i < src_len; ++i)
+                {
+                    commit_val = (commit_val << 8) | (uint8_t)interface_board_st.app_metadata->commitID[i];
+                }
+                binocan_interface_board_version.itfc_version_commit = binocan_interface_board_version_itfc_version_commit_encode(commit_val);
+            }
+            else
+            {
+                // ESP_LOGI(TAG,"Commit will be 0");
+                binocan_interface_board_version.itfc_version_commit = binocan_interface_board_version_itfc_version_commit_encode(0ULL);
+            }
+            binocan_interface_board_version_pack(tx_msg.data, &binocan_interface_board_version, BINOCAN_INTERFACE_BOARD_VERSION_LENGTH);
+            break;
+
+        default:
+            break;
+        }
 
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(TAG, "Could not queue internal state message in queue");
         }
     }
-    
 }
 #pragma endregion
 
@@ -697,6 +738,12 @@ extern "C" void app_main(void)
         ESP_LOGE(TAG, "Could not create base odometer package task");
         interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
         // return;
+    }
+    if (xTaskCreate(interface_brd_version_PKG, "B_VER_PKG", 4096, NULL, 3, &interface_brd_version_PKG_hdl) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Could not create interface board version package task");
+        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        // return
     }
 
 #pragma region Register Button ISR and timer

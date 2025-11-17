@@ -4,6 +4,6 @@
 SCRIPT_DIR=$(dirname "$0")
 
 # Change the command to use the script's directory and the filename
-cantools generate_c_source --use-float "$SCRIPT_DIR/binocan.dbc";
+cantools generate_c_source  "$SCRIPT_DIR/binocan.dbc";
  
 exit
