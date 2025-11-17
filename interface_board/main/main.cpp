@@ -443,7 +443,7 @@ void base_odometer_PKG(void *pvParameters)
 void interface_brd_ST_PKG(void *pvParameters)
 {
     temperature_sensor_handle_t temp_sensor = NULL;
-    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10,85);
+    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20,100);
     ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_install(&temp_sensor_config,&temp_sensor));
     ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_enable(temp_sensor));
     
