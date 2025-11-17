@@ -527,7 +527,7 @@ void interface_brd_version_PKG(void *pvParameters)
                     src_len = 8;
                 for (size_t i = 0; i < src_len; ++i)
                 {
-                    commit_val = (commit_val << 8) | (uint8_t)interface_board_st.app_metadata->commitID[i];
+                    commit_val = (commit_val << 8) | (uint8_t)interface_board_st.app_metadata->commitID[src_len-i-1];
                 }
                 binocan_interface_board_version.itfc_version_commit = binocan_interface_board_version_itfc_version_commit_encode(commit_val);
             }

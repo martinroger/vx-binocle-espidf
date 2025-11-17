@@ -1,0 +1,221 @@
+VERSION ""
+
+
+NS_ :
+    NS_DESC_
+    CM_
+    BA_DEF_
+    BA_
+    VAL_
+    CAT_DEF_
+    CAT_
+    FILTER
+    BA_DEF_DEF_
+    EV_DATA_
+    ENVVAR_DATA_
+    SGTYPE_
+    SGTYPE_VAL_
+    BA_DEF_SGTYPE_
+    BA_SGTYPE_
+    SIG_TYPE_REF_
+    VAL_TABLE_
+    SIG_GROUP_
+    SIG_VALTYPE_
+    SIGTYPE_VALTYPE_
+    BO_TX_BU_
+    BA_DEF_REL_
+    BA_REL_
+    BA_DEF_DEF_REL_
+    BU_SG_REL_
+    BU_EV_REL_
+    BU_BO_REL_
+    SG_MUL_VAL_
+
+BS_: 
+BU_: external_controller interface_board right_display left_display 
+BO_ 1925 RD_UDS_RESP: 8 right_display
+
+BO_ 1924 RD_UDS_REQ: 8 Vector__XXX
+
+BO_ 1923 LD_UDS_RESP: 8 left_display
+
+BO_ 1922 LD_UDS_REQ: 8 Vector__XXX
+
+BO_ 1921 ITFC_UDS_RESP: 8 interface_board
+
+BO_ 1920 ITFC_UDS_REQ: 8 Vector__XXX
+
+BO_ 304 interface_board_version: 8 interface_board
+   SG_ ITFC_version_patch m0 : 24|8@4- (1,0) [0|255] "" Vector__XXX
+   SG_ ITFC_version_minor m0 : 16|8@4- (1,0) [0|255] "" Vector__XXX
+   SG_ ITFC_version_major m0 : 8|8@4- (1,0) [0|255] "" Vector__XXX
+   SG_ ITFC_version_dirty m0 : 2|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ITFC_version_commit m1 : 8|56@4- (1,0) [0|7.20576e+16] "" Vector__XXX
+   SG_ ITFC_version_MUX M : 0|2@1+ (1,0) [0|3] "" Vector__XXX
+
+BO_ 290 rd_brd_ST: 8 right_display
+   SG_ RD_board_ST : 0|4@1+ (1,0) [0|15] "" left_display
+
+BO_ 289 ld_brd_ST: 8 left_display
+   SG_ LD_board_ST : 0|4@1+ (1,0) [0|15] "" right_display
+
+BO_ 288 interface_brd_ST: 8 interface_board
+   SG_ ITFC_EXP_ST : 2|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ EN_HI_R_SENSE_ST : 1|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ ITFC_ADC_ST : 3|1@1+ (1,0) [0|1] "" Vector__XXX
+   SG_ MCU_temperature : 17|7@1+ (1,0) [0|127] "degC" Vector__XXX
+   SG_ RD_check_alive_ST : 7|1@1+ (1,0) [0|1] "" left_display
+   SG_ LD_check_alive_ST : 6|1@1+ (1,0) [0|1] "" left_display
+   SG_ ITFC_board_ST : 13|3@1+ (1,0) [0|7] "" left_display
+   SG_ EN_5V_ST : 5|1@1+ (1,0) [0|1] "" left_display
+   SG_ EN_5V_AUX_ST : 4|1@1+ (1,0) [0|1] "" left_display
+
+BO_ 273 base_odometer: 8 interface_board
+   SG_ trip_rem_m : 36|4@1+ (100,0) [0|1500] "m" left_display
+   SG_ trip_km : 24|12@1+ (1,0) [0|4095] "km" left_display
+   SG_ odometer_km : 0|20@1+ (1,0) [0|1.04858e+06] "km" left_display
+   SG_ odo_rem_m : 20|4@1+ (100,0) [0|1500] "m" left_display
+
+BO_ 513 extra_chargecooling_metrics: 8 external_controller
+   SG_ bitmask : 0|8@1+ (1,0) [0|255] "" right_display
+   SG_ charge_coolant_temp_out : 16|8@1+ (1,0) [0|255] "degC" right_display
+   SG_ charge_coolant_temp_in : 8|8@1+ (1,0) [0|255] "degC" right_display
+
+BO_ 257 base_active_hi_lo: 8 interface_board
+   SG_ backlight_AH : 15|1@1+ (1,0) [0|1] "" left_display
+   SG_ alarm_AH : 14|1@1+ (1,0) [0|1] "" left_display
+   SG_ button_AL : 13|1@1+ (1,0) [0|1] "" left_display
+   SG_ door_AL_TT : 11|1@1+ (1,0) [0|1] "" left_display
+   SG_ left_turn_AH_TT : 9|1@1+ (1,0) [0|1] "" left_display
+   SG_ ignition_AH_ST : 0|1@1+ (1,0) [0|1] "" left_display
+   SG_ right_turn_AH_TT : 8|1@1+ (1,0) [0|1] "" right_display
+   SG_ parking_brake_AL_TT : 4|1@1+ (1,0) [0|1] "" right_display
+   SG_ over_temperature_TT : 16|1@1+ (1,0) [0|1] "" right_display
+   SG_ alternator_AL_TT : 2|1@1+ (1,0) [0|1] "" right_display
+   SG_ oil_pressure_AL_TT : 5|1@1+ (1,0) [0|1] "" right_display
+   SG_ fuel_low_TT : 17|1@1+ (1,0) [0|1] "" right_display
+   SG_ coolant_low_AL_TT : 12|1@1+ (1,0) [0|1] "" right_display
+   SG_ brake_low_AL_TT : 3|1@1+ (1,0) [0|1] "" right_display
+   SG_ hi_beams_AH_TT : 1|1@1+ (1,0) [0|1] "" right_display
+   SG_ CEL_AL_TT : 7|1@1+ (1,0) [0|1] "" right_display
+   SG_ airbag_AL_TT : 6|1@1+ (1,0) [0|1] "" right_display
+   SG_ abs_AL_TT : 10|1@1+ (1,0) [0|1] "" right_display
+
+BO_ 512 extra_oil_metrics: 8 external_controller
+   SG_ bitmask : 0|8@1+ (1,0) [0|255] "" right_display
+   SG_ oil_temperature : 16|8@1+ (1,0) [0|255] "degC" right_display
+   SG_ oil_pressure : 8|8@1+ (0.1,0) [0|25.5] "bar" right_display
+
+BO_ 272 base_slow_metrics: 8 interface_board
+   SG_ lv_voltage_v : 16|8@1+ (0.1,0) [0|25.5] "V" right_display
+   SG_ fuel_level_pc : 8|8@1+ (0.5,0) [0|127.5] "pc" right_display
+   SG_ coolant_temp : 0|8@1+ (0.4,70) [70|172] "degC" right_display
+
+BO_ 256 base_fast_metrics: 8 interface_board
+   SG_ speed_kph : 16|16@1+ (0.04,0) [0|2621.4] "kph" right_display
+   SG_ rpm : 0|16@1+ (0.14,0) [0|9174.9] "" right_display
+
+CM_ BO_ 1925 "UDS responses from the right display";
+CM_ BO_ 1924 "UDS requests to the right display";
+CM_ BO_ 1923 "UDS responses from the left display";
+CM_ BO_ 1922 "UDS requests to the left display";
+CM_ BO_ 1921 "UDS responses from the interface board";
+CM_ BO_ 1920 "UDS requests to the interface board";
+CM_ BO_ 304 "Interface board software version information";
+CM_ SG_ 288 ITFC_EXP_ST "Indicates if the IO expander on the interface board is in a valid (ON) or invalid (OFF) state.";
+CM_ SG_ 288 EN_HI_R_SENSE_ST "Reports status of the interface board Hi R sense enable toggle.";
+CM_ SG_ 288 ITFC_ADC_ST "Indicates if the ADC on the interface board is in a valid (ON) or invalid (OFF) state.";
+CM_ SG_ 288 MCU_temperature "Internal temperature of the MCU.";
+CM_ BO_ 273 "Odometer and trip information from interface board";
+CM_ BO_ 513 "Metrics related to chargecooling";
+CM_ SG_ 513 bitmask "Bitmask used to highlight unavailable signals in a standard message";
+CM_ SG_ 513 charge_coolant_temp_out "Charge coolant temperature out of the intake intercooler";
+CM_ SG_ 513 charge_coolant_temp_in "Charge coolant temperature at intercooler inlet";
+CM_ BO_ 257 "Medium priority cyclic and trigger telltale message";
+CM_ SG_ 257 backlight_AH "LCD backlight input, might be related to headlights in low beam or position.";
+CM_ SG_ 257 alarm_AH "Unknown active high. Could be alarm or revlight";
+CM_ SG_ 257 button_AL "Button status";
+CM_ SG_ 257 door_AL_TT "Door telltale status";
+CM_ SG_ 257 left_turn_AH_TT "Turn indicators telltale";
+CM_ SG_ 257 right_turn_AH_TT "Turn indicators telltale";
+CM_ SG_ 257 parking_brake_AL_TT "Parking brake telltale";
+CM_ SG_ 257 over_temperature_TT "Coolant overtemperature telltale";
+CM_ SG_ 257 alternator_AL_TT "Battery or alternator telltale";
+CM_ SG_ 257 oil_pressure_AL_TT "Low oil pressure telltale";
+CM_ SG_ 257 fuel_low_TT "Low fuel level telltale";
+CM_ SG_ 257 coolant_low_AL_TT "Low coolant level telltale";
+CM_ SG_ 257 brake_low_AL_TT "Low brake fluid telltale";
+CM_ SG_ 257 hi_beams_AH_TT "High beams telltale";
+CM_ SG_ 257 CEL_AL_TT "Check Engine Light telltale";
+CM_ SG_ 257 airbag_AL_TT "Airbag telltale";
+CM_ SG_ 257 abs_AL_TT "ABS telltale";
+CM_ BO_ 512 "Message for extra measurements related to oil metrics";
+CM_ SG_ 512 bitmask "Bitmask used to highlight unavailable signals in a standard message";
+CM_ SG_ 512 oil_temperature "Optional oil temperature reading";
+CM_ SG_ 512 oil_pressure "Optional oil pressure reading";
+CM_ BO_ 272 "Slow cyclic message with numerical readings";
+CM_ SG_ 272 lv_voltage_v "12V measured after protection circuitry";
+CM_ SG_ 272 fuel_level_pc "Relative fuel tank level";
+CM_ SG_ 272 coolant_temp "Indicated coolant temperature";
+CM_ BO_ 256 "Fast cyclic message for base vehicle metrics and telltale triggers";
+CM_ SG_ 256 speed_kph "Vehicle speed in km/h";
+CM_ SG_ 256 rpm "Engine rotations in RPM";
+BA_DEF_ SG_ "SigType" ENUM "Default","Range","RangeSigned","ASCII","Discrete","Control","ReferencePGN","DTC","StringDelimiter","StringLength","StringLengthControl","PayloadCRC","PayloadCounter";
+BA_DEF_ "Baudrate" INT 0 1e+06;
+BA_DEF_ BO_ "GenMsgSendType" ENUM "Default","Range","RangeSigned","ASCII","Discrete","Control","ReferencePGN","DTC","StringDelimiter","StringLength","StringLengthControl","PayloadCRC","PayloadCounter","Cyclic","SendOnRequest","CyclicIfActive","SendOnRequestWithDelay","CyclicAndSendOnRequest","CyclicAndSendOnRequestWithDelay","IfActive","NoMsgSendType";
+BA_DEF_ BO_ "GenMsgCycleTime" INT 2 10000;
+BA_DEF_ "MultiplexExtEnabled" ENUM "Default","Range","RangeSigned","ASCII","Discrete","Control","ReferencePGN","DTC","StringDelimiter","StringLength","StringLengthControl","PayloadCRC","PayloadCounter","Cyclic","SendOnRequest","CyclicIfActive","SendOnRequestWithDelay","CyclicAndSendOnRequest","CyclicAndSendOnRequestWithDelay","IfActive","NoMsgSendType","No","Yes";
+BA_DEF_ "BusType" STRING ;
+BA_DEF_ BO_ "GenMsgBackgroundColor" STRING ;
+BA_DEF_ BO_ "GenMsgForegroundColor" STRING ;
+BA_DEF_DEF_ "SigType" "Default";
+BA_DEF_DEF_ "Baudrate" 500000;
+BA_DEF_DEF_ "GenMsgSendType" "Cyclic";
+BA_DEF_DEF_ "GenMsgCycleTime" 100;
+BA_DEF_DEF_ "MultiplexExtEnabled" "No";
+BA_DEF_DEF_ "BusType" "CAN";
+BA_DEF_DEF_ "GenMsgBackgroundColor" "#1e1e1e";
+BA_DEF_DEF_ "GenMsgForegroundColor" "#ffffff";
+BA_ "GenMsgSendType" BO_ 1925 1;
+BA_ "GenMsgSendType" BO_ 1924 1;
+BA_ "GenMsgSendType" BO_ 1923 1;
+BA_ "GenMsgSendType" BO_ 1922 1;
+BA_ "GenMsgSendType" BO_ 1921 1;
+BA_ "GenMsgSendType" BO_ 1920 1;
+BA_ "GenMsgCycleTime" BO_ 304 1000;
+BA_ "GenMsgCycleTime" BO_ 290 200;
+BA_ "GenMsgCycleTime" BO_ 289 200;
+BA_ "GenMsgCycleTime" BO_ 288 200;
+BA_ "GenMsgCycleTime" BO_ 273 500;
+BA_ "GenMsgCycleTime" BO_ 257 200;
+BA_ "GenMsgSendType" BO_ 257 4;
+BA_ "GenMsgCycleTime" BO_ 272 500;
+VAL_ 304 ITFC_version_MUX 1 "Commit ID" 0 "Base version tag and dirty flag";
+VAL_ 290 RD_board_ST 4 "Fault" 3 "Degraded" 2 "OK" 1 "Init" 0 "OFF";
+VAL_ 289 LD_board_ST 4 "Fault" 3 "Degraded" 2 "OK" 1 "Init" 0 "OFF";
+VAL_ 288 ITFC_EXP_ST 1 "ON" 0 "OFF";
+VAL_ 288 EN_HI_R_SENSE_ST 1 "ON" 0 "OFF";
+VAL_ 288 ITFC_ADC_ST 1 "ON" 0 "OFF";
+VAL_ 288 RD_check_alive_ST 1 "ON" 0 "OFF";
+VAL_ 288 LD_check_alive_ST 1 "ON" 0 "OFF";
+VAL_ 288 ITFC_board_ST 4 "Fault" 3 "Degraded" 2 "OK" 1 "Init" 0 "OFF";
+VAL_ 288 EN_5V_ST 1 "ON" 0 "OFF";
+VAL_ 288 EN_5V_AUX_ST 1 "ON" 0 "OFF";
+VAL_ 257 backlight_AH 1 "ON" 0 "OFF";
+VAL_ 257 alarm_AH 1 "ON" 0 "OFF";
+VAL_ 257 button_AL 1 "ON" 0 "OFF";
+VAL_ 257 door_AL_TT 1 "ON" 0 "OFF";
+VAL_ 257 left_turn_AH_TT 1 "ON" 0 "OFF";
+VAL_ 257 ignition_AH_ST 1 "ON" 0 "OFF";
+VAL_ 257 right_turn_AH_TT 1 "ON" 0 "OFF";
+VAL_ 257 parking_brake_AL_TT 1 "ON" 0 "OFF";
+VAL_ 257 over_temperature_TT 1 "ON" 0 "OFF";
+VAL_ 257 alternator_AL_TT 1 "ON" 0 "OFF";
+VAL_ 257 oil_pressure_AL_TT 1 "ON" 0 "OFF";
+VAL_ 257 fuel_low_TT 1 "ON" 0 "OFF";
+VAL_ 257 coolant_low_AL_TT 1 "ON" 0 "OFF";
+VAL_ 257 brake_low_AL_TT 1 "ON" 0 "OFF";
+VAL_ 257 hi_beams_AH_TT 1 "ON" 0 "OFF";
+VAL_ 257 CEL_AL_TT 1 "ON" 0 "OFF";
+VAL_ 257 airbag_AL_TT 1 "ON" 0 "OFF";
+VAL_ 257 abs_AL_TT 1 "ON" 0 "OFF";
