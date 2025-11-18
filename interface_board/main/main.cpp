@@ -36,8 +36,8 @@ struct board_ST
     bool EN_5_V_ST = false;
     bool EN_5_V_AUX_ST = false;
     uint8_t internal_ST = 0x00;
-    bool expander_ST = false;
-    bool adc_ST = false;
+    bool expander_ST = true;
+    bool adc_ST = true;
     float mcu_temperature = 0.0;
     bool LDB_check_alive_ST = false;
     bool RDB_check_alive_ST = false;
@@ -320,10 +320,11 @@ void base_active_hilo_PKG(void *pvParameters)
         {
             ESP_LOGE(TAG, "Impossible to fetch register from expander");
             interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+            interface_board_st.expander_ST = false;
         }
         else
         {
-
+            interface_board_st.expander_ST = true;
             if (xSemaphoreTake(exp_act_hilo_semaphore, pdMS_TO_TICKS(1)) == pdTRUE)
             {
                 active_hi_lo_grp.AL_brake_low = read_bitmask(raw, EXP_IO_0_BITMASK);
@@ -429,6 +430,8 @@ void interface_brd_ST_PKG(void *pvParameters)
     ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_install(&temp_sensor_config, &temp_sensor));
     ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_enable(temp_sensor));
 
+    bool ads1115_busy = false;
+
     binocan_itf_board_st_t binocan_itf_board_st;
     binocan_itf_board_st_init(&binocan_itf_board_st);
     twai_message_t tx_msg = {
@@ -453,6 +456,12 @@ void interface_brd_ST_PKG(void *pvParameters)
         interface_board_st.EN_5_V_ST = gpio_get_level((gpio_num_t)CONFIG_5V_EN_GPIO);
         interface_board_st.EN_hi_R_sense_ST = gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
         ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_get_celsius(temp_sensor, &(interface_board_st.mcu_temperature)));
+        if (ads111x_is_busy(&adc_slave, &ads1115_busy) != ESP_OK)
+        {
+            interface_board_st.adc_ST = false;
+        }
+        else
+            interface_board_st.adc_ST = true;
 
         binocan_itf_board_st.itf_hi_r_sense_st = binocan_itf_board_st_itf_hi_r_sense_st_encode(interface_board_st.EN_hi_R_sense_ST);
         binocan_itf_board_st.itf_5_v_aux_st = binocan_itf_board_st_itf_5_v_aux_st_encode(interface_board_st.EN_5_V_AUX_ST);
@@ -461,6 +470,8 @@ void interface_brd_ST_PKG(void *pvParameters)
         binocan_itf_board_st.itf_ld_check_alive_st = binocan_itf_board_st_itf_ld_check_alive_st_encode(interface_board_st.LDB_check_alive_ST);
         binocan_itf_board_st.itf_rd_check_alive_st = binocan_itf_board_st_itf_rd_check_alive_st_encode(interface_board_st.RDB_check_alive_ST);
         binocan_itf_board_st.itf_mcu_temp = binocan_itf_board_st_itf_mcu_temp_encode(interface_board_st.mcu_temperature);
+        binocan_itf_board_st.itf_adc_st = binocan_itf_board_st_itf_adc_st_encode(interface_board_st.adc_ST);
+        binocan_itf_board_st.itf_expander_st = binocan_itf_board_st_itf_expander_st_encode(interface_board_st.expander_ST);
         binocan_itf_board_st_pack(tx_msg.data, &binocan_itf_board_st, BINOCAN_ITF_BOARD_ST_LENGTH);
 
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
@@ -470,6 +481,8 @@ void interface_brd_ST_PKG(void *pvParameters)
     }
 }
 
+/// @brief Generates the commit and version information and regularly broadcasts them on the bus
+/// @param pvParameters
 void interface_brd_version_PKG(void *pvParameters)
 {
     uint8_t message_mux = 0;
@@ -479,52 +492,38 @@ void interface_brd_version_PKG(void *pvParameters)
         .identifier = BINOCAN_ITF_BOARD_VERSION_FRAME_ID,
         .data_length_code = BINOCAN_ITF_BOARD_VERSION_LENGTH};
 
+    binocan_itf_board_version.itf_version_major = binocan_itf_board_version_itf_version_major_encode((uint8_t)(interface_board_st.app_metadata->base_version[0]));
+    binocan_itf_board_version.itf_version_minor = binocan_itf_board_version_itf_version_minor_encode((uint8_t)(interface_board_st.app_metadata->base_version[2]));
+    binocan_itf_board_version.itf_version_patch = binocan_itf_board_version_itf_version_patch_encode((uint8_t)(interface_board_st.app_metadata->base_version[4]));
+    binocan_itf_board_version.itf_version_dirty = binocan_itf_board_version_itf_version_dirty_encode((uint8_t)interface_board_st.app_metadata->is_dirty);
+    // Build a 64-bit value from up to 8 bytes of commitID and pass to the encode helper.
+    // This avoids memcpy into a numeric field and is lightweight.
+    if (interface_board_st.app_metadata && interface_board_st.app_metadata->commitID)
+    {
+        // ESP_LOGI(TAG,"Commit is valid");
+        uint64_t commit_val = 0;
+        size_t src_len = interface_board_st.app_metadata->commit_len;
+        if (src_len > 8)
+            src_len = 8;
+        for (size_t i = 0; i < src_len; ++i)
+        {
+            commit_val = (commit_val << 8) | (uint8_t)interface_board_st.app_metadata->commitID[src_len - i - 1];
+        }
+        binocan_itf_board_version.itf_version_commit = binocan_itf_board_version_itf_version_commit_encode(commit_val);
+    }
+    else
+    {
+        // ESP_LOGI(TAG,"Commit will be 0");
+        binocan_itf_board_version.itf_version_commit = binocan_itf_board_version_itf_version_commit_encode(0ULL);
+    }
+
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_BOARD_VERSION_CYCLE_TIME_MS));
-        // To be fair, all of the following could be done outside of the while loop...
         // Switch the mux indicator
         message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
-        // ESP_LOGI(TAG,"Mux: %u",message_mux);
-        switch (message_mux)
-        {
-        case BINOCAN_ITF_BOARD_VERSION_ITF_VERSION_MUX_BASE_VERSION_TAG_AND_DIRTY_FLAG_CHOICE:
-            binocan_itf_board_version.itf_version_mux = binocan_itf_board_version_itf_version_mux_encode(message_mux);
-            binocan_itf_board_version.itf_version_major = binocan_itf_board_version_itf_version_major_encode((uint8_t)(interface_board_st.app_metadata->base_version[0]));
-            binocan_itf_board_version.itf_version_minor = binocan_itf_board_version_itf_version_minor_encode((uint8_t)(interface_board_st.app_metadata->base_version[2]));
-            binocan_itf_board_version.itf_version_patch = binocan_itf_board_version_itf_version_patch_encode((uint8_t)(interface_board_st.app_metadata->base_version[4]));
-            binocan_itf_board_version.itf_version_dirty = binocan_itf_board_version_itf_version_dirty_encode((uint8_t)interface_board_st.app_metadata->is_dirty);
-            binocan_itf_board_version_pack(tx_msg.data, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
-            break;
-        case BINOCAN_ITF_BOARD_VERSION_ITF_VERSION_MUX_COMMIT_ID_CHOICE:
-            binocan_itf_board_version.itf_version_mux = binocan_itf_board_version_itf_version_mux_encode(message_mux);
-            // Build a 64-bit value from up to 8 bytes of commitID and pass to the encode helper.
-            // This avoids memcpy into a numeric field and is lightweight.
-            if (interface_board_st.app_metadata && interface_board_st.app_metadata->commitID)
-            {
-                // ESP_LOGI(TAG,"Commit is valid");
-                uint64_t commit_val = 0;
-                size_t src_len = interface_board_st.app_metadata->commit_len;
-                if (src_len > 8)
-                    src_len = 8;
-                for (size_t i = 0; i < src_len; ++i)
-                {
-                    commit_val = (commit_val << 8) | (uint8_t)interface_board_st.app_metadata->commitID[src_len-i-1];
-                }
-                binocan_itf_board_version.itf_version_commit = binocan_itf_board_version_itf_version_commit_encode(commit_val);
-            }
-            else
-            {
-                // ESP_LOGI(TAG,"Commit will be 0");
-                binocan_itf_board_version.itf_version_commit = binocan_itf_board_version_itf_version_commit_encode(0ULL);
-            }
-            binocan_itf_board_version_pack(tx_msg.data, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
-            break;
-
-        default:
-            break;
-        }
-
+        binocan_itf_board_version.itf_version_mux = binocan_itf_board_version_itf_version_mux_encode(message_mux);
+        binocan_itf_board_version_pack(tx_msg.data, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(TAG, "Could not queue internal state message in queue");
@@ -675,18 +674,22 @@ extern "C" void app_main(void)
     {
         ESP_LOGE(TAG, "Could not start I²C bus");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+        interface_board_st.expander_ST = false;
+        interface_board_st.adc_ST = false;
         // return;
     }
     if (initialize_adc_processor() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start ADC processor");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+        interface_board_st.adc_ST = false;
         // return;
     }
     if (initialize_exp_active_hi_lo_proc() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start ActHiLo processor");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+        interface_board_st.expander_ST = false;
         // return;
     }
 
@@ -736,7 +739,6 @@ extern "C" void app_main(void)
         ESP_LOGW(TAG, "Could not create trip reset timer; button long-press will not reset trip");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
     }
-
     if (gpio_set_intr_type((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, GPIO_INTR_NEGEDGE) != ESP_OK)
     {
         ESP_LOGW(TAG, "Could not set Button IO interrupt type");
@@ -775,24 +777,6 @@ extern "C" void app_main(void)
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(5000));
-        // Only used to log MCPWM output
-        /* #ifdef CONFIG_LOOP_LOG_MCPWM
-                vTaskDelay(pdMS_TO_TICKS(LOG_INTERVAL_MS));
-                compute_freq_dut(&pwm_cap_coolant);
-                compute_freq_dut(&pwm_cap_rpm);
-                compute_freq_dut(&pwm_cap_speed);
-                ESP_LOGI(TAG, "Coolant:\t %.2f Hz, %.1f%% \t|\tRPM:\t %.2f Hz, %.1f%% \t|\tSpeed:\t %.2f Hz, %.1f%%",
-                         pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0,
-                         pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle * 100.0,
-                         pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle * 100.0);
-
-                pwm_cap_coolant.deltaT = 0;
-                pwm_cap_coolant.period_ticks = 0;
-                pwm_cap_rpm.deltaT = 0;
-                pwm_cap_rpm.period_ticks = 0;
-                pwm_cap_speed.deltaT = 0;
-                pwm_cap_speed.period_ticks = 0;
-        #endif */
     }
 }
 
