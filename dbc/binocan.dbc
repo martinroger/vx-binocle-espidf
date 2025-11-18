@@ -108,9 +108,9 @@ BO_ 257 ITF_active_hi_lo: 8 ITF
  SG_ ITF_ignition_AH_ST : 0|1@1+ (1,0) [0|1] ""  LDB,RDB
  SG_ ITF_right_turn_AH_TT : 8|1@1+ (1,0) [0|1] ""  RDB,LDB
  SG_ ITF_parking_brake_AL_TT : 4|1@1+ (1,0) [0|1] ""  RDB,LDB
- SG_ EXT_over_temperature_TT : 16|1@1+ (1,0) [0|1] ""  RDB,LDB
+ SG_ ITF_over_temperature_TT : 16|1@1+ (1,0) [0|1] ""  RDB,LDB
  SG_ ITF_alternator_AL_TT : 2|1@1+ (1,0) [0|1] ""  RDB,LDB
- SG_ EXT_oil_pressure_AL_TT : 5|1@1+ (1,0) [0|1] ""  RDB,LDB
+ SG_ ITF_oil_pressure_AL_TT : 5|1@1+ (1,0) [0|1] ""  RDB,LDB
  SG_ ITF_fuel_low_TT : 17|1@1+ (1,0) [0|1] ""  RDB,LDB
  SG_ ITF_coolant_low_AL_TT : 12|1@1+ (1,0) [0|1] ""  RDB,LDB
  SG_ ITF_brake_low_AL_TT : 3|1@1+ (1,0) [0|1] ""  RDB,LDB
@@ -176,9 +176,9 @@ CM_ SG_ 257 ITF_door_AL_TT "Door telltale status";
 CM_ SG_ 257 ITF_left_turn_AH_TT "Turn indicators telltale";
 CM_ SG_ 257 ITF_right_turn_AH_TT "Turn indicators telltale";
 CM_ SG_ 257 ITF_parking_brake_AL_TT "Parking brake telltale";
-CM_ SG_ 257 EXT_over_temperature_TT "Coolant overtemperature telltale";
+CM_ SG_ 257 ITF_over_temperature_TT "Coolant overtemperature telltale";
 CM_ SG_ 257 ITF_alternator_AL_TT "Battery or alternator telltale";
-CM_ SG_ 257 EXT_oil_pressure_AL_TT "Low oil pressure telltale";
+CM_ SG_ 257 ITF_oil_pressure_AL_TT "Low oil pressure telltale";
 CM_ SG_ 257 ITF_fuel_low_TT "Low fuel level telltale";
 CM_ SG_ 257 ITF_coolant_low_AL_TT "Low coolant level telltale";
 CM_ SG_ 257 ITF_brake_low_AL_TT "Low brake fluid telltale";
@@ -222,8 +222,8 @@ BA_ "GenMsgCycleTime" BO_ 290 200;
 BA_ "GenMsgCycleTime" BO_ 289 200;
 BA_ "GenMsgCycleTime" BO_ 288 200;
 BA_ "GenMsgCycleTime" BO_ 273 500;
-BA_ "GenMsgSendType" BO_ 257 4;
 BA_ "GenMsgCycleTime" BO_ 257 200;
+BA_ "GenMsgSendType" BO_ 257 4;
 BA_ "GenMsgCycleTime" BO_ 272 500;
 VAL_ 304 ITF_version_MUX 1 "Commit ID" 0 "Base version tag and dirty flag" ;
 VAL_ 290 RDB_SM_ST 4 "Fault" 3 "Degraded" 2 "OK" 1 "Init" 0 "OFF" ;
@@ -244,9 +244,9 @@ VAL_ 257 ITF_left_turn_AH_TT 1 "ON" 0 "OFF" ;
 VAL_ 257 ITF_ignition_AH_ST 1 "ON" 0 "OFF" ;
 VAL_ 257 ITF_right_turn_AH_TT 1 "ON" 0 "OFF" ;
 VAL_ 257 ITF_parking_brake_AL_TT 1 "ON" 0 "OFF" ;
-VAL_ 257 EXT_over_temperature_TT 1 "ON" 0 "OFF" ;
+VAL_ 257 ITF_over_temperature_TT 1 "ON" 0 "OFF" ;
 VAL_ 257 ITF_alternator_AL_TT 1 "ON" 0 "OFF" ;
-VAL_ 257 EXT_oil_pressure_AL_TT 1 "ON" 0 "OFF" ;
+VAL_ 257 ITF_oil_pressure_AL_TT 1 "ON" 0 "OFF" ;
 VAL_ 257 ITF_fuel_low_TT 1 "ON" 0 "OFF" ;
 VAL_ 257 ITF_coolant_low_AL_TT 1 "ON" 0 "OFF" ;
 VAL_ 257 ITF_brake_low_AL_TT 1 "ON" 0 "OFF" ;
