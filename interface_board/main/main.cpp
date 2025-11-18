@@ -32,15 +32,15 @@
 // Should be extended to more ?
 struct board_ST
 {
-    bool EN_HI_R_SENSE_ST = false;
+    bool EN_hi_R_sense_ST = false;
     bool EN_5_V_ST = false;
     bool EN_5_V_AUX_ST = false;
     uint8_t internal_ST = 0x00;
     bool expander_ST = false;
     bool adc_ST = false;
     float mcu_temperature = 0.0;
-    bool LD_CHECK_ALIVE_ST = false;
-    bool RD_CHECK_ALIVE_ST = false;
+    bool LDB_check_alive_ST = false;
+    bool RDB_check_alive_ST = false;
     bool lowFuel = false;
     bool overTemp = false;
     parsed_app_meta_t *app_metadata;
@@ -67,7 +67,7 @@ static void trip_reset_timer_cb(TimerHandle_t xTimer)
         if (trip_set(trip_m) != ESP_OK)
         {
             ESP_LOGW(TAG, "Could not set trip_m in NVS");
-            interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         }
     }
 
@@ -218,11 +218,11 @@ void base_slow_metrics_PKG(void *pvParameters)
     // fuel_level_pc
     // lv_voltage_v
 
-    binocan_base_slow_metrics_t binocan_base_slow_metrics;
-    binocan_base_slow_metrics_init(&binocan_base_slow_metrics);
+    binocan_itf_slow_metrics_t binocan_itf_slow_metrics;
+    binocan_itf_slow_metrics_init(&binocan_itf_slow_metrics);
     twai_message_t tx_msg = {
-        .identifier = BINOCAN_BASE_SLOW_METRICS_FRAME_ID,
-        .data_length_code = BINOCAN_BASE_SLOW_METRICS_LENGTH};
+        .identifier = BINOCAN_ITF_SLOW_METRICS_FRAME_ID,
+        .data_length_code = BINOCAN_ITF_SLOW_METRICS_LENGTH};
 
     while (true)
     {
@@ -254,10 +254,10 @@ void base_slow_metrics_PKG(void *pvParameters)
         // Comment in for debug
         ESP_LOGD(TAG, "Fuel : %.2f - %.2fV - %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
 
-        binocan_base_slow_metrics.coolant_temp = binocan_base_slow_metrics_coolant_temp_encode(coolant_degC);
-        binocan_base_slow_metrics.fuel_level_pc = binocan_base_slow_metrics_fuel_level_pc_encode(fuel_level_pc);
-        binocan_base_slow_metrics.lv_voltage_v = binocan_base_slow_metrics_lv_voltage_v_encode(lv_v);
-        binocan_base_slow_metrics_pack(tx_msg.data, &binocan_base_slow_metrics, BINOCAN_BASE_SLOW_METRICS_LENGTH);
+        binocan_itf_slow_metrics.itf_coolant_temp = binocan_itf_slow_metrics_itf_coolant_temp_encode(coolant_degC);
+        binocan_itf_slow_metrics.itf_fuel_level_pc = binocan_itf_slow_metrics_itf_fuel_level_pc_encode(fuel_level_pc);
+        binocan_itf_slow_metrics.itf_lv_voltage_v = binocan_itf_slow_metrics_itf_lv_voltage_v_encode(lv_v);
+        binocan_itf_slow_metrics_pack(tx_msg.data, &binocan_itf_slow_metrics, BINOCAN_ITF_SLOW_METRICS_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(TAG, "Could not queue slow metrics message in queue");
@@ -273,11 +273,11 @@ void base_fast_metrics_PKG(void *pvParameters)
     // speed_kph
     // rpm
 
-    binocan_base_fast_metrics_t binocan_base_fast_metrics;
-    binocan_base_fast_metrics_init(&binocan_base_fast_metrics);
+    binocan_itf_fast_metrics_t binocan_itf_fast_metrics;
+    binocan_itf_fast_metrics_init(&binocan_itf_fast_metrics);
     twai_message_t tx_msg = {
-        .identifier = BINOCAN_BASE_FAST_METRICS_FRAME_ID,
-        .data_length_code = BINOCAN_BASE_FAST_METRICS_LENGTH};
+        .identifier = BINOCAN_ITF_FAST_METRICS_FRAME_ID,
+        .data_length_code = BINOCAN_ITF_FAST_METRICS_LENGTH};
 
     while (true)
     {
@@ -289,9 +289,9 @@ void base_fast_metrics_PKG(void *pvParameters)
         float speed = COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P;
         ESP_LOGD(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
 
-        binocan_base_fast_metrics.rpm = binocan_base_fast_metrics_rpm_encode(rpm);
-        binocan_base_fast_metrics.speed_kph = binocan_base_fast_metrics_speed_kph_encode(speed);
-        binocan_base_fast_metrics_pack(tx_msg.data, &binocan_base_fast_metrics, BINOCAN_BASE_FAST_METRICS_LENGTH);
+        binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
+        binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
+        binocan_itf_fast_metrics_pack(tx_msg.data, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(TAG, "Could not queue fast metrics message in queue");
@@ -307,11 +307,11 @@ void base_active_hilo_PKG(void *pvParameters)
     // Essentially direct from expander + a couple virtual telltales
     uint16_t raw;
 
-    binocan_base_active_hi_lo_t binocan_base_active_hi_lo;
-    binocan_base_active_hi_lo_init(&binocan_base_active_hi_lo);
+    binocan_itf_active_hi_lo_t binocan_itf_active_hi_lo;
+    binocan_itf_active_hi_lo_init(&binocan_itf_active_hi_lo);
     twai_message_t tx_msg = {
-        .identifier = BINOCAN_BASE_ACTIVE_HI_LO_FRAME_ID,
-        .data_length_code = BINOCAN_BASE_ACTIVE_HI_LO_LENGTH};
+        .identifier = BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID,
+        .data_length_code = BINOCAN_ITF_ACTIVE_HI_LO_LENGTH};
 
     while (true)
     {
@@ -319,7 +319,7 @@ void base_active_hilo_PKG(void *pvParameters)
         if (tca95x5_port_read(&tca_slave, &raw) != ESP_OK)
         {
             ESP_LOGE(TAG, "Impossible to fetch register from expander");
-            interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         }
         else
         {
@@ -343,49 +343,31 @@ void base_active_hilo_PKG(void *pvParameters)
                 active_hi_lo_grp.AH_right_turn = !read_bitmask(raw, EXP_IO_14_BITMASK); // Inverted
                 active_hi_lo_grp.AL_ABS = read_bitmask(raw, EXP_IO_15_BITMASK);
 
-                binocan_base_active_hi_lo.ignition_ah_st = binocan_base_active_hi_lo_ignition_ah_st_encode(active_hi_lo_grp.AH_ignition);
-                binocan_base_active_hi_lo.hi_beams_ah_tt = binocan_base_active_hi_lo_hi_beams_ah_tt_encode(active_hi_lo_grp.AH_hi_beams);
-                binocan_base_active_hi_lo.alternator_al_tt = binocan_base_active_hi_lo_alternator_al_tt_encode(active_hi_lo_grp.AL_alternator);
-                binocan_base_active_hi_lo.brake_low_al_tt = binocan_base_active_hi_lo_brake_low_al_tt_encode(active_hi_lo_grp.AL_brake_low);
-                binocan_base_active_hi_lo.parking_brake_al_tt = binocan_base_active_hi_lo_parking_brake_al_tt_encode(active_hi_lo_grp.AL_parking_brake);
-                binocan_base_active_hi_lo.oil_pressure_al_tt = binocan_base_active_hi_lo_oil_pressure_al_tt_encode(active_hi_lo_grp.AL_oil_pressure);
-                binocan_base_active_hi_lo.airbag_al_tt = binocan_base_active_hi_lo_airbag_al_tt_encode(active_hi_lo_grp.AL_airbag);
-                binocan_base_active_hi_lo.cel_al_tt = binocan_base_active_hi_lo_cel_al_tt_encode(active_hi_lo_grp.AL_CEL);
-                binocan_base_active_hi_lo.right_turn_ah_tt = binocan_base_active_hi_lo_right_turn_ah_tt_encode(active_hi_lo_grp.AH_right_turn);
-                binocan_base_active_hi_lo.left_turn_ah_tt = binocan_base_active_hi_lo_left_turn_ah_tt_encode(active_hi_lo_grp.AH_left_turn);
-                binocan_base_active_hi_lo.abs_al_tt = binocan_base_active_hi_lo_abs_al_tt_encode(active_hi_lo_grp.AL_ABS);
-                binocan_base_active_hi_lo.door_al_tt = binocan_base_active_hi_lo_door_al_tt_encode(active_hi_lo_grp.AL_door);
-                binocan_base_active_hi_lo.coolant_low_al_tt = binocan_base_active_hi_lo_coolant_low_al_tt_encode(active_hi_lo_grp.AL_coolant_low);
-                binocan_base_active_hi_lo.button_al = binocan_base_active_hi_lo_button_al_encode(active_hi_lo_grp.AL_button);
-                binocan_base_active_hi_lo.alarm_ah = binocan_base_active_hi_lo_alarm_ah_encode(active_hi_lo_grp.AH_alarm);
-                binocan_base_active_hi_lo.backlight_ah = binocan_base_active_hi_lo_backlight_ah_encode(active_hi_lo_grp.AH_backlight);
+                binocan_itf_active_hi_lo.itf_ignition_ah_st = binocan_itf_active_hi_lo_itf_ignition_ah_st_encode(active_hi_lo_grp.AH_ignition);
+                binocan_itf_active_hi_lo.itf_hi_beams_ah_tt = binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_encode(active_hi_lo_grp.AH_hi_beams);
+                binocan_itf_active_hi_lo.itf_alternator_al_tt = binocan_itf_active_hi_lo_itf_alternator_al_tt_encode(active_hi_lo_grp.AL_alternator);
+                binocan_itf_active_hi_lo.itf_brake_low_al_tt = binocan_itf_active_hi_lo_itf_brake_low_al_tt_encode(active_hi_lo_grp.AL_brake_low);
+                binocan_itf_active_hi_lo.itf_parking_brake_al_tt = binocan_itf_active_hi_lo_itf_parking_brake_al_tt_encode(active_hi_lo_grp.AL_parking_brake);
+                binocan_itf_active_hi_lo.itf_oil_pressure_al_tt = binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_encode(active_hi_lo_grp.AL_oil_pressure);
+                binocan_itf_active_hi_lo.itf_airbag_al_tt = binocan_itf_active_hi_lo_itf_airbag_al_tt_encode(active_hi_lo_grp.AL_airbag);
+                binocan_itf_active_hi_lo.itf_cel_al_tt = binocan_itf_active_hi_lo_itf_cel_al_tt_encode(active_hi_lo_grp.AL_CEL);
+                binocan_itf_active_hi_lo.itf_right_turn_ah_tt = binocan_itf_active_hi_lo_itf_right_turn_ah_tt_encode(active_hi_lo_grp.AH_right_turn);
+                binocan_itf_active_hi_lo.itf_left_turn_ah_tt = binocan_itf_active_hi_lo_itf_left_turn_ah_tt_encode(active_hi_lo_grp.AH_left_turn);
+                binocan_itf_active_hi_lo.itf_abs_al_tt = binocan_itf_active_hi_lo_itf_abs_al_tt_encode(active_hi_lo_grp.AL_ABS);
+                binocan_itf_active_hi_lo.itf_door_al_tt = binocan_itf_active_hi_lo_itf_door_al_tt_encode(active_hi_lo_grp.AL_door);
+                binocan_itf_active_hi_lo.itf_coolant_low_al_tt = binocan_itf_active_hi_lo_itf_coolant_low_al_tt_encode(active_hi_lo_grp.AL_coolant_low);
+                binocan_itf_active_hi_lo.itf_button_al = binocan_itf_active_hi_lo_itf_button_al_encode(active_hi_lo_grp.AL_button);
+                binocan_itf_active_hi_lo.itf_alarm_ah = binocan_itf_active_hi_lo_itf_alarm_ah_encode(active_hi_lo_grp.AH_alarm);
+                binocan_itf_active_hi_lo.itf_backlight_ah = binocan_itf_active_hi_lo_itf_backlight_ah_encode(active_hi_lo_grp.AH_backlight);
                 // Virtual tell tales
-                binocan_base_active_hi_lo.over_temperature_tt = binocan_base_active_hi_lo_over_temperature_tt_encode(interface_board_st.overTemp);
-                binocan_base_active_hi_lo.fuel_low_tt = binocan_base_active_hi_lo_fuel_low_tt_encode(interface_board_st.lowFuel);
-                binocan_base_active_hi_lo_pack(tx_msg.data, &binocan_base_active_hi_lo, BINOCAN_BASE_ACTIVE_HI_LO_LENGTH);
+                binocan_itf_active_hi_lo.itf_over_temperature_tt = binocan_itf_active_hi_lo_itf_over_temperature_tt_encode(interface_board_st.overTemp);
+                binocan_itf_active_hi_lo.itf_fuel_low_tt = binocan_itf_active_hi_lo_itf_fuel_low_tt_encode(interface_board_st.lowFuel);
+                binocan_itf_active_hi_lo_pack(tx_msg.data, &binocan_itf_active_hi_lo, BINOCAN_ITF_ACTIVE_HI_LO_LENGTH);
 
                 if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
                 {
                     ESP_LOGW(TAG, "Could not queue active hi/lo message in queue");
                 }
-
-                // For debugging purposes
-                // ESP_LOGI(TAG, "Ignition: %s", active_hi_lo_grp.AH_ignition ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Hi beams: %s", active_hi_lo_grp.AH_hi_beams ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Alternator: %s", active_hi_lo_grp.AL_alternator ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Brake low level: %s", active_hi_lo_grp.AL_brake_low ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Parking brake: %s", active_hi_lo_grp.AL_parking_brake ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Oil alarm: %s", active_hi_lo_grp.AL_oil_pressure ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Airbag: %s", active_hi_lo_grp.AL_airbag ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "CEL: %s", active_hi_lo_grp.AL_CEL ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Right turn: %s", active_hi_lo_grp.AH_right_turn ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Left turn: %s", active_hi_lo_grp.AH_left_turn ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "ABS: %s", active_hi_lo_grp.AL_ABS ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Door: %s", active_hi_lo_grp.AL_door ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Low coolant: %s", active_hi_lo_grp.AL_coolant_low ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Button: %s", active_hi_lo_grp.AL_button ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Alarm: %s", active_hi_lo_grp.AH_alarm ? "ON" : "OFF");
-                // ESP_LOGI(TAG, "Backlight: %s", active_hi_lo_grp.AH_backlight ? "ON" : "OFF");
                 xSemaphoreGive(exp_act_hilo_semaphore);
             }
         }
@@ -396,17 +378,17 @@ void base_active_hilo_PKG(void *pvParameters)
 /// @param pvParameters
 void base_odometer_PKG(void *pvParameters)
 {
-    binocan_base_odometer_t binocan_base_odometer;
-    binocan_base_odometer_init(&binocan_base_odometer);
+    binocan_itf_odometer_t binocan_itf_odometer;
+    binocan_itf_odometer_init(&binocan_itf_odometer);
     twai_message_t tx_msg = {
-        .identifier = BINOCAN_BASE_ODOMETER_FRAME_ID,
-        .data_length_code = BINOCAN_BASE_ODOMETER_LENGTH};
+        .identifier = BINOCAN_ITF_ODOMETER_FRAME_ID,
+        .data_length_code = BINOCAN_ITF_ODOMETER_LENGTH};
 
     uint32_t pulse_m = 0;
 
     while (true)
     {
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_BASE_ODOMETER_CYCLE_TIME_MS));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_ODOMETER_CYCLE_TIME_MS));
         // Check if number of pulses exceed 100m, if yes update trip_m and odometer_m to their new values, and propagate to NVS and CAN, if not just repeat values over CAN and do nothing on NVS side
         pulse_m = COEFF_PULSES_TO_METER * pwm_cap_speed.pulse_counter;
 
@@ -418,18 +400,18 @@ void base_odometer_PKG(void *pvParameters)
             if (odometer_set(odometer_m) != ESP_OK)
             {
                 ESP_LOGW(TAG, "Could not set odometer_m in NVS");
-                interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
             }
             if (trip_set(trip_m) != ESP_OK)
             {
                 ESP_LOGW(TAG, "Could not set trip_m in NVS");
-                interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
             }
-            binocan_base_odometer.odometer_km = binocan_base_odometer_odometer_km_encode((float)(odometer_m / 1000));
-            binocan_base_odometer.odo_rem_m = binocan_base_odometer_odo_rem_m_encode((float)(odometer_m % 1000));
-            binocan_base_odometer.trip_km = binocan_base_odometer_trip_km_encode((float)(trip_m / 1000));
-            binocan_base_odometer.trip_rem_m = binocan_base_odometer_trip_rem_m_encode((float)(trip_m % 1000));
-            binocan_base_odometer_pack(tx_msg.data, &binocan_base_odometer, BINOCAN_BASE_ODOMETER_LENGTH);
+            binocan_itf_odometer.itf_odometer_km = binocan_itf_odometer_itf_odometer_km_encode((float)(odometer_m / 1000));
+            binocan_itf_odometer.itf_odo_rem_m = binocan_itf_odometer_itf_odo_rem_m_encode((float)(odometer_m % 1000));
+            binocan_itf_odometer.itf_trip_km = binocan_itf_odometer_itf_trip_km_encode((float)(trip_m / 1000));
+            binocan_itf_odometer.itf_trip_rem_m = binocan_itf_odometer_itf_trip_rem_m_encode((float)(trip_m % 1000));
+            binocan_itf_odometer_pack(tx_msg.data, &binocan_itf_odometer, BINOCAN_ITF_ODOMETER_LENGTH);
         }
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
@@ -447,11 +429,11 @@ void interface_brd_ST_PKG(void *pvParameters)
     ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_install(&temp_sensor_config, &temp_sensor));
     ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_enable(temp_sensor));
 
-    binocan_interface_brd_st_t binocan_interface_brd_st;
-    binocan_interface_brd_st_init(&binocan_interface_brd_st);
+    binocan_itf_board_st_t binocan_itf_board_st;
+    binocan_itf_board_st_init(&binocan_itf_board_st);
     twai_message_t tx_msg = {
-        .identifier = BINOCAN_INTERFACE_BRD_ST_FRAME_ID,
-        .data_length_code = BINOCAN_INTERFACE_BRD_ST_LENGTH};
+        .identifier = BINOCAN_ITF_BOARD_ST_FRAME_ID,
+        .data_length_code = BINOCAN_ITF_BOARD_ST_LENGTH};
 
     gpio_set_direction((gpio_num_t)CONFIG_LD_ALIVE_IO, GPIO_MODE_INPUT);
     gpio_set_pull_mode((gpio_num_t)CONFIG_LD_ALIVE_IO, GPIO_PULLDOWN_ONLY);
@@ -463,23 +445,23 @@ void interface_brd_ST_PKG(void *pvParameters)
 
     while (true)
     {
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_INTERFACE_BRD_ST_CYCLE_TIME_MS));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_BOARD_ST_CYCLE_TIME_MS));
 
-        interface_board_st.LD_CHECK_ALIVE_ST = gpio_get_level((gpio_num_t)CONFIG_LD_ALIVE_IO);
-        interface_board_st.RD_CHECK_ALIVE_ST = gpio_get_level((gpio_num_t)CONFIG_RD_ALIVE_IO);
+        interface_board_st.LDB_check_alive_ST = gpio_get_level((gpio_num_t)CONFIG_LD_ALIVE_IO);
+        interface_board_st.RDB_check_alive_ST = gpio_get_level((gpio_num_t)CONFIG_RD_ALIVE_IO);
         interface_board_st.EN_5_V_AUX_ST = gpio_get_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
         interface_board_st.EN_5_V_ST = gpio_get_level((gpio_num_t)CONFIG_5V_EN_GPIO);
-        interface_board_st.EN_HI_R_SENSE_ST = gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
+        interface_board_st.EN_hi_R_sense_ST = gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
         ESP_ERROR_CHECK_WITHOUT_ABORT(temperature_sensor_get_celsius(temp_sensor, &(interface_board_st.mcu_temperature)));
 
-        binocan_interface_brd_st.en_hi_r_sense_st = binocan_interface_brd_st_en_hi_r_sense_st_encode(interface_board_st.EN_HI_R_SENSE_ST);
-        binocan_interface_brd_st.en_5_v_aux_st = binocan_interface_brd_st_en_5_v_aux_st_encode(interface_board_st.EN_5_V_AUX_ST);
-        binocan_interface_brd_st.en_5_v_st = binocan_interface_brd_st_en_5_v_st_encode(interface_board_st.EN_5_V_ST);
-        binocan_interface_brd_st.itfc_board_st = binocan_interface_brd_st_itfc_board_st_encode(interface_board_st.internal_ST);
-        binocan_interface_brd_st.ld_check_alive_st = binocan_interface_brd_st_ld_check_alive_st_encode(interface_board_st.LD_CHECK_ALIVE_ST);
-        binocan_interface_brd_st.rd_check_alive_st = binocan_interface_brd_st_rd_check_alive_st_encode(interface_board_st.RD_CHECK_ALIVE_ST);
-        binocan_interface_brd_st.mcu_temperature = binocan_interface_brd_st_mcu_temperature_encode(interface_board_st.mcu_temperature);
-        binocan_interface_brd_st_pack(tx_msg.data, &binocan_interface_brd_st, BINOCAN_INTERFACE_BRD_ST_LENGTH);
+        binocan_itf_board_st.itf_hi_r_sense_st = binocan_itf_board_st_itf_hi_r_sense_st_encode(interface_board_st.EN_hi_R_sense_ST);
+        binocan_itf_board_st.itf_5_v_aux_st = binocan_itf_board_st_itf_5_v_aux_st_encode(interface_board_st.EN_5_V_AUX_ST);
+        binocan_itf_board_st.itf_5_v_st = binocan_itf_board_st_itf_5_v_st_encode(interface_board_st.EN_5_V_ST);
+        binocan_itf_board_st.itf_sm_st = binocan_itf_board_st_itf_sm_st_encode(interface_board_st.internal_ST);
+        binocan_itf_board_st.itf_ld_check_alive_st = binocan_itf_board_st_itf_ld_check_alive_st_encode(interface_board_st.LDB_check_alive_ST);
+        binocan_itf_board_st.itf_rd_check_alive_st = binocan_itf_board_st_itf_rd_check_alive_st_encode(interface_board_st.RDB_check_alive_ST);
+        binocan_itf_board_st.itf_mcu_temp = binocan_itf_board_st_itf_mcu_temp_encode(interface_board_st.mcu_temperature);
+        binocan_itf_board_st_pack(tx_msg.data, &binocan_itf_board_st, BINOCAN_ITF_BOARD_ST_LENGTH);
 
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
@@ -491,31 +473,31 @@ void interface_brd_ST_PKG(void *pvParameters)
 void interface_brd_version_PKG(void *pvParameters)
 {
     uint8_t message_mux = 0;
-    binocan_interface_board_version_t binocan_interface_board_version;
-    binocan_interface_board_version_init(&binocan_interface_board_version);
+    binocan_itf_board_version_t binocan_itf_board_version;
+    binocan_itf_board_version_init(&binocan_itf_board_version);
     twai_message_t tx_msg = {
-        .identifier = BINOCAN_INTERFACE_BOARD_VERSION_FRAME_ID,
-        .data_length_code = BINOCAN_INTERFACE_BOARD_VERSION_LENGTH};
+        .identifier = BINOCAN_ITF_BOARD_VERSION_FRAME_ID,
+        .data_length_code = BINOCAN_ITF_BOARD_VERSION_LENGTH};
 
     while (true)
     {
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_INTERFACE_BOARD_VERSION_CYCLE_TIME_MS));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_BOARD_VERSION_CYCLE_TIME_MS));
         // To be fair, all of the following could be done outside of the while loop...
         // Switch the mux indicator
         message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
         // ESP_LOGI(TAG,"Mux: %u",message_mux);
         switch (message_mux)
         {
-        case BINOCAN_INTERFACE_BOARD_VERSION_ITFC_VERSION_MUX_BASE_VERSION_TAG_AND_DIRTY_FLAG_CHOICE:
-            binocan_interface_board_version.itfc_version_mux = binocan_interface_board_version_itfc_version_mux_encode(message_mux);
-            binocan_interface_board_version.itfc_version_major = binocan_interface_board_version_itfc_version_major_encode((uint8_t)(interface_board_st.app_metadata->base_version[0]));
-            binocan_interface_board_version.itfc_version_minor = binocan_interface_board_version_itfc_version_minor_encode((uint8_t)(interface_board_st.app_metadata->base_version[2]));
-            binocan_interface_board_version.itfc_version_patch = binocan_interface_board_version_itfc_version_patch_encode((uint8_t)(interface_board_st.app_metadata->base_version[4]));
-            binocan_interface_board_version.itfc_version_dirty = binocan_interface_board_version_itfc_version_dirty_encode((uint8_t)interface_board_st.app_metadata->is_dirty);
-            binocan_interface_board_version_pack(tx_msg.data, &binocan_interface_board_version, BINOCAN_INTERFACE_BOARD_VERSION_LENGTH);
+        case BINOCAN_ITF_BOARD_VERSION_ITF_VERSION_MUX_BASE_VERSION_TAG_AND_DIRTY_FLAG_CHOICE:
+            binocan_itf_board_version.itf_version_mux = binocan_itf_board_version_itf_version_mux_encode(message_mux);
+            binocan_itf_board_version.itf_version_major = binocan_itf_board_version_itf_version_major_encode((uint8_t)(interface_board_st.app_metadata->base_version[0]));
+            binocan_itf_board_version.itf_version_minor = binocan_itf_board_version_itf_version_minor_encode((uint8_t)(interface_board_st.app_metadata->base_version[2]));
+            binocan_itf_board_version.itf_version_patch = binocan_itf_board_version_itf_version_patch_encode((uint8_t)(interface_board_st.app_metadata->base_version[4]));
+            binocan_itf_board_version.itf_version_dirty = binocan_itf_board_version_itf_version_dirty_encode((uint8_t)interface_board_st.app_metadata->is_dirty);
+            binocan_itf_board_version_pack(tx_msg.data, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
             break;
-        case BINOCAN_INTERFACE_BOARD_VERSION_ITFC_VERSION_MUX_COMMIT_ID_CHOICE:
-            binocan_interface_board_version.itfc_version_mux = binocan_interface_board_version_itfc_version_mux_encode(message_mux);
+        case BINOCAN_ITF_BOARD_VERSION_ITF_VERSION_MUX_COMMIT_ID_CHOICE:
+            binocan_itf_board_version.itf_version_mux = binocan_itf_board_version_itf_version_mux_encode(message_mux);
             // Build a 64-bit value from up to 8 bytes of commitID and pass to the encode helper.
             // This avoids memcpy into a numeric field and is lightweight.
             if (interface_board_st.app_metadata && interface_board_st.app_metadata->commitID)
@@ -529,14 +511,14 @@ void interface_brd_version_PKG(void *pvParameters)
                 {
                     commit_val = (commit_val << 8) | (uint8_t)interface_board_st.app_metadata->commitID[src_len-i-1];
                 }
-                binocan_interface_board_version.itfc_version_commit = binocan_interface_board_version_itfc_version_commit_encode(commit_val);
+                binocan_itf_board_version.itf_version_commit = binocan_itf_board_version_itf_version_commit_encode(commit_val);
             }
             else
             {
                 // ESP_LOGI(TAG,"Commit will be 0");
-                binocan_interface_board_version.itfc_version_commit = binocan_interface_board_version_itfc_version_commit_encode(0ULL);
+                binocan_itf_board_version.itf_version_commit = binocan_itf_board_version_itf_version_commit_encode(0ULL);
             }
-            binocan_interface_board_version_pack(tx_msg.data, &binocan_interface_board_version, BINOCAN_INTERFACE_BOARD_VERSION_LENGTH);
+            binocan_itf_board_version_pack(tx_msg.data, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
             break;
 
         default:
@@ -555,7 +537,7 @@ void interface_brd_version_PKG(void *pvParameters)
 extern "C" void app_main(void)
 {
 
-    interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_INIT_CHOICE; // Move to Init state
+    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; // Move to Init state
 
 #pragma region App metadata parse
     // Allocate memory for app_metadata and fill it by reference
@@ -671,19 +653,19 @@ extern "C" void app_main(void)
     if (set_capture_channel(cap_chan_coolant, (gpio_num_t)CONFIG_COOLANT_PWM_CAP_GPIO, &pwm_cap_coolant) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set Coolant capture channel");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (set_capture_channel(cap_chan_rpm, (gpio_num_t)CONFIG_RPM_PWM_CAP_GPIO, &pwm_cap_rpm) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set RPM capture channel");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (set_capture_channel(cap_chan_speed, (gpio_num_t)CONFIG_SPEED_PWM_CAP_GPIO, &pwm_cap_speed) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set Speed capture channel");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
 
@@ -692,57 +674,57 @@ extern "C" void app_main(void)
     if (i2cdev_init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start I²C bus");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (initialize_adc_processor() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start ADC processor");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (initialize_exp_active_hi_lo_proc() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start ActHiLo processor");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
 
     // Set up the packaging and queuing tasks
-    if (xTaskCreate(interface_brd_ST_PKG, "ITFC_ST_PKG", 4096, NULL, 3, &interface_brd_ST_PKG_hdl) != pdPASS)
+    if (xTaskCreate(interface_brd_ST_PKG, "ITF_ST_PKG", 4096, NULL, 3, &interface_brd_ST_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface state package task");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (xTaskCreate(base_active_hilo_PKG, "B_AHL_PKG", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base ActHiLo package task");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (xTaskCreate(base_slow_metrics_PKG, "B_SLO_M_PKG", 4096, NULL, 3, &base_slow_metrics_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base slow metrics package task");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (xTaskCreate(base_fast_metrics_PKG, "B_FST_M_PKG", 4096, NULL, 3, &base_fast_metrics_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (xTaskCreate(base_odometer_PKG, "B_ODO_PKG", 4096, NULL, 3, &base_odometer_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base odometer package task");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return;
     }
     if (xTaskCreate(interface_brd_version_PKG, "B_VER_PKG", 4096, NULL, 3, &interface_brd_version_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface board version package task");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
         // return
     }
 
@@ -752,13 +734,13 @@ extern "C" void app_main(void)
     if (trip_reset_timer == NULL)
     {
         ESP_LOGW(TAG, "Could not create trip reset timer; button long-press will not reset trip");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
     }
 
     if (gpio_set_intr_type((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, GPIO_INTR_NEGEDGE) != ESP_OK)
     {
         ESP_LOGW(TAG, "Could not set Button IO interrupt type");
-        interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
     }
     else
     {
@@ -773,7 +755,7 @@ extern "C" void app_main(void)
             break;
         default:
             ESP_LOGE(TAG, "Could not start ISR service.");
-            interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
             break;
         }
         if (ret == ESP_OK || ret == ESP_ERR_INVALID_STATE)
@@ -781,7 +763,7 @@ extern "C" void app_main(void)
             if (gpio_isr_handler_add((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, button_isr_handler, NULL) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not add ISR handler for button to service");
-                interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_DEGRADED_CHOICE;
+                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
             }
         }
     }
@@ -789,7 +771,7 @@ extern "C" void app_main(void)
 #pragma endregion
 
 #pragma endregion
-    interface_board_st.internal_ST = BINOCAN_INTERFACE_BRD_ST_ITFC_BOARD_ST_OK_CHOICE;
+    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_OK_CHOICE;
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(5000));
