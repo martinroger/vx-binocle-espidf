@@ -204,9 +204,6 @@ static esp_err_t odometer_get_handler(httpd_req_t *req)
 	esp_err_t err = ESP_FAIL;
 
 	/* Try reading from partition "nvs_odo" with namespace "storage", fall back to default */
-	// if (esp_err_to_name != NULL) {
-	// 	/* noop to avoid warning if esp_err_to_name isn't used elsewhere */
-	// }
 	err = nvs_open_from_partition("nvs_odo", "storage", NVS_READONLY, &h);
 	if (err != ESP_OK) {
 		err = nvs_open("storage", NVS_READONLY, &h);
@@ -280,14 +277,14 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	if (body_start) body_start += 4; else body_start = buf;
 	size_t to_write = r - (body_start - buf);
 
-	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which precedes the descriptor */
+	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which is part of the descriptor */
 	const esp_app_desc_t *img_desc = NULL;
 	if (to_write >= sizeof(esp_app_desc_t)) {
 		uint32_t *scan = (uint32_t *)body_start;
 		uint32_t scan_end = (to_write - sizeof(esp_app_desc_t)) / 4;
 		for (uint32_t i = 0; i < scan_end; i++) {
 			if (scan[i] == 0xABCD5432) {
-				img_desc = (const esp_app_desc_t *)&scan[i + 1];
+				img_desc = (const esp_app_desc_t *)&scan[i];
 				break;
 			}
 		}
