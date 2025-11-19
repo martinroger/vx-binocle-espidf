@@ -43,9 +43,15 @@ static const char index_html[] =
 "<html><head><meta charset=\"utf-8\"><title>Binocan Factory</title></head><body>"
 "<h1>Binocan Factory App</h1>"
 "<div id=\"info\">Loading...</div>"
+"<div>Odometer: <span id=\"odometer\">-</span> m &nbsp; Trip: <span id=\"trip\">-</span> m</div>"
 "<h2>Partitions</h2>"
-"<button onclick=\"fetch('/partitions').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=JSON.stringify(j,null,2)})\">Refresh</button>"
+"<button onclick=\"refreshPartitions()\">Refresh</button>"
 "<button onclick=\"fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting'))\">Reboot</button>"
+"<div>\n"
+"Factory: <span id=\"factory_project\">-</span> (<span id=\"factory_version\">-</span>)<br>\n"
+"OTA0: <span id=\"ota0_project\">-</span> (<span id=\"ota0_version\">-</span>)<br>\n"
+"OTA1: <span id=\"ota1_project\">-</span> (<span id=\"ota1_version\">-</span>)<br>\n"
+"</div>"
 "<h2>Upload Firmware</h2>"
 "<form id=\"uploadForm\" method=\"POST\" enctype=\"multipart/form-data\">"
 "Target: <select name=\"target\" id=\"target\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select><br><br>"
@@ -57,7 +63,17 @@ static const char index_html[] =
 "<h2>Set Boot Partition</h2>"
 "<select id=\"bootsel\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select>"
 "<button onclick=\"fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))\">Set Boot and Reboot</button>"
-"<script>function doUpload(){var f=document.getElementById('file').files[0];if(!f){alert('Choose file');return;}var t=document.getElementById('target').value;var fd=new FormData();fd.append('file',f);var xhr=new XMLHttpRequest();xhr.open('POST','/upload?target='+t,true);xhr.upload.onprogress=function(e){if(e.lengthComputable){document.getElementById('uploadProgress').value=Math.round(e.loaded/e.total*100);}};xhr.onload=function(){document.getElementById('result').innerText=xhr.responseText;document.getElementById('uploadProgress').value=0;};xhr.onerror=function(){alert('Upload failed');document.getElementById('uploadProgress').value=0;};xhr.send(fd);}fetch('/version').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=JSON.stringify(j,null,2)})</script>"
+"<script>\n"
+"function refreshPartitions(){\n"
+"  fetch('/partitions').then(r=>r.json()).then(j=>{\n"
+"    if(j.factory){document.getElementById('factory_project').innerText=j.factory.project_name||'-';document.getElementById('factory_version').innerText=j.factory.version||'-';}\n"
+"    if(j.ota_0){document.getElementById('ota0_project').innerText=j.ota_0.project_name||'-';document.getElementById('ota0_version').innerText=j.ota_0.version||'-';}\n"
+"    if(j.ota_1){document.getElementById('ota1_project').innerText=j.ota_1.project_name||'-';document.getElementById('ota1_version').innerText=j.ota_1.version||'-';}\n"
+"  });\n"
+"}\n"
+"function doUpload(){var f=document.getElementById('file').files[0];if(!f){alert('Choose file');return;}var t=document.getElementById('target').value;var fd=new FormData();fd.append('file',f);var xhr=new XMLHttpRequest();xhr.open('POST','/upload?target='+t,true);xhr.upload.onprogress=function(e){if(e.lengthComputable){document.getElementById('uploadProgress').value=Math.round(e.loaded/e.total*100);}};xhr.onload=function(){try{var j=JSON.parse(xhr.responseText);document.getElementById('result').innerText=JSON.stringify(j,null,2);if(j.project_name){refreshPartitions();}}catch(e){document.getElementById('result').innerText=xhr.responseText;}document.getElementById('uploadProgress').value=0;};xhr.onerror=function(){alert('Upload failed');document.getElementById('uploadProgress').value=0;};xhr.send(fd);}\n"
+"window.addEventListener('load', function(){ refreshPartitions(); fetch('/odometer').then(r=>r.json()).then(j=>{document.getElementById('odometer').innerText=j.odometer_m;document.getElementById('trip').innerText=j.trip_m}); fetch('/version').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=JSON.stringify(j,null,2)}); });\n"
+"</script>"
 "</body></html>";
 
 static esp_err_t read_wifi_credentials(char *ssid, size_t ssid_len, char *password, size_t pass_len)
@@ -180,6 +196,36 @@ static esp_err_t version_get_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+static esp_err_t odometer_get_handler(httpd_req_t *req)
+{
+	int32_t odometer_m = 0;
+	int32_t trip_m = 0;
+	nvs_handle_t h;
+	esp_err_t err = ESP_FAIL;
+
+	/* Try reading from partition "nvs_odo" with namespace "storage", fall back to default */
+	// if (esp_err_to_name != NULL) {
+	// 	/* noop to avoid warning if esp_err_to_name isn't used elsewhere */
+	// }
+	err = nvs_open_from_partition("nvs_odo", "storage", NVS_READONLY, &h);
+	if (err != ESP_OK) {
+		err = nvs_open("storage", NVS_READONLY, &h);
+		if (err != ESP_OK) {
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS open failed");
+			return ESP_FAIL;
+		}
+	}
+	if (nvs_get_i32(h, "odometer_m", &odometer_m) == ESP_ERR_NVS_NOT_FOUND) odometer_m = 0;
+	if (nvs_get_i32(h, "trip_m", &trip_m) == ESP_ERR_NVS_NOT_FOUND) trip_m = 0;
+	nvs_close(h);
+
+	char out[128];
+	snprintf(out, sizeof(out), "{\"odometer_m\":%ld,\"trip_m\":%ld}", odometer_m, trip_m);
+	httpd_resp_set_type(req, "application/json");
+	httpd_resp_sendstr(req, out);
+	return ESP_OK;
+}
+
 static esp_err_t reboot_post_handler(httpd_req_t *req)
 {
 	httpd_resp_sendstr(req, "Rebooting");
@@ -252,6 +298,10 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 		return ESP_FAIL;
 	}
 
+	/* Copy descriptor locally before freeing the upload buffer */
+	esp_app_desc_t local_desc;
+	memcpy(&local_desc, img_desc, sizeof(esp_app_desc_t));
+
 	/* Begin OTA now that image looks valid */
 	esp_ota_handle_t ota_handle = 0;
 	esp_err_t err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
@@ -283,7 +333,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	/* Respond with JSON including app metadata */
 	char out[256];
 	snprintf(out, sizeof(out), "{\"status\":\"ok\",\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\"}",
-			 img_desc->project_name, img_desc->version, img_desc->date);
+			 local_desc.project_name, local_desc.version, local_desc.date);
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, out);
 	return ESP_OK;
@@ -330,6 +380,8 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &setboot_uri);
 	httpd_uri_t reboot_uri = { .uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler };
 	httpd_register_uri_handler(server, &reboot_uri);
+	httpd_uri_t odo_uri = { .uri = "/odometer", .method = HTTP_GET, .handler = odometer_get_handler };
+	httpd_register_uri_handler(server, &odo_uri);
 	return server;
 }
 
