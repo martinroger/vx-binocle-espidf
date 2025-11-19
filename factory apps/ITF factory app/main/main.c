@@ -57,7 +57,7 @@ static const char index_html[] =
 "<h2>Set Boot Partition</h2>"
 "<select id=\"bootsel\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select>"
 "<button onclick=\"fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))\">Set Boot and Reboot</button>"
-"<script>function doUpload(){var f=document.getElementById('file').files[0];if(!f){alert('Choose file');return;}var t=document.getElementById('target').value;var fd=new FormData();fd.append('file',f);fd.append('target',t);var xhr=new XMLHttpRequest();xhr.open('POST','/upload',true);xhr.upload.onprogress=function(e){if(e.lengthComputable){document.getElementById('uploadProgress').value=Math.round(e.loaded/e.total*100);}};xhr.onload=function(){document.getElementById('result').innerText=xhr.responseText;document.getElementById('uploadProgress').value=0;};xhr.onerror=function(){alert('Upload failed');document.getElementById('uploadProgress').value=0;};xhr.send(fd);}fetch('/version').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=JSON.stringify(j,null,2)})</script>"
+"<script>function doUpload(){var f=document.getElementById('file').files[0];if(!f){alert('Choose file');return;}var t=document.getElementById('target').value;var fd=new FormData();fd.append('file',f);var xhr=new XMLHttpRequest();xhr.open('POST','/upload?target='+t,true);xhr.upload.onprogress=function(e){if(e.lengthComputable){document.getElementById('uploadProgress').value=Math.round(e.loaded/e.total*100);}};xhr.onload=function(){document.getElementById('result').innerText=xhr.responseText;document.getElementById('uploadProgress').value=0;};xhr.onerror=function(){alert('Upload failed');document.getElementById('uploadProgress').value=0;};xhr.send(fd);}fetch('/version').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=JSON.stringify(j,null,2)})</script>"
 "</body></html>";
 
 static esp_err_t read_wifi_credentials(char *ssid, size_t ssid_len, char *password, size_t pass_len)
@@ -213,22 +213,13 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	read_total += r;
 
 	char target_label[32] = {0};
-	if (strstr(buf, "name=\"target\"")) {
-		char *p = strstr(buf, "name=\"target\"");
-		char *val = strstr(p, "\r\n\r\n");
-		if (val) {
-			val += 4;
-			char *end = strstr(val, "\r\n");
-			if (end && (end - val) < (int)sizeof(target_label)) {
-				int l = end - val;
-				strncpy(target_label, val, l);
-				target_label[l] = '\0';
-			}
-		}
-	}
-	if (!target_label[0]) {
-		if (strstr(req->uri, "target=ota_1")) strncpy(target_label, "ota_1", sizeof(target_label));
-		else strncpy(target_label, "ota_0", sizeof(target_label));
+	/* Extract target from query string: /upload?target=ota_0 or /upload?target=ota_1 */
+	if (strstr(req->uri, "target=ota_1")) {
+		strncpy(target_label, "ota_1", sizeof(target_label) - 1);
+	} else if (strstr(req->uri, "target=ota_0")) {
+		strncpy(target_label, "ota_0", sizeof(target_label) - 1);
+	} else {
+		strncpy(target_label, "ota_0", sizeof(target_label) - 1);
 	}
 	ESP_LOGI(TAG, "Upload target partition: %s", target_label);
 	update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, target_label);
