@@ -143,17 +143,9 @@ static esp_err_t version_get_handler(httpd_req_t *req)
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, buf);
 	return ESP_OK;
-}
+	}
 
-static bool get_partition_desc(const char *label, esp_app_desc_t *out_desc)
-{
-	const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, label);
-	if (!part) return false;
-	esp_err_t err = esp_ota_get_partition_description(part, out_desc);
-	return err == ESP_OK;
-}
-
-static esp_err_t partitions_get_handler(httpd_req_t *req)
+	static esp_err_t partitions_get_handler(httpd_req_t *req)
 {
 	const char *labels[] = { "nvs", "phy_init", "factory", "ota_0", "ota_1", "ota_data", "storage" };
 	const int nlabels = sizeof(labels) / sizeof(labels[0]);
@@ -251,10 +243,17 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	if (body_start) body_start += 4; else body_start = buf;
 	size_t to_write = r - (body_start - buf);
 
-	/* Quick validate: check if uploaded image contains an app descriptor */
+	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which precedes the descriptor */
 	const esp_app_desc_t *img_desc = NULL;
-	if (to_write > 0) {
-		img_desc = esp_app_get_description((const void*)body_start);
+	if (to_write >= sizeof(esp_app_desc_t)) {
+		uint32_t *scan = (uint32_t *)body_start;
+		uint32_t scan_end = (to_write - sizeof(esp_app_desc_t)) / 4;
+		for (uint32_t i = 0; i < scan_end; i++) {
+			if (scan[i] == 0xABCD5432) {
+				img_desc = (const esp_app_desc_t *)&scan[i + 1];
+				break;
+			}
+		}
 	}
 	if (!img_desc) {
 		free(buf);
