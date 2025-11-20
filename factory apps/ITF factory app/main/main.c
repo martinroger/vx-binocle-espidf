@@ -1,6 +1,6 @@
 /*
  * Interface board Factory App
- * - Start as open AP named BINOCAN-<MAC>
+ * - Start as open AP named ITF-<MAC>
  * - Start mDNS as hostname "interface-board"
  * - Start HTTP server with endpoints:
  *   GET / -> UI
@@ -28,52 +28,12 @@
 #include "esp_err.h"
 #include "esp_mac.h"
 #include "esp_image_format.h"
+#include "esp_spiffs.h"
 
 #ifdef TAG
 #undef TAG
 #endif
 #define TAG "factory_app"
-
-static const char index_html[] =
-	"<!doctype html>\n"
-	"<html><head><meta charset=\"utf-8\"><title>Interface board factory app</title></head><body>"
-	"<h1>Interface board setup</h1>"
-	"<div id=\"info\">Loading...</div>"
-	"<div>Odometer: <span id=\"odometer\">-</span> m &nbsp; Trip: <span id=\"trip\">-</span> m</div>"
-	"<h2>Partitions</h2>"
-	"<button onclick=\"refreshPartitions()\">Refresh Partitions info</button>"
-	"<button onclick=\"fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting'))\">Reboot</button>"
-	"<div>\n"
-	"Factory: <span id=\"factory_project\">-</span> (<span id=\"factory_version\">-</span>)<br>\n"
-	"OTA0: <span id=\"ota0_project\">-</span> (<span id=\"ota0_version\">-</span>)<br>\n"
-	"OTA1: <span id=\"ota1_project\">-</span> (<span id=\"ota1_version\">-</span>)<br>\n"
-	"</div>"
-	"<h2>Upload Firmware</h2>"
-	"<div>Previously running partition: <span id=\"prevRunningPart\">-</span></div>"
-	"<div>Recommended OTA partition: <span id=\"recOTAPart\">-</span></div>"
-	"<form id=\"uploadForm\" method=\"POST\" enctype=\"multipart/form-data\">"
-	"Target partition: <select name=\"target\" id=\"target\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select><br><br>"
-	"File: <input type=\"file\" name=\"file\" id=\"file\"><br><br>"
-	"<button type=\"button\" onclick=\"doUpload()\">Upload and flash</button>"
-	"</form>"
-	"<progress id=\"uploadProgress\" value=\"0\" max=\"100\" style=\"width:300px;display:block;margin-top:8px\"></progress>"
-	"<pre id=\"result\"></pre>"
-	"<h2>Set Boot Partition</h2>"
-	"<div>Currently selected: <span id=\"bootPart\">-</span></div>"
-	"<select id=\"bootsel\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select>"
-	"<button onclick=\"fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))\">Set Boot and Reboot</button>"
-	"<script>\n"
-	"function refreshPartitions(){\n"
-	"  fetch('/partitions').then(r=>r.json()).then(j=>{\n"
-	"    if(j.factory){document.getElementById('factory_project').innerText=j.factory.project_name||'-';document.getElementById('factory_version').innerText=j.factory.version||'-';}\n"
-	"    if(j.ota_0){document.getElementById('ota0_project').innerText=j.ota_0.project_name||'-';document.getElementById('ota0_version').innerText=j.ota_0.version||'-';}\n"
-	"    if(j.ota_1){document.getElementById('ota1_project').innerText=j.ota_1.project_name||'-';document.getElementById('ota1_version').innerText=j.ota_1.version||'-';}\n"
-	"  });\n"
-	"}\n"
-	"function doUpload(){var f=document.getElementById('file').files[0];if(!f){alert('Choose file');return;}var t=document.getElementById('target').value;var fd=new FormData();fd.append('file',f);var xhr=new XMLHttpRequest();xhr.open('POST','/upload?target='+t,true);xhr.upload.onprogress=function(e){if(e.lengthComputable){document.getElementById('uploadProgress').value=Math.round(e.loaded/e.total*100);}};xhr.onload=function(){try{var j=JSON.parse(xhr.responseText);document.getElementById('result').innerText=JSON.stringify(j,null,2);if(j.project_name){refreshPartitions();}}catch(e){document.getElementById('result').innerText=xhr.responseText;}document.getElementById('uploadProgress').value=0;};xhr.onerror=function(){alert('Upload failed');document.getElementById('uploadProgress').value=0;};xhr.send(fd);}\n"
-	"window.addEventListener('load', function(){ refreshPartitions(); fetch('/odometer').then(r=>r.json()).then(j=>{document.getElementById('odometer').innerText=j.odometer_m;document.getElementById('trip').innerText=j.trip_m}); fetch('/version').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=('Project: ' + j.project_name + ' Version: ' + j.version +' Built : ' + j.date)}); });\n"
-	"</script>"
-	"</body></html>";
 
 static void start_mdns(void)
 {
@@ -84,8 +44,23 @@ static void start_mdns(void)
 
 static esp_err_t index_get_handler(httpd_req_t *req)
 {
+	FILE *f = fopen("/spiffs/index.html", "r");
+	if (!f)
+	{
+		ESP_LOGE(TAG, "Failed to open index.html");
+		httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "File not found");
+		return ESP_FAIL;
+	}
+
 	httpd_resp_set_type(req, "text/html");
-	httpd_resp_send(req, index_html, HTTPD_RESP_USE_STRLEN);
+
+	char buf[512];
+	while (fgets(buf, sizeof(buf), f))
+	{
+		httpd_resp_send_chunk(req, buf, strlen(buf));
+	}
+	httpd_resp_send_chunk(req, NULL, 0);
+	fclose(f);
 	return ESP_OK;
 }
 
@@ -389,6 +364,20 @@ void app_main(void)
 	}
 	esp_netif_init();
 	esp_event_loop_create_default();
+
+	// Mount SPIFFS
+	esp_vfs_spiffs_conf_t conf = {
+		.base_path = "/spiffs",
+		.partition_label = "storage",
+		.max_files = 5,
+		.format_if_mount_failed = true};
+	err = esp_vfs_spiffs_register(&conf);
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(TAG, "Failed to mount SPIFFS: %s", esp_err_to_name(err));
+		return;
+	}
+	ESP_LOGI(TAG, "SPIFFS mounted successfully");
 
 	start_ap_mode();
 	start_mdns();
