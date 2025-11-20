@@ -1,9 +1,9 @@
 /*
- * Binocan Factory App
+ * Interface board Factory App
  * - Read WiFi creds from NVS (namespace "storage")
  * - Scan for SSID; connect as STA if available
- * - Fallback to open AP named BINOCAN-<MAC>
- * - Start mDNS as hostname "binocan"
+ * - Fallback to open AP named ITF-<MAC>
+ * - Start mDNS as hostname "interface-board"
  * - Start HTTP server with endpoints:
  *   GET / -> UI
  *   GET /version -> running app info
@@ -33,63 +33,72 @@
 #include "esp_mac.h"
 #include "esp_image_format.h"
 
-static const char *TAG = "factory_app";
+#ifdef TAG
+#undef TAG
+#endif
+#define TAG "factory_app"
 
 static EventGroupHandle_t s_wifi_event_group;
 static const int WIFI_CONNECTED_BIT = BIT0;
 
 static const char index_html[] =
-"<!doctype html>\n"
-"<html><head><meta charset=\"utf-8\"><title>Binocan Factory</title></head><body>"
-"<h1>Binocan Factory App</h1>"
-"<div id=\"info\">Loading...</div>"
-"<div>Odometer: <span id=\"odometer\">-</span> m &nbsp; Trip: <span id=\"trip\">-</span> m</div>"
-"<h2>Partitions</h2>"
-"<button onclick=\"refreshPartitions()\">Refresh</button>"
-"<button onclick=\"fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting'))\">Reboot</button>"
-"<div>\n"
-"Factory: <span id=\"factory_project\">-</span> (<span id=\"factory_version\">-</span>)<br>\n"
-"OTA0: <span id=\"ota0_project\">-</span> (<span id=\"ota0_version\">-</span>)<br>\n"
-"OTA1: <span id=\"ota1_project\">-</span> (<span id=\"ota1_version\">-</span>)<br>\n"
-"</div>"
-"<h2>Upload Firmware</h2>"
-"<form id=\"uploadForm\" method=\"POST\" enctype=\"multipart/form-data\">"
-"Target: <select name=\"target\" id=\"target\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select><br><br>"
-"File: <input type=\"file\" name=\"file\" id=\"file\"><br><br>"
-"<button type=\"button\" onclick=\"doUpload()\">Upload</button>"
-"</form>"
-"<progress id=\"uploadProgress\" value=\"0\" max=\"100\" style=\"width:300px;display:block;margin-top:8px\"></progress>"
-"<pre id=\"result\"></pre>"
-"<h2>Set Boot Partition</h2>"
-"<select id=\"bootsel\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select>"
-"<button onclick=\"fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))\">Set Boot and Reboot</button>"
-"<script>\n"
-"function refreshPartitions(){\n"
-"  fetch('/partitions').then(r=>r.json()).then(j=>{\n"
-"    if(j.factory){document.getElementById('factory_project').innerText=j.factory.project_name||'-';document.getElementById('factory_version').innerText=j.factory.version||'-';}\n"
-"    if(j.ota_0){document.getElementById('ota0_project').innerText=j.ota_0.project_name||'-';document.getElementById('ota0_version').innerText=j.ota_0.version||'-';}\n"
-"    if(j.ota_1){document.getElementById('ota1_project').innerText=j.ota_1.project_name||'-';document.getElementById('ota1_version').innerText=j.ota_1.version||'-';}\n"
-"  });\n"
-"}\n"
-"function doUpload(){var f=document.getElementById('file').files[0];if(!f){alert('Choose file');return;}var t=document.getElementById('target').value;var fd=new FormData();fd.append('file',f);var xhr=new XMLHttpRequest();xhr.open('POST','/upload?target='+t,true);xhr.upload.onprogress=function(e){if(e.lengthComputable){document.getElementById('uploadProgress').value=Math.round(e.loaded/e.total*100);}};xhr.onload=function(){try{var j=JSON.parse(xhr.responseText);document.getElementById('result').innerText=JSON.stringify(j,null,2);if(j.project_name){refreshPartitions();}}catch(e){document.getElementById('result').innerText=xhr.responseText;}document.getElementById('uploadProgress').value=0;};xhr.onerror=function(){alert('Upload failed');document.getElementById('uploadProgress').value=0;};xhr.send(fd);}\n"
-"window.addEventListener('load', function(){ refreshPartitions(); fetch('/odometer').then(r=>r.json()).then(j=>{document.getElementById('odometer').innerText=j.odometer_m;document.getElementById('trip').innerText=j.trip_m}); fetch('/version').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=JSON.stringify(j,null,2)}); });\n"
-"</script>"
-"</body></html>";
+	"<!doctype html>\n"
+	"<html><head><meta charset=\"utf-8\"><title>Interface board factory app</title></head><body>"
+	"<h1>Interface board setup</h1>"
+	"<div id=\"info\">Loading...</div>"
+	"<div>Odometer: <span id=\"odometer\">-</span> m &nbsp; Trip: <span id=\"trip\">-</span> m</div>"
+	"<h2>Partitions</h2>"
+	"<button onclick=\"refreshPartitions()\">Refresh Partitions info</button>"
+	"<button onclick=\"fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting'))\">Reboot</button>"
+	"<div>\n"
+	"Factory: <span id=\"factory_project\">-</span> (<span id=\"factory_version\">-</span>)<br>\n"
+	"OTA0: <span id=\"ota0_project\">-</span> (<span id=\"ota0_version\">-</span>)<br>\n"
+	"OTA1: <span id=\"ota1_project\">-</span> (<span id=\"ota1_version\">-</span>)<br>\n"
+	"</div>"
+	"<h2>Upload Firmware</h2>"
+	"<div>Previously running partition: <span id=\"prevRunningPart\">-</span></div>"
+	"<div>Recommended OTA partition: <span id=\"recOTAPart\">-</span></div>"
+	"<form id=\"uploadForm\" method=\"POST\" enctype=\"multipart/form-data\">"
+	"Target partition: <select name=\"target\" id=\"target\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select><br><br>"
+	"File: <input type=\"file\" name=\"file\" id=\"file\"><br><br>"
+	"<button type=\"button\" onclick=\"doUpload()\">Upload and flash</button>"
+	"</form>"
+	"<progress id=\"uploadProgress\" value=\"0\" max=\"100\" style=\"width:300px;display:block;margin-top:8px\"></progress>"
+	"<pre id=\"result\"></pre>"
+	"<h2>Set Boot Partition</h2>"
+	"<div>Currently selected: <span id=\"bootPart\">-</span></div>"
+	"<select id=\"bootsel\"><option value=\"ota_0\">ota_0</option><option value=\"ota_1\">ota_1</option></select>"
+	"<button onclick=\"fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))\">Set Boot and Reboot</button>"
+	"<script>\n"
+	"function refreshPartitions(){\n"
+	"  fetch('/partitions').then(r=>r.json()).then(j=>{\n"
+	"    if(j.factory){document.getElementById('factory_project').innerText=j.factory.project_name||'-';document.getElementById('factory_version').innerText=j.factory.version||'-';}\n"
+	"    if(j.ota_0){document.getElementById('ota0_project').innerText=j.ota_0.project_name||'-';document.getElementById('ota0_version').innerText=j.ota_0.version||'-';}\n"
+	"    if(j.ota_1){document.getElementById('ota1_project').innerText=j.ota_1.project_name||'-';document.getElementById('ota1_version').innerText=j.ota_1.version||'-';}\n"
+	"  });\n"
+	"}\n"
+	"function doUpload(){var f=document.getElementById('file').files[0];if(!f){alert('Choose file');return;}var t=document.getElementById('target').value;var fd=new FormData();fd.append('file',f);var xhr=new XMLHttpRequest();xhr.open('POST','/upload?target='+t,true);xhr.upload.onprogress=function(e){if(e.lengthComputable){document.getElementById('uploadProgress').value=Math.round(e.loaded/e.total*100);}};xhr.onload=function(){try{var j=JSON.parse(xhr.responseText);document.getElementById('result').innerText=JSON.stringify(j,null,2);if(j.project_name){refreshPartitions();}}catch(e){document.getElementById('result').innerText=xhr.responseText;}document.getElementById('uploadProgress').value=0;};xhr.onerror=function(){alert('Upload failed');document.getElementById('uploadProgress').value=0;};xhr.send(fd);}\n"
+	"window.addEventListener('load', function(){ refreshPartitions(); fetch('/odometer').then(r=>r.json()).then(j=>{document.getElementById('odometer').innerText=j.odometer_m;document.getElementById('trip').innerText=j.trip_m}); fetch('/version').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=('Project: ' + j.project_name + ' Version: ' + j.version +' Built : ' + j.date)}); });\n"
+	"</script>"
+	"</body></html>";
 
 static esp_err_t read_wifi_credentials(char *ssid, size_t ssid_len, char *password, size_t pass_len)
 {
 	nvs_handle_t h;
 	esp_err_t err = nvs_open("storage", NVS_READONLY, &h);
-	if (err != ESP_OK) return err;
+	if (err != ESP_OK)
+		return err;
 	size_t required = ssid_len;
 	err = nvs_get_str(h, "wifi_ssid", ssid, &required);
-	if (err != ESP_OK) {
+	if (err != ESP_OK)
+	{
 		nvs_close(h);
 		return err;
 	}
 	required = pass_len;
 	err = nvs_get_str(h, "wifi_password", password, &required);
-	if (err == ESP_ERR_NVS_NOT_FOUND) {
+	if (err == ESP_ERR_NVS_NOT_FOUND)
+	{
 		password[0] = '\0';
 		err = ESP_OK;
 	}
@@ -97,19 +106,26 @@ static esp_err_t read_wifi_credentials(char *ssid, size_t ssid_len, char *passwo
 	return err;
 }
 
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-							   int32_t event_id, void* event_data)
+static void wifi_event_handler(void *arg, esp_event_base_t event_base,
+							   int32_t event_id, void *event_data)
 {
-	if (event_base == WIFI_EVENT) {
-		if (event_id == WIFI_EVENT_STA_START) {
+	if (event_base == WIFI_EVENT)
+	{
+		if (event_id == WIFI_EVENT_STA_START)
+		{
 			esp_wifi_connect();
-		} else if (event_id == WIFI_EVENT_STA_DISCONNECTED) {
+		}
+		else if (event_id == WIFI_EVENT_STA_DISCONNECTED)
+		{
 			xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 			ESP_LOGI(TAG, "Disconnected, retrying...");
 			esp_wifi_connect();
 		}
-	} else if (event_base == IP_EVENT) {
-		if (event_id == IP_EVENT_STA_GOT_IP) {
+	}
+	else if (event_base == IP_EVENT)
+	{
+		if (event_id == IP_EVENT_STA_GOT_IP)
+		{
 			xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 		}
 	}
@@ -117,18 +133,22 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
 static bool scan_for_ssid(const char *ssid)
 {
-	wifi_scan_config_t scan_config = { .ssid = NULL, .bssid = NULL, .channel = 0, .show_hidden = true };
+	wifi_scan_config_t scan_config = {.ssid = NULL, .bssid = NULL, .channel = 0, .show_hidden = true};
 	esp_err_t err = esp_wifi_scan_start(&scan_config, true);
-	if (err != ESP_OK) {
+	if (err != ESP_OK)
+	{
 		ESP_LOGW(TAG, "Scan start failed: %s", esp_err_to_name(err));
 		return false;
 	}
 	uint16_t ap_num = 20;
 	wifi_ap_record_t ap_info[20];
 	err = esp_wifi_scan_get_ap_records(&ap_num, ap_info);
-	if (err != ESP_OK) return false;
-	for (int i = 0; i < ap_num; ++i) {
-		if (strcmp((char*)ap_info[i].ssid, ssid) == 0) {
+	if (err != ESP_OK)
+		return false;
+	for (int i = 0; i < ap_num; ++i)
+	{
+		if (strcmp((char *)ap_info[i].ssid, ssid) == 0)
+		{
 			ESP_LOGI(TAG, "Found SSID %s", ssid);
 			return true;
 		}
@@ -139,8 +159,8 @@ static bool scan_for_ssid(const char *ssid)
 static void start_mdns(void)
 {
 	mdns_init();
-	mdns_hostname_set("binocan");
-	mdns_instance_name_set("Binocan Factory");
+	mdns_hostname_set("interface-board");
+	mdns_instance_name_set("Interface Board Factory");
 }
 
 static esp_err_t index_get_handler(httpd_req_t *req)
@@ -159,24 +179,28 @@ static esp_err_t version_get_handler(httpd_req_t *req)
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, buf);
 	return ESP_OK;
-	}
+}
 
-	static esp_err_t partitions_get_handler(httpd_req_t *req)
+static esp_err_t partitions_get_handler(httpd_req_t *req)
 {
-	const char *labels[] = { "nvs", "phy_init", "factory", "ota_0", "ota_1", "ota_data", "storage" };
+	const char *labels[] = {"nvs", "phy_init", "factory", "ota_0", "ota_1", "ota_data", "storage"};
 	const int nlabels = sizeof(labels) / sizeof(labels[0]);
 	char buf[1024];
 	size_t off = 0;
 	off += snprintf(buf + off, sizeof(buf) - off, "{");
-	for (int i = 0; i < nlabels; ++i) {
+	for (int i = 0; i < nlabels; ++i)
+	{
 		const char *lab = labels[i];
 		const esp_partition_t *p = esp_partition_find_first(ESP_PARTITION_TYPE_ANY, ESP_PARTITION_SUBTYPE_ANY, lab);
-		if (!p) continue;
+		if (!p)
+			continue;
 		off += snprintf(buf + off, sizeof(buf) - off, "\"%s\":{\"address\":\"0x%08x\",\"size\":%u,\"type\":%d,\"subtype\":%d",
-				lab, (unsigned int)p->address, (unsigned int)p->size, p->type, p->subtype);
-		if (strcmp(lab, "ota_0") == 0 || strcmp(lab, "ota_1") == 0) {
+						lab, (unsigned int)p->address, (unsigned int)p->size, p->type, p->subtype);
+		if (strcmp(lab, "factory") == 0 || strcmp(lab, "ota_0") == 0 || strcmp(lab, "ota_1") == 0)
+		{
 			esp_app_desc_t desc;
-			if (esp_ota_get_partition_description(p, &desc) == ESP_OK) {
+			if (esp_ota_get_partition_description(p, &desc) == ESP_OK)
+			{
 				off += snprintf(buf + off, sizeof(buf) - off, " ,\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\" ",
 								desc.project_name, desc.version, desc.date);
 			}
@@ -186,8 +210,9 @@ static esp_err_t version_get_handler(httpd_req_t *req)
 		off += snprintf(buf + off, sizeof(buf) - off, "},");
 	}
 	/* remove trailing comma if present */
-	if (off > 1 && buf[off-1] == ',') {
-		buf[off-1] = '\0';
+	if (off > 1 && buf[off - 1] == ',')
+	{
+		buf[off - 1] = '\0';
 		off--;
 	}
 	off += snprintf(buf + off, sizeof(buf) - off, "}");
@@ -205,15 +230,19 @@ static esp_err_t odometer_get_handler(httpd_req_t *req)
 
 	/* Try reading from partition "nvs_odo" with namespace "storage", fall back to default */
 	err = nvs_open_from_partition("nvs_odo", "storage", NVS_READONLY, &h);
-	if (err != ESP_OK) {
+	if (err != ESP_OK)
+	{
 		err = nvs_open("storage", NVS_READONLY, &h);
-		if (err != ESP_OK) {
+		if (err != ESP_OK)
+		{
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS open failed");
 			return ESP_FAIL;
 		}
 	}
-	if (nvs_get_i32(h, "odometer_m", &odometer_m) == ESP_ERR_NVS_NOT_FOUND) odometer_m = 0;
-	if (nvs_get_i32(h, "trip_m", &trip_m) == ESP_ERR_NVS_NOT_FOUND) trip_m = 0;
+	if (nvs_get_i32(h, "odometer_m", &odometer_m) == ESP_ERR_NVS_NOT_FOUND)
+		odometer_m = 0;
+	if (nvs_get_i32(h, "trip_m", &trip_m) == ESP_ERR_NVS_NOT_FOUND)
+		trip_m = 0;
 	nvs_close(h);
 
 	char out[128];
@@ -234,13 +263,15 @@ static esp_err_t reboot_post_handler(httpd_req_t *req)
 static esp_err_t upload_post_handler(httpd_req_t *req)
 {
 	int remaining = req->content_len;
-	if (remaining <= 0) {
+	if (remaining <= 0)
+	{
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "invalid content length");
 		return ESP_FAIL;
 	}
 	const size_t buf_size = 4096;
 	char *buf = malloc(buf_size);
-	if (!buf) {
+	if (!buf)
+	{
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "failed to allocate buffer");
 		return ESP_FAIL;
 	}
@@ -248,7 +279,8 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	const esp_partition_t *update_partition = NULL;
 	size_t read_total = 0;
 	ssize_t r = httpd_req_recv(req, buf, buf_size);
-	if (r <= 0) {
+	if (r <= 0)
+	{
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "failed to receive request");
 		return ESP_FAIL;
@@ -257,16 +289,22 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 
 	char target_label[32] = {0};
 	/* Extract target from query string: /upload?target=ota_0 or /upload?target=ota_1 */
-	if (strstr(req->uri, "target=ota_1")) {
+	if (strstr(req->uri, "target=ota_1"))
+	{
 		strncpy(target_label, "ota_1", sizeof(target_label) - 1);
-	} else if (strstr(req->uri, "target=ota_0")) {
+	}
+	else if (strstr(req->uri, "target=ota_0"))
+	{
 		strncpy(target_label, "ota_0", sizeof(target_label) - 1);
-	} else {
+	}
+	else
+	{
 		strncpy(target_label, "ota_0", sizeof(target_label) - 1);
 	}
 	ESP_LOGI(TAG, "Upload target partition: %s", target_label);
 	update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, target_label);
-	if (!update_partition) {
+	if (!update_partition)
+	{
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Target partition not found");
 		return ESP_FAIL;
@@ -274,22 +312,29 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 
 	/* Find start of file body in first chunk */
 	char *body_start = strstr(buf, "\r\n\r\n");
-	if (body_start) body_start += 4; else body_start = buf;
+	if (body_start)
+		body_start += 4;
+	else
+		body_start = buf;
 	size_t to_write = r - (body_start - buf);
 
 	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which is part of the descriptor */
 	const esp_app_desc_t *img_desc = NULL;
-	if (to_write >= sizeof(esp_app_desc_t)) {
+	if (to_write >= sizeof(esp_app_desc_t))
+	{
 		uint32_t *scan = (uint32_t *)body_start;
 		uint32_t scan_end = (to_write - sizeof(esp_app_desc_t)) / 4;
-		for (uint32_t i = 0; i < scan_end; i++) {
-			if (scan[i] == 0xABCD5432) {
+		for (uint32_t i = 0; i < scan_end; i++)
+		{
+			if (scan[i] == 0xABCD5432)
+			{
 				img_desc = (const esp_app_desc_t *)&scan[i];
 				break;
 			}
 		}
 	}
-	if (!img_desc) {
+	if (!img_desc)
+	{
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Uploaded binary contains no app descriptor (rejecting)");
 		return ESP_FAIL;
@@ -302,26 +347,32 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	/* Begin OTA now that image looks valid */
 	esp_ota_handle_t ota_handle = 0;
 	esp_err_t err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
-	if (err != ESP_OK) {
+	if (err != ESP_OK)
+	{
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "esp_ota_begin failed");
 		return ESP_FAIL;
 	}
 
-	if (to_write > 0) {
-		esp_ota_write(ota_handle, (const void*)body_start, to_write);
+	if (to_write > 0)
+	{
+		esp_ota_write(ota_handle, (const void *)body_start, to_write);
 	}
-	while (read_total < (size_t)req->content_len) {
+	while (read_total < (size_t)req->content_len)
+	{
 		int to_read = buf_size;
-		if ((size_t)to_read > (size_t)req->content_len - read_total) to_read = req->content_len - read_total;
+		if ((size_t)to_read > (size_t)req->content_len - read_total)
+			to_read = req->content_len - read_total;
 		r = httpd_req_recv(req, buf, to_read);
-		if (r <= 0) break;
+		if (r <= 0)
+			break;
 		esp_ota_write(ota_handle, buf, r);
 		read_total += r;
 	}
 	free(buf);
 	err = esp_ota_end(ota_handle);
-	if (err != ESP_OK) {
+	if (err != ESP_OK)
+	{
 		esp_ota_abort(ota_handle);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "esp_ota_end failed");
 		return ESP_FAIL;
@@ -339,15 +390,19 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 static esp_err_t set_boot_post_handler(httpd_req_t *req)
 {
 	char target[32] = {0};
-	if (strstr(req->uri, "target=ota_1")) strncpy(target, "ota_1", sizeof(target));
-	else strncpy(target, "ota_0", sizeof(target));
+	if (strstr(req->uri, "target=ota_1"))
+		strncpy(target, "ota_1", sizeof(target));
+	else
+		strncpy(target, "ota_0", sizeof(target));
 	const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, target);
-	if (!part) {
+	if (!part)
+	{
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Partition not found");
 		return ESP_FAIL;
 	}
 	esp_err_t err = esp_ota_set_boot_partition(part);
-	if (err != ESP_OK) {
+	if (err != ESP_OK)
+	{
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "esp_ota_set_boot_partition failed");
 		return ESP_FAIL;
 	}
@@ -361,23 +416,24 @@ static httpd_handle_t start_webserver(void)
 {
 	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
 	httpd_handle_t server = NULL;
-	if (httpd_start(&server, &config) != ESP_OK) {
+	if (httpd_start(&server, &config) != ESP_OK)
+	{
 		ESP_LOGE(TAG, "Failed to start webserver");
 		return NULL;
 	}
-	httpd_uri_t index_uri = { .uri = "/", .method = HTTP_GET, .handler = index_get_handler };
+	httpd_uri_t index_uri = {.uri = "/", .method = HTTP_GET, .handler = index_get_handler};
 	httpd_register_uri_handler(server, &index_uri);
-	httpd_uri_t version_uri = { .uri = "/version", .method = HTTP_GET, .handler = version_get_handler };
+	httpd_uri_t version_uri = {.uri = "/version", .method = HTTP_GET, .handler = version_get_handler};
 	httpd_register_uri_handler(server, &version_uri);
-	httpd_uri_t parts_uri = { .uri = "/partitions", .method = HTTP_GET, .handler = partitions_get_handler };
+	httpd_uri_t parts_uri = {.uri = "/partitions", .method = HTTP_GET, .handler = partitions_get_handler};
 	httpd_register_uri_handler(server, &parts_uri);
-	httpd_uri_t upload_uri = { .uri = "/upload", .method = HTTP_POST, .handler = upload_post_handler };
+	httpd_uri_t upload_uri = {.uri = "/upload", .method = HTTP_POST, .handler = upload_post_handler};
 	httpd_register_uri_handler(server, &upload_uri);
-	httpd_uri_t setboot_uri = { .uri = "/set_boot", .method = HTTP_POST, .handler = set_boot_post_handler };
+	httpd_uri_t setboot_uri = {.uri = "/set_boot", .method = HTTP_POST, .handler = set_boot_post_handler};
 	httpd_register_uri_handler(server, &setboot_uri);
-	httpd_uri_t reboot_uri = { .uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler };
+	httpd_uri_t reboot_uri = {.uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler};
 	httpd_register_uri_handler(server, &reboot_uri);
-	httpd_uri_t odo_uri = { .uri = "/odometer", .method = HTTP_GET, .handler = odometer_get_handler };
+	httpd_uri_t odo_uri = {.uri = "/odometer", .method = HTTP_GET, .handler = odometer_get_handler};
 	httpd_register_uri_handler(server, &odo_uri);
 	return server;
 }
@@ -392,17 +448,20 @@ static bool try_connect_sta(const char *ssid, const char *password)
 	esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, &instance_any_id);
 	esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, &instance_got_ip);
 	wifi_config_t wifi_config = {0};
-	strncpy((char*)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid)-1);
-	if (password && password[0]) strncpy((char*)wifi_config.sta.password, password, sizeof(wifi_config.sta.password)-1);
+	strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
+	if (password && password[0])
+		strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
 	esp_wifi_set_mode(WIFI_MODE_STA);
 	esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
 	esp_wifi_start();
-	if (!scan_for_ssid(ssid)) {
+	if (!scan_for_ssid(ssid))
+	{
 		ESP_LOGW(TAG, "SSID %s not found in scan", ssid);
 		return false;
 	}
 	EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(15000));
-	if (bits & WIFI_CONNECTED_BIT) {
+	if (bits & WIFI_CONNECTED_BIT)
+	{
 		ESP_LOGI(TAG, "Connected to AP %s", ssid);
 		return true;
 	}
@@ -420,7 +479,7 @@ static void start_ap_mode(void)
 	esp_read_mac(mac, ESP_MAC_WIFI_STA);
 	char ssid[32];
 	snprintf(ssid, sizeof(ssid), "BINOCAN-%02X%02X%02X", mac[3], mac[4], mac[5]);
-	strncpy((char*)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid)-1);
+	strncpy((char *)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
 	wifi_config.ap.ssid_len = strlen(ssid);
 	wifi_config.ap.max_connection = 4;
 	wifi_config.ap.authmode = WIFI_AUTH_OPEN;
@@ -433,7 +492,8 @@ static void start_ap_mode(void)
 void app_main(void)
 {
 	esp_err_t err = nvs_flash_init();
-	if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+	if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
+	{
 		nvs_flash_erase();
 		nvs_flash_init();
 	}
@@ -443,14 +503,18 @@ void app_main(void)
 
 	char ssid[64] = {0};
 	char password[64] = {0};
-	if (read_wifi_credentials(ssid, sizeof(ssid), password, sizeof(password)) == ESP_OK) {
+	if (read_wifi_credentials(ssid, sizeof(ssid), password, sizeof(password)) == ESP_OK)
+	{
 		ESP_LOGI(TAG, "Read credentials SSID='%s' pwd_len=%d", ssid, (int)strlen(password));
-		if (try_connect_sta(ssid, password)) {
+		if (try_connect_sta(ssid, password))
+		{
 			start_mdns();
 			start_webserver();
 			return;
 		}
-	} else {
+	}
+	else
+	{
 		ESP_LOGI(TAG, "No WiFi credentials in NVS");
 	}
 	start_ap_mode();
