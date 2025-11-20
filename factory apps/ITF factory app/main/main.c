@@ -1,8 +1,6 @@
 /*
  * Interface board Factory App
- * - Read WiFi creds from NVS (namespace "storage")
- * - Scan for SSID; connect as STA if available
- * - Fallback to open AP named ITF-<MAC>
+ * - Start as open AP named BINOCAN-<MAC>
  * - Start mDNS as hostname "interface-board"
  * - Start HTTP server with endpoints:
  *   GET / -> UI
@@ -17,10 +15,8 @@
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/event_groups.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
-#include "nvs.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -37,9 +33,6 @@
 #undef TAG
 #endif
 #define TAG "factory_app"
-
-static EventGroupHandle_t s_wifi_event_group;
-static const int WIFI_CONNECTED_BIT = BIT0;
 
 static const char index_html[] =
 	"<!doctype html>\n"
@@ -81,80 +74,6 @@ static const char index_html[] =
 	"window.addEventListener('load', function(){ refreshPartitions(); fetch('/odometer').then(r=>r.json()).then(j=>{document.getElementById('odometer').innerText=j.odometer_m;document.getElementById('trip').innerText=j.trip_m}); fetch('/version').then(r=>r.json()).then(j=>{document.getElementById('info').innerText=('Project: ' + j.project_name + ' Version: ' + j.version +' Built : ' + j.date)}); });\n"
 	"</script>"
 	"</body></html>";
-
-static esp_err_t read_wifi_credentials(char *ssid, size_t ssid_len, char *password, size_t pass_len)
-{
-	nvs_handle_t h;
-	esp_err_t err = nvs_open("storage", NVS_READONLY, &h);
-	if (err != ESP_OK)
-		return err;
-	size_t required = ssid_len;
-	err = nvs_get_str(h, "wifi_ssid", ssid, &required);
-	if (err != ESP_OK)
-	{
-		nvs_close(h);
-		return err;
-	}
-	required = pass_len;
-	err = nvs_get_str(h, "wifi_password", password, &required);
-	if (err == ESP_ERR_NVS_NOT_FOUND)
-	{
-		password[0] = '\0';
-		err = ESP_OK;
-	}
-	nvs_close(h);
-	return err;
-}
-
-static void wifi_event_handler(void *arg, esp_event_base_t event_base,
-							   int32_t event_id, void *event_data)
-{
-	if (event_base == WIFI_EVENT)
-	{
-		if (event_id == WIFI_EVENT_STA_START)
-		{
-			esp_wifi_connect();
-		}
-		else if (event_id == WIFI_EVENT_STA_DISCONNECTED)
-		{
-			xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-			ESP_LOGI(TAG, "Disconnected, retrying...");
-			esp_wifi_connect();
-		}
-	}
-	else if (event_base == IP_EVENT)
-	{
-		if (event_id == IP_EVENT_STA_GOT_IP)
-		{
-			xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-		}
-	}
-}
-
-static bool scan_for_ssid(const char *ssid)
-{
-	wifi_scan_config_t scan_config = {.ssid = NULL, .bssid = NULL, .channel = 0, .show_hidden = true};
-	esp_err_t err = esp_wifi_scan_start(&scan_config, true);
-	if (err != ESP_OK)
-	{
-		ESP_LOGW(TAG, "Scan start failed: %s", esp_err_to_name(err));
-		return false;
-	}
-	uint16_t ap_num = 20;
-	wifi_ap_record_t ap_info[20];
-	err = esp_wifi_scan_get_ap_records(&ap_num, ap_info);
-	if (err != ESP_OK)
-		return false;
-	for (int i = 0; i < ap_num; ++i)
-	{
-		if (strcmp((char *)ap_info[i].ssid, ssid) == 0)
-		{
-			ESP_LOGI(TAG, "Found SSID %s", ssid);
-			return true;
-		}
-	}
-	return false;
-}
 
 static void start_mdns(void)
 {
@@ -438,36 +357,7 @@ static httpd_handle_t start_webserver(void)
 	return server;
 }
 
-static bool try_connect_sta(const char *ssid, const char *password)
-{
-	esp_netif_create_default_wifi_sta();
-	wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-	esp_wifi_init(&cfg);
-	esp_event_handler_instance_t instance_any_id;
-	esp_event_handler_instance_t instance_got_ip;
-	esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, &instance_any_id);
-	esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, &instance_got_ip);
-	wifi_config_t wifi_config = {0};
-	strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-	if (password && password[0])
-		strncpy((char *)wifi_config.sta.password, password, sizeof(wifi_config.sta.password) - 1);
-	esp_wifi_set_mode(WIFI_MODE_STA);
-	esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-	esp_wifi_start();
-	if (!scan_for_ssid(ssid))
-	{
-		ESP_LOGW(TAG, "SSID %s not found in scan", ssid);
-		return false;
-	}
-	EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(15000));
-	if (bits & WIFI_CONNECTED_BIT)
-	{
-		ESP_LOGI(TAG, "Connected to AP %s", ssid);
-		return true;
-	}
-	ESP_LOGW(TAG, "Failed to get IP from AP");
-	return false;
-}
+
 
 static void start_ap_mode(void)
 {
@@ -478,7 +368,7 @@ static void start_ap_mode(void)
 	uint8_t mac[6];
 	esp_read_mac(mac, ESP_MAC_WIFI_STA);
 	char ssid[32];
-	snprintf(ssid, sizeof(ssid), "BINOCAN-%02X%02X%02X", mac[3], mac[4], mac[5]);
+	snprintf(ssid, sizeof(ssid), "ITF-%02X%02X%02X", mac[3], mac[4], mac[5]);
 	strncpy((char *)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
 	wifi_config.ap.ssid_len = strlen(ssid);
 	wifi_config.ap.max_connection = 4;
@@ -499,24 +389,7 @@ void app_main(void)
 	}
 	esp_netif_init();
 	esp_event_loop_create_default();
-	s_wifi_event_group = xEventGroupCreate();
 
-	char ssid[64] = {0};
-	char password[64] = {0};
-	if (read_wifi_credentials(ssid, sizeof(ssid), password, sizeof(password)) == ESP_OK)
-	{
-		ESP_LOGI(TAG, "Read credentials SSID='%s' pwd_len=%d", ssid, (int)strlen(password));
-		if (try_connect_sta(ssid, password))
-		{
-			start_mdns();
-			start_webserver();
-			return;
-		}
-	}
-	else
-	{
-		ESP_LOGI(TAG, "No WiFi credentials in NVS");
-	}
 	start_ap_mode();
 	start_mdns();
 	start_webserver();
