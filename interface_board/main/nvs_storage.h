@@ -5,6 +5,8 @@
 #include "esp_err.h"
 #include <stdint.h>
 #include <stdbool.h>
+#include "nvs_flash.h"
+#include "nvs.h"
 
 #ifdef __cplusplus
 extern "C" {
