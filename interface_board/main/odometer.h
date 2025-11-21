@@ -10,8 +10,8 @@
 extern "C" {
 #endif
 
-static uint32_t odometer_m = 0;
-static uint32_t trip_m = 0;
+static uint32_t odometer_m = 99;
+static uint32_t trip_m = 99;
 
 // Get odometer value in meters. If found != NULL it will be set to true when a value exists.
 uint32_t odometer_get(bool *found);

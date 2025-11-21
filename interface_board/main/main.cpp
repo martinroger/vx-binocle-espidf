@@ -13,6 +13,9 @@
 #include "mcpwm_capture_helpers.h"
 #include "coefficients.h"
 
+#include "esp_partition.h"
+#include "esp_ota_ops.h"
+
 #include "nvs_storage.h"
 #include "odometer.h"
 
@@ -67,7 +70,7 @@ static void trip_reset_timer_cb(TimerHandle_t xTimer)
         if (trip_set(trip_m) != ESP_OK)
         {
             ESP_LOGW(TAG, "Could not set trip_m in NVS");
-            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
         }
     }
 
@@ -319,7 +322,7 @@ void base_active_hilo_PKG(void *pvParameters)
         if (tca95x5_port_read(&tca_slave, &raw) != ESP_OK)
         {
             ESP_LOGE(TAG, "Impossible to fetch register from expander");
-            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
             interface_board_st.expander_ST = false;
         }
         else
@@ -401,12 +404,12 @@ void base_odometer_PKG(void *pvParameters)
             if (odometer_set(odometer_m) != ESP_OK)
             {
                 ESP_LOGW(TAG, "Could not set odometer_m in NVS");
-                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
             }
             if (trip_set(trip_m) != ESP_OK)
             {
                 ESP_LOGW(TAG, "Could not set trip_m in NVS");
-                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
             }
             binocan_itf_odometer.itf_odometer_km = binocan_itf_odometer_itf_odometer_km_encode((float)(odometer_m / 1000));
             binocan_itf_odometer.itf_odo_rem_m = binocan_itf_odometer_itf_odo_rem_m_encode((float)(odometer_m % 1000));
@@ -535,8 +538,15 @@ void interface_brd_version_PKG(void *pvParameters)
 #pragma region Main App
 extern "C" void app_main(void)
 {
+    bool rollBackPossible = esp_ota_check_rollback_is_possible();
+    ESP_LOGI(__func__, "Rollback Possible ? %u", rollBackPossible);
+    const esp_partition_t *runningPart = esp_ota_get_running_partition();
+    esp_ota_img_states_t imageState;
+    esp_ota_get_state_partition(runningPart, &imageState);
+    bool firstBoot = (imageState == ESP_OTA_IMG_PENDING_VERIFY);
+    ESP_LOGI(__func__, "First boot ? %u", firstBoot);
 
-    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; // Move to Init state
+    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_INIT_CHOICE;
 
 #pragma region App metadata parse
     // Allocate memory for app_metadata and fill it by reference
@@ -567,6 +577,15 @@ extern "C" void app_main(void)
     ret = gpio_set_pull_mode((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO, GPIO_PULLUP_ONLY); // Inverted
     ret = gpio_pullup_en((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO);
     ret = gpio_pullup_en((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Issue during escape sequence GPIO setup, attempt rollback and reboot.");
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback_and_reboot();
+        else
+            ESP_LOGE(TAG, "Rollback not possible");
+    }
+
     ESP_LOGI(TAG, "Escape sequence GPIOs set.");
     if (gpio_get_level((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO) == 0 && gpio_get_level((gpio_num_t)CONFIG_FULL_BEAMS_IRQ_GPIO) == 0)
     {
@@ -577,11 +596,36 @@ extern "C" void app_main(void)
             if (esp_timer_get_time() - start_esc_seq_ts > 1000 * 1000)
             {
                 ESP_LOGW(TAG, "Escape sequence successfully completed, recording current OTA partition ID.");
-                // Record current active OTA partition ID
+
+                if (runningPart != NULL)
+                {
+                    ESP_LOGI(TAG, "Running partition : %s", runningPart->label);
+                }
                 ESP_LOGW(TAG, "Setting target boot partition to factory app (updater)");
-                // Set target boot partition to factory
+                const esp_partition_t *factoryPart = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, "factory");
+                // We are assuming that the factory app is ALWAYS good.
+                if (factoryPart != NULL)
+                {
+                    esp_err_t err = esp_ota_set_boot_partition(factoryPart);
+                    if (err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG, "Could not set factory partition as boot partition, wtf bro. Attempting rollback and reboot.");
+                        if (rollBackPossible)
+                            esp_ota_mark_app_invalid_rollback_and_reboot();
+                        else
+                            ESP_LOGE(TAG, "Rollback not possible");
+                    }
+                }
+                else
+                {
+                    ESP_LOGE(TAG, "Could not find factory partition. WTF ! Rollback and reboot.");
+                    if (rollBackPossible)
+                        esp_ota_mark_app_invalid_rollback_and_reboot();
+                    else
+                        ESP_LOGE(TAG, "Rollback not possible");
+                }
                 ESP_LOGW(TAG, "Rebooting.");
-                // Rebooting
+                esp_restart();
                 break;
             }
         }
@@ -592,29 +636,48 @@ extern "C" void app_main(void)
     // Start 5V Channels
     if (init_5V_ctrl() != ESP_OK)
     {
-        ESP_LOGW(TAG, "Impossible to initialize 5V outputs. Continuing");
+        ESP_LOGW(TAG, "Impossible to initialize 5V outputs. Continuing in invalid.");
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (enable_5V() != ESP_OK)
     {
-        ESP_LOGW(TAG, "Could not fire up main 5V output. Continuing.");
+        ESP_LOGW(TAG, "Could not fire up main 5V output. Continuing in Invalid.");
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (enable_5V_AUX() != ESP_OK)
     {
-        ESP_LOGW(TAG, "Could not fire up secondary 5V output. Continuing.");
+        ESP_LOGW(TAG, "Could not fire up secondary 5V output. Continuing in Invalid.");
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
 
     // Start TWAI
     if (initCAN(NULL) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not initialize TWAI daemon, aborting...");
-        return;
+        ESP_LOGE(TAG, "Could not initialize TWAI daemon, marking invalid and rebooting.");
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
 
     // Initialize NVS and try to read persisted u32 values: odometer_m and trip_m
     esp_err_t nvs_err = nvs_init_flash();
     if (nvs_err != ESP_OK)
     {
-        ESP_LOGW(TAG, "NVS init failed (%d). Continuing without persisted odometer/trip.", nvs_err);
+        ESP_LOGW(TAG, "NVS init failed (%d). Continuing without persisted odometer/trip, invalidated and rollback on next boot.", nvs_err);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     else
     {
@@ -630,6 +693,10 @@ extern "C" void app_main(void)
             if (odometer_set(odometer_m) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not set odometer in NVS!");
+                if (rollBackPossible)
+                    esp_ota_mark_app_invalid_rollback();
+                else
+                    ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
             }
         }
 
@@ -644,6 +711,10 @@ extern "C" void app_main(void)
             if (trip_set(trip_m) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not set trip in NVS!");
+                if (rollBackPossible)
+                    esp_ota_mark_app_invalid_rollback();
+                else
+                    ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
             }
         }
     }
@@ -651,84 +722,126 @@ extern "C" void app_main(void)
     // Set up the capture channels
     if (set_capture_channel(cap_chan_coolant, (gpio_num_t)CONFIG_COOLANT_PWM_CAP_GPIO, &pwm_cap_coolant) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not set Coolant capture channel");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return;
+        ESP_LOGE(TAG, "Could not set Coolant capture channel. Rollback on reboot");
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (set_capture_channel(cap_chan_rpm, (gpio_num_t)CONFIG_RPM_PWM_CAP_GPIO, &pwm_cap_rpm) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not set RPM capture channel");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return;
+        ESP_LOGE(TAG, "Could not set RPM capture channel. Rollback on reboot");
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (set_capture_channel(cap_chan_speed, (gpio_num_t)CONFIG_SPEED_PWM_CAP_GPIO, &pwm_cap_speed) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not set Speed capture channel");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return;
+        ESP_LOGE(TAG, "Could not set Speed capture channel. Rollback on reboot");
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
 
     // Set up the IO Expander
 
     if (i2cdev_init() != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could not start I²C bus");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+        ESP_LOGE(TAG, "Could not start I²C bus, rollback on next reboot");
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
         interface_board_st.expander_ST = false;
         interface_board_st.adc_ST = false;
-        // return;
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (initialize_adc_processor() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start ADC processor");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
         interface_board_st.adc_ST = false;
-        // return;
+        if (rollBackPossible && firstBoot)
+        {
+            ESP_LOGE(TAG, "App invalidated on first boot. Rollback on reboot.");
+            esp_ota_mark_app_invalid_rollback();
+        }
+        else
+            ESP_LOGW(TAG, "Rollback impossible or not first boot, image was not be invalidated.");
     }
     if (initialize_exp_active_hi_lo_proc() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start ActHiLo processor");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
         interface_board_st.expander_ST = false;
-        // return;
+        if (rollBackPossible && firstBoot)
+        {
+            ESP_LOGE(TAG, "App invalidated on first boot. Rollback on reboot.");
+            esp_ota_mark_app_invalid_rollback();
+        }
+        else
+            ESP_LOGW(TAG, "Rollback impossible or not first boot, image was not be invalidated.");
     }
 
     // Set up the packaging and queuing tasks
     if (xTaskCreate(interface_brd_ST_PKG, "ITF_ST_PKG", 4096, NULL, 3, &interface_brd_ST_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface state package task");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (xTaskCreate(base_active_hilo_PKG, "B_AHL_PKG", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base ActHiLo package task");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (xTaskCreate(base_slow_metrics_PKG, "B_SLO_M_PKG", 4096, NULL, 3, &base_slow_metrics_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base slow metrics package task");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (xTaskCreate(base_fast_metrics_PKG, "B_FST_M_PKG", 4096, NULL, 3, &base_fast_metrics_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (xTaskCreate(base_odometer_PKG, "B_ODO_PKG", 4096, NULL, 3, &base_odometer_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base odometer package task");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (xTaskCreate(interface_brd_version_PKG, "B_VER_PKG", 4096, NULL, 3, &interface_brd_version_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface board version package task");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-        // return
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
 
 #pragma region Register Button ISR and timer
@@ -737,12 +850,20 @@ extern "C" void app_main(void)
     if (trip_reset_timer == NULL)
     {
         ESP_LOGW(TAG, "Could not create trip reset timer; button long-press will not reset trip");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     if (gpio_set_intr_type((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, GPIO_INTR_NEGEDGE) != ESP_OK)
     {
         ESP_LOGW(TAG, "Could not set Button IO interrupt type");
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
     else
     {
@@ -757,7 +878,11 @@ extern "C" void app_main(void)
             break;
         default:
             ESP_LOGE(TAG, "Could not start ISR service.");
-            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+            if (rollBackPossible)
+                esp_ota_mark_app_invalid_rollback();
+            else
+                ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
             break;
         }
         if (ret == ESP_OK || ret == ESP_ERR_INVALID_STATE)
@@ -765,7 +890,11 @@ extern "C" void app_main(void)
             if (gpio_isr_handler_add((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, button_isr_handler, NULL) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not add ISR handler for button to service");
-                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+                interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE; ESP_LOGW(__func__,"Entering degraded mode at line %lu",__LINE__);
+                if (rollBackPossible)
+                    esp_ota_mark_app_invalid_rollback();
+                else
+                    ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
             }
         }
     }
@@ -773,7 +902,28 @@ extern "C" void app_main(void)
 #pragma endregion
 
 #pragma endregion
-    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_OK_CHOICE;
+    if (interface_board_st.internal_ST != BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE)
+    {
+        
+        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_OK_CHOICE;
+        if (firstBoot)
+        {
+            if (esp_ota_mark_app_valid_cancel_rollback() != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Could not mark the image as valid.");
+            }
+            else
+            {
+                ESP_LOGI(TAG, "Image marked as valid, cancelled rollback");
+            }
+        }
+
+        // esp_ota_mark_app_invalid_rollback();
+    }
+    else
+        ESP_LOGW(__func__,"Exit startup in degraded mode.");
+
+
     while (1)
     {
         vTaskDelay(pdMS_TO_TICKS(5000));
