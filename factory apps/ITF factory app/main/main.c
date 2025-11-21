@@ -166,6 +166,19 @@ static esp_err_t partitions_get_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+static esp_err_t prevboot_get_handler(httpd_req_t *req)
+{
+	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+
+	char buf[256];
+	snprintf(buf,sizeof(buf),"{\"bootPart\":\"blip\",\"prevRunningPart\":\"bloup\",\"recOTAPart\":\"baboum\"}");
+	ESP_LOGI(__func__,"Response to request : %s",buf);
+	httpd_resp_set_type(req,"application/json");
+	httpd_resp_sendstr(req,buf);
+	return ESP_OK;
+
+}
+
 /// @brief Handler for the request to get odometer and trip values
 /// @param req GET /odometer
 /// @return
@@ -374,7 +387,12 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	{
 		esp_ota_abort(ota_handle);
 		ESP_LOGE(__func__,"Written OTA image could not be validated.");
-		//Erase partition here.
+		//Erase partition here
+		err = esp_partition_erase_range(update_partition,0,update_partition->size);
+		if(err != ESP_OK)
+		{
+			ESP_LOGE(__func__,"Could not erase partition %s",update_partition->label);
+		}
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA validation failed");
 		return ESP_FAIL;
 	}
@@ -388,24 +406,39 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+/// @brief Handler to set the boot partition and reboot on it
+/// @param req /set_boot?target= POST from dropdown menu
+/// @return 
 static esp_err_t set_boot_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
 
 	char target[32] = {0};
 	if (strstr(req->uri, "target=ota_1"))
+	{
 		strncpy(target, "ota_1", sizeof(target));
-	else
+	}
+	else if (strstr(req->uri, "target=ota_0"))
+	{
 		strncpy(target, "ota_0", sizeof(target));
+	}
+	else
+	{
+		strncpy(target,"factory",sizeof(target));
+	}
+	ESP_LOGI(__func__,"Boot target : %s",target);
+	// Look for that partition
 	const esp_partition_t *part = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, target);
 	if (!part)
 	{
+		ESP_LOGE(__func__,"Could not find boot target %s",target);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Partition not found");
 		return ESP_FAIL;
 	}
 	esp_err_t err = esp_ota_set_boot_partition(part);
 	if (err != ESP_OK)
 	{
+		ESP_LOGE(__func__,"Set boot failed with code %u",err);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "esp_ota_set_boot_partition failed");
 		return ESP_FAIL;
 	}
@@ -415,13 +448,18 @@ static esp_err_t set_boot_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+/// @brief Web Server initialization handler
+/// @param  None
+/// @return Handle to webserver if successfully started, NULL otherwise.
 static httpd_handle_t start_webserver(void)
 {
 	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+	config.max_uri_handlers = 20;
+	config.stack_size = 8192;
 	httpd_handle_t server = NULL;
 	if (httpd_start(&server, &config) != ESP_OK)
 	{
-		ESP_LOGE(TAG, "Failed to start webserver");
+		ESP_LOGE(__func__, "Failed to start webserver");
 		return NULL;
 	}
 	httpd_uri_t index_uri = {.uri = "/", .method = HTTP_GET, .handler = index_get_handler};
@@ -438,9 +476,13 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &reboot_uri);
 	httpd_uri_t odo_uri = {.uri = "/odometer", .method = HTTP_GET, .handler = odometer_get_handler};
 	httpd_register_uri_handler(server, &odo_uri);
+	httpd_uri_t bootPart_uri = {.uri = "/prevboot", .method = HTTP_GET, .handler = prevboot_get_handler};
+	httpd_register_uri_handler(server,&bootPart_uri);
 	return server;
 }
 
+/// @brief Start WIFI AP
+/// @param  
 static void start_ap_mode(void)
 {
 	esp_netif_create_default_wifi_ap();
@@ -463,9 +505,11 @@ static void start_ap_mode(void)
 
 void app_main(void)
 {
+	
 	esp_err_t err = nvs_flash_init();
 	if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
 	{
+		ESP_LOGE(__func__,"Could not init default NVS, erasing and retrying.");
 		nvs_flash_erase();
 		nvs_flash_init();
 	}

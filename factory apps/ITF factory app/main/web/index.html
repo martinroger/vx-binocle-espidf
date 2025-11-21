@@ -17,9 +17,9 @@
         OTA0: <span id="ota0_project">-</span> (<span id="ota0_version">-</span>)<br>
         OTA1: <span id="ota1_project">-</span> (<span id="ota1_version">-</span>)<br>
     </div>
-    <div>    
-    <button onclick="refreshPartitions()">Refresh Partitions info</button>
-    <button onclick="fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting...'))">Reboot</button>
+    <div>
+        <button onclick="refreshPartitions()">Refresh Partitions info</button>
+        <button onclick="fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting...'))">Reboot</button>
     </div>
     <h2>Upload Firmware</h2>
     <div>Previously running partition: <span id="prevRunningPart">-</span></div>
@@ -30,13 +30,14 @@
             <option value="ota_1">ota_1</option>
         </select><br><br>
         File: <input type="file" name="file" id="file"><br><br>
-        <button type="button" onclick="doUpload()">Upload and flash</button> 
+        <button type="button" onclick="doUpload()">Upload and flash</button>
     </form>
     <progress id="uploadProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
     <pre id="result"></pre>
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
     <select id="bootsel">
+        <option value="factory">factory</option>
         <option value="ota_0">ota_0</option>
         <option value="ota_1">ota_1</option>
     </select>
@@ -88,6 +89,7 @@
 
         window.addEventListener('load', function () {
             refreshPartitions();
+            fetch('/prevboot').then(r => r.json()).then(j => { document.getElementById('bootPart').innerText = j.bootPart; document.getElementById('prevRunningPart').innerText = j.prevRunningPart; document.getElementById('recOTAPart').innerText = j.recOTAPart });
             fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m });
             fetch('/version').then(r => r.json()).then(j => { document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date) });
         });
