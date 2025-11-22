@@ -160,7 +160,7 @@ static esp_err_t partitions_get_handler(httpd_req_t *req)
 				if (noState != ESP_OK)
 				{
 					ESP_LOGW(__func__, "Could not get partition %s state:%s", p->label, esp_err_to_name(noState));
-					partStateEnum_length = snprintf(partStateEnum, sizeof(partStateEnum), "NO STATE");
+					partStateEnum_length = snprintf(partStateEnum, sizeof(partStateEnum), "UNKNOWN");
 				}
 				else
 				{
@@ -190,8 +190,7 @@ static esp_err_t partitions_get_handler(httpd_req_t *req)
 					}
 				}
 
-				off += snprintf(buf + off, sizeof(buf) - off, " ,\"state\":\"%s\"",
-								partStateEnum);
+				off += snprintf(buf + off, sizeof(buf) - off, " ,\"state\":\"%s\"", partStateEnum);
 				ESP_LOGD(__func__, "Offset : %u @ %u\nBuffer : %s", off, __LINE__, buf);
 			}
 		}
@@ -212,6 +211,9 @@ static esp_err_t partitions_get_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+/// @brief Handler to fetch from NVS the previously booted partition. Not 100% accurate all the time
+/// @param req GET /prevboot
+/// @return
 static esp_err_t prevboot_get_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
@@ -223,24 +225,28 @@ static esp_err_t prevboot_get_handler(httpd_req_t *req)
 
 	nvs_handle_t h;
 	nvs_open("storage", NVS_READONLY, &h);
+	// Defaulting to the factory app partition
 	int8_t prevBootID = -1;
 	esp_err_t nvs_err = nvs_get_i8(h, "lastPart", &prevBootID);
 	if (nvs_err != ESP_OK)
 		ESP_LOGW(__func__, "Error reading lastPart : %s", esp_err_to_name(nvs_err));
+
 	nvs_close(h);
+	// Prepare short buffers for the lastPartition and nextPartition
 	char lastPart[10];
 	char nextPart[10];
+
 	switch (prevBootID)
 	{
-	case -1:
+	case -1: // Last boot was in factory
 		strncpy(lastPart, "factory", sizeof(lastPart));
 		strncpy(nextPart, "ota_0", sizeof(nextPart));
 		break;
-	case 0:
+	case 0: // Last boot was ota_0, ext ota should be in 1
 		strncpy(lastPart, "ota_0", sizeof(lastPart));
 		strncpy(nextPart, "ota_1", sizeof(nextPart));
 		break;
-	case 1:
+	case 1: // Opposite case to 0
 		strncpy(lastPart, "ota_1", sizeof(lastPart));
 		strncpy(nextPart, "ota_0", sizeof(nextPart));
 		break;
@@ -248,23 +254,40 @@ static esp_err_t prevboot_get_handler(httpd_req_t *req)
 		break;
 	}
 
+	// DEBUG
+	const esp_partition_t *lastbooted = esp_ota_get_last_invalid_partition();
+	if (lastbooted != NULL)
+		ESP_LOGI(__func__, "Last invalidated partition : %s", lastbooted->label);
+	else
+		ESP_LOGI(__func__, "Could not retrieve last invalidated partition.");
+
+	// Some override if some states can be picked up
+	esp_err_t staterr;
 	if (ota0Partition != NULL)
 	{
-		esp_ota_get_state_partition(ota0Partition, &ota0State);
-
-		ESP_LOGI(__func__, "OTA 0 state : %u ", ota0State);
-		if (ota0State == ESP_OTA_IMG_ABORTED || ota0State == ESP_OTA_IMG_INVALID)
-			strncpy(nextPart, "ota_0", sizeof(nextPart));
+		staterr = esp_ota_get_state_partition(ota0Partition, &ota0State);
+		if (staterr == ESP_OK)
+		{
+			ESP_LOGI(__func__, "OTA 0 state : %u ", ota0State);
+			if (ota0State == ESP_OTA_IMG_ABORTED || ota0State == ESP_OTA_IMG_INVALID)
+				strncpy(nextPart, "ota_0", sizeof(nextPart));
+		}
+		else
+			ESP_LOGW(__func__, "Could not determine the state of ota_0");
 	}
 	if (ota1Partition != NULL)
 	{
-		esp_ota_get_state_partition(ota1Partition, &ota1State);
-
-		ESP_LOGI(__func__, "OTA 1 state : %u ", ota1State);
-		if (ota1State == ESP_OTA_IMG_ABORTED || ota1State == ESP_OTA_IMG_INVALID)
-			strncpy(nextPart, "ota_1", sizeof(nextPart));
+		staterr = esp_ota_get_state_partition(ota1Partition, &ota1State);
+		if (staterr == ESP_OK)
+		{
+			ESP_LOGI(__func__, "OTA 1 state : %u ", ota1State);
+			if (ota1State == ESP_OTA_IMG_ABORTED || ota1State == ESP_OTA_IMG_INVALID)
+				strncpy(nextPart, "ota_1", sizeof(nextPart));
+		}
+		else
+			ESP_LOGW(__func__, "Could not determine the state of ota_1");
 	}
-
+	// Prepare json response
 	char buf[256];
 	snprintf(buf, sizeof(buf), "{\"bootPart\":\"%s\",\"prevRunningPart\":\"%s\",\"recOTAPart\":\"%s\"}", bootPartition->label, lastPart, nextPart);
 	ESP_LOGI(__func__, "Response to request : %s", buf);
@@ -550,43 +573,82 @@ static esp_err_t set_boot_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
-static esp_err_t set_trip_odo_post_handler(httpd_req_t* req)
+/// @brief Allows editing trip and odometer (in meters) in the NVS
+/// @param req POST /set_trip_odo?new_trip= or /set_trip_odo?new_odo=
+/// @return
+static esp_err_t set_trip_odo_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
-	// This needs more robustness
 	nvs_handle_t h;
-	nvs_open_from_partition("nvs_odo","storage",NVS_READWRITE,&h);
-	const char* new_trip_ptr = strstr(req->uri,"new_trip=");
-	const char* new_odo_ptr = strstr(req->uri,"new_odo=");
+	esp_err_t nvserr = nvs_open_from_partition("nvs_odo", "storage", NVS_READWRITE, &h);
+	if (nvserr != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not open nvs_odo -> storage, error %s", esp_err_to_name(nvserr));
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not load nvs_odo NVS");
+		return ESP_FAIL;
+	}
+	// Prepare pointers to substrings
+	const char *new_trip_ptr = strstr(req->uri, "new_trip=");
+	const char *new_odo_ptr = strstr(req->uri, "new_odo=");
 	long detectedNumber = 0;
-	
+	// Check if "new_trip=" is a valid pointer (detected)
 	if (new_trip_ptr != NULL)
 	{
-		const char* tripToParse = new_trip_ptr+sizeof("new_trip=")-1;
-		
-		detectedNumber = atol(tripToParse);
-		if(detectedNumber<0)
-			detectedNumber *= -1;
-		if(detectedNumber>UINT32_MAX)
-			detectedNumber = UINT32_MAX;
-		nvs_set_u32(h,"trip_m",(uint32_t)detectedNumber);
-		ESP_LOGI(__func__,"Trip updated to %lu m",(uint32_t)detectedNumber);
-		nvs_commit(h);
+		// Construct pointer at the first supposed numerical character
+		const char *tripToParse = new_trip_ptr + sizeof("new_trip=") - 1;
+		// atol is not checking anything. Let's check that at least the first character is either numerical or +-
+		if ((tripToParse[0] == '-') || (tripToParse[0] == '+') || ((tripToParse[0] >= '0') && (tripToParse[0] <= '9')))
+		{
+			ESP_LOGI(__func__, "Numeral or compatible detected, atol sorta safe to use.");
+			detectedNumber = atol(tripToParse);
+			if (detectedNumber < 0)
+				detectedNumber *= -1;
+			if (detectedNumber > UINT32_MAX)
+				detectedNumber = UINT32_MAX;
+			nvs_set_u32(h, "trip_m", (uint32_t)detectedNumber);
+			ESP_LOGI(__func__, "Trip updated to %lu m", (uint32_t)detectedNumber);
+			nvs_commit(h);
+		}
+		else
+		{
+			ESP_LOGE(__func__, "Invalid starting character %s for atol, reporting error", tripToParse[0]);
+			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in trip set request");
+			nvs_close(h);
+			return ESP_FAIL;
+		}
 	}
-	else if (new_odo_ptr != NULL)
+	if (new_odo_ptr != NULL)
 	{
-		const char* odoToParse = new_odo_ptr+sizeof("new_odo=")-1;
-		detectedNumber = atol(odoToParse);
-		if(detectedNumber<0)
-			detectedNumber *= -1;
-		if(detectedNumber>UINT32_MAX)
-			detectedNumber = UINT32_MAX;
-		nvs_set_u32(h,"odometer_m",(uint32_t)detectedNumber);
-		ESP_LOGI(__func__,"Odometer updated to %lu m",(uint32_t)detectedNumber);
-		nvs_commit(h);
+		const char *odoToParse = new_odo_ptr + sizeof("new_odo=") - 1;
+		if ((odoToParse[0] == '-') || (odoToParse[0] == '+') || ((odoToParse[0] >= '0') && (odoToParse[0] <= '9')))
+		{
+			detectedNumber = atol(odoToParse);
+			if (detectedNumber < 0)
+				detectedNumber *= -1;
+			if (detectedNumber > UINT32_MAX)
+				detectedNumber = UINT32_MAX;
+			nvs_set_u32(h, "odometer_m", (uint32_t)detectedNumber);
+			ESP_LOGI(__func__, "Odometer updated to %lu m", (uint32_t)detectedNumber);
+			nvs_commit(h);
+		}
+		else
+		{
+			ESP_LOGE(__func__, "Invalid starting character %s for atol, reporting error", odoToParse[0]);
+			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in odo set request");
+			nvs_close(h);
+			return ESP_FAIL;
+		}
 	}
+	if (new_odo_ptr == NULL && new_trip_ptr == NULL) //Gibberish in the request
+	{
+		ESP_LOGE(__func__,"Invalid update request, no new_trip or new_odo.");
+		httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Malformed request, no correct tags");
+		nvs_close(h);
+		return ESP_FAIL;
+	}
+	// Close NVS if nothing returned before
 	nvs_close(h);
-	httpd_resp_send(req, HTTPD_200,sizeof(HTTPD_200));
+	httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
 	return ESP_OK;
 }
 
@@ -669,20 +731,6 @@ void app_main(void)
 		nvs_flash_erase_partition("nvs_odo");
 		nvs_flash_init_partition("nvs_odo");
 	}
-
-	// Debug only
-	//  nvs_handle_t temporary;
-	//  nvs_open_from_partition("nvs_odo","storage",NVS_READONLY,&temporary);
-	//  nvs_type_t odometer_type = NVS_TYPE_I32;
-	//  if(nvs_find_key(temporary,"odometer_m",&odometer_type) == ESP_OK)
-	//  	ESP_LOGI(__func__,"Key found");
-	//  else
-	//  	ESP_LOGW(__func__,"Key not found");
-	//  odometer_type = NVS_TYPE_U32;
-	//  if(nvs_find_key(temporary,"odometer_m",&odometer_type) == ESP_OK)
-	//  	ESP_LOGI(__func__,"Key found U32");
-	//  else
-	//  	ESP_LOGW(__func__,"Key not found U32");
 
 	esp_netif_init();
 	esp_event_loop_create_default();
