@@ -214,13 +214,23 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
     static binocan_rdb_uds_req_t binocan_rdb_uds_req_msg;
 
     generatorOn = false;
+    // ESP_LOGI(__func__,"ID: 0x%04LX ",rxMsg->identifier);
+    // for (int i = 0; i < rxMsg->data_length_code; i++)
+    // {
+    //     printf("0x%02X\t",rxMsg->data[i]);
+    // }
+    // printf("\n");
+    
 
     switch (rxMsg->identifier)
     {
     case BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID:
     {
-        binocan_itf_active_hi_lo_unpack(&binocan_itf_active_hi_lo_msg, rxMsg->data, rxMsg->data_length_code);
-
+        if(binocan_itf_active_hi_lo_unpack(&binocan_itf_active_hi_lo_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
         if (binocan_itf_active_hi_lo_itf_abs_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_abs_al_tt))
         {
             binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_ON_CHOICE ? absOn = true : absOn = false;
@@ -362,7 +372,11 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     case BINOCAN_ITF_SLOW_METRICS_FRAME_ID:
     {
-        binocan_itf_slow_metrics_unpack(&binocan_itf_slow_metrics_msg, rxMsg->data, rxMsg->data_length_code);
+        if(binocan_itf_slow_metrics_unpack(&binocan_itf_slow_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
 
         if (binocan_itf_slow_metrics_itf_coolant_temp_is_in_range(binocan_itf_slow_metrics_msg.itf_coolant_temp))
         {
@@ -403,7 +417,11 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     case BINOCAN_ITF_FAST_METRICS_FRAME_ID:
     {
-        binocan_itf_fast_metrics_unpack(&binocan_itf_fast_metrics_msg, rxMsg->data, rxMsg->data_length_code);
+        if(binocan_itf_fast_metrics_unpack(&binocan_itf_fast_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
         if (binocan_itf_fast_metrics_itf_rpm_is_in_range(binocan_itf_fast_metrics_msg.itf_rpm))
         {
             rpm = (uint32_t)binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm);
@@ -430,7 +448,11 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     case BINOCAN_ITF_ODOMETER_FRAME_ID:
     {
-        binocan_itf_odometer_unpack(&binocan_itf_odometer_msg,rxMsg->data, rxMsg->data_length_code);
+        if(binocan_itf_odometer_unpack(&binocan_itf_odometer_msg,rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
         if(binocan_itf_odometer_itf_odometer_km_is_in_range(binocan_itf_odometer_msg.itf_odometer_km) && binocan_itf_odometer_itf_odo_rem_m_is_in_range(binocan_itf_odometer_msg.itf_odo_rem_m))
         {
             odometer_km = binocan_itf_odometer_itf_odometer_km_decode(binocan_itf_odometer_msg.itf_odometer_km) + binocan_itf_odometer_itf_odo_rem_m_decode(binocan_itf_odometer_msg.itf_odo_rem_m)/1000.0;
@@ -457,37 +479,61 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     case BINOCAN_EXT_OIL_METRICS_FRAME_ID:
     {
-        binocan_ext_oil_metrics_unpack(&binocan_ext_oil_metrics_msg, rxMsg->data, rxMsg->data_length_code);
+        if(binocan_ext_oil_metrics_unpack(&binocan_ext_oil_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
     }
     break;
 
     case BINOCAN_EXT_CHARGECOOLING_METRICS_FRAME_ID:
     {
-        binocan_ext_chargecooling_metrics_unpack(&binocan_ext_chargecooling_metrics_msg, rxMsg->data, rxMsg->data_length_code);
+        if(binocan_ext_chargecooling_metrics_unpack(&binocan_ext_chargecooling_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
     }
     break;
 
     case BINOCAN_ITF_BOARD_ST_FRAME_ID:
     {
-        binocan_itf_board_st_unpack(&binocan_itf_board_st_msg, rxMsg->data, rxMsg->data_length_code);
+        if(binocan_itf_board_st_unpack(&binocan_itf_board_st_msg, rxMsg->data, rxMsg->data_length_code)==EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
     }
     break;
 
     case BINOCAN_ITF_BOARD_VERSION_FRAME_ID:
     {
-        binocan_itf_board_version_unpack(&binocan_itf_board_version_msg, rxMsg->data, rxMsg->data_length_code);
+        if(binocan_itf_board_version_unpack(&binocan_itf_board_version_msg, rxMsg->data, rxMsg->data_length_code)==EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
     }
     break;
 
     case BINOCAN_LDB_ST_FRAME_ID:
     {
-        binocan_ldb_st_unpack(&binocan_ldb_st_msg, rxMsg->data, rxMsg->data_length_code);
+        if(binocan_ldb_st_unpack(&binocan_ldb_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
     }
     break;
 
     case BINOCAN_RDB_UDS_REQ_FRAME_ID:
     {
-        binocan_rdb_uds_req_unpack(&binocan_rdb_uds_req_msg, rxMsg->data, rxMsg->data_length_code);
+        if(binocan_rdb_uds_req_unpack(&binocan_rdb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(TAG,"Malformed frame 0x%03LX, invalid DLC",rxMsg->identifier);
+            break;
+        }
     }
     break;
 
@@ -535,8 +581,9 @@ extern "C" void app_main()
     auto backLight = board->getBacklight();
     ESP_LOGD("Backlight OFF", " %d", backLight->off());
 
+
 // Screen test when in debug mode
-#if CONFIG_LOG_DEFAULT_LEVEL >= ESP_LOG_DEBUG
+#if CONFIG_LOG_DEFAULT_LEVEL >= 4
     auto expander = board->getIO_Expander()->getBase();
     expander->printStatus();
     ESP_LOGI("Backlight", " %d", backLight->on());
@@ -579,10 +626,6 @@ extern "C" void app_main()
 
     ESP_LOGI(TAG, "Starting TWAI port and daemon");
     ESP_UTILS_CHECK_ERROR_EXIT(initCAN(&dispatchFrame), "Failed to initialize TWAI port and daemon");
-    // if (initCAN(&dispatchFrame) != ESP_OK)
-    // {
-    //     ESP_LOGE(TAG, "Failed to initialize TWAI port and daemon");
-    // }
     ESP_LOGI(TAG, "Setup done");
 
 #pragma region Main Loop
