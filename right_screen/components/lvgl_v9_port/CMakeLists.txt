@@ -7,5 +7,5 @@ file(GLOB_RECURSE C_SRCS "${SRCS_DIR}/*.c")
 idf_component_register(
     SRCS ${C_SRCS} ${CPP_SRCS}
     INCLUDE_DIRS ${SRCS_DIR}
-    REQUIRES lvgl esp32_display_panel
+    REQUIRES lvgl esp32_display_panel esp_timer
 )

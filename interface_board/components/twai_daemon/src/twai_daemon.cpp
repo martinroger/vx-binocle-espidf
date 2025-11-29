@@ -36,7 +36,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
         .rx_io = (gpio_num_t)CONFIG_CAN_RX,
         .clkout_io = TWAI_IO_UNUSED,
         .bus_off_io = TWAI_IO_UNUSED,
-        .tx_queue_len = 16,
+        .tx_queue_len = 256,
         .rx_queue_len = 256,
         .alerts_enabled = alerts_to_enable,
         .clkout_divider = 0,
@@ -103,7 +103,7 @@ void CAN_RX_Task(void *pvParameters)
 
     while (true)
     {
-        while (twai_receive(&rxMessage, pdMS_TO_TICKS(0)) == ESP_OK)
+        while (twai_receive(&rxMessage, pdMS_TO_TICKS(CAN_RX_POLL_MS)) == ESP_OK)
         {
             if (dispatchCANFrame == nullptr)
             {
@@ -116,7 +116,7 @@ void CAN_RX_Task(void *pvParameters)
                 ESP_LOGW(TAG, "Frame dispatcher returned an error");
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(CAN_RX_POLL_MS));
+        // vTaskDelay(pdMS_TO_TICKS(CAN_RX_POLL_MS));
     }
 }
 
@@ -127,13 +127,13 @@ void CAN_TX_Task(void *pvParameters)
 
     while (true)
     {
-        while (xQueueReceive(CAN_TX_queue_hdl, &txMessage, pdMS_TO_TICKS(0)) == pdPASS)
+        while (xQueueReceive(CAN_TX_queue_hdl, &txMessage, pdMS_TO_TICKS(CAN_TX_POLL_MS)) == pdPASS)
         {
             if (twai_transmit(&txMessage, pdMS_TO_TICKS(5)) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not TX TWAI message!");
             }
         }
-        vTaskDelay(pdMS_TO_TICKS(CAN_TX_POLL_MS));
+        // vTaskDelay(pdMS_TO_TICKS(CAN_TX_POLL_MS));
     }
 }
