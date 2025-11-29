@@ -422,9 +422,18 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 
 	/* Find start of file body in first chunk */
 	char *body_start = strstr(buf, "\r\n\r\n");
+
 	if (body_start)
 	{
 		body_start += 4;
+		// char *counter = buf;
+		// while (counter < body_start + 8)
+		// {
+		// 	printf("%c", *counter);
+		// 	counter++;
+		// }
+		// printf("\n");
+		printf("%X\n",*body_start);
 	}
 	else
 	{
@@ -432,7 +441,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	}
 	// Calculate the size to write by assuming that the delta is the first 4K received bytes, minus the length in bytes between *body_start and *buf memory addresses
 	size_t to_write = receivedBytes - (body_start - buf);
-	ESP_LOGI(__func__, "To write : %d", to_write);
+	ESP_LOGI(__func__, "To write : %d out of %d", to_write, req->content_len - (body_start - buf));
 	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which is part of the descriptor */
 	const esp_app_desc_t *img_desc = NULL;
 	// Check if the segment that remains is large enough to accomodate an app descriptor
@@ -469,7 +478,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	/* Begin OTA now that image looks valid */
 	esp_ota_handle_t ota_handle;
 	ESP_LOGI(__func__, "Image seems valid, starting OTA to target partition.");
-	esp_err_t err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
+	esp_err_t err = esp_ota_begin(update_partition, req->content_len - (body_start - buf), &ota_handle);
 	if (err != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not start OTA, aborting.");
