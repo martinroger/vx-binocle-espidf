@@ -6,4 +6,12 @@ menu "TWAI Daemon"
     config CAN_RX
         int "CAN Transceiver RX GPIO"
         default 38
+
+    config CAN_TX_POLLING_RATE_MS
+        int "TX Queue polling interval in ms"
+        default 5 
+
+    config CAN_RX_POLLING_RATE_MS
+        int "RX Queue polling interval in ms"
+        default 5 
 endmenu
