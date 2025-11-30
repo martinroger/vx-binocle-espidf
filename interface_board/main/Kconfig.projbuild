@@ -161,17 +161,6 @@ menu "Interface board configuration"
             help
                 Default is 200ms
 
-        config CAN_RX_POLLING_RATE_MS
-            int "Polling rate on the RX side of the CAN transceiver"
-            default 10
-            help 
-                Default is 10ms
-
-        config CAN_TX_POLLING_RATE_MS
-            int "Polling rate for the TX bursts of the CAN transceiver"
-            default 5
-            help
-                Default is 5ms
     endmenu
 
     menu "Display control"

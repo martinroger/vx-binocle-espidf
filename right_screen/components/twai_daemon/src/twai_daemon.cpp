@@ -4,6 +4,8 @@ const char *TAG = "CAN Daemon";
 
 frameDispatcher_t *dispatchCANFrame = nullptr;
 
+bool CAN_RX_TimedOut = false;
+
 // Pointer to rx and dispatch task handle
 TaskHandle_t CAN_RX_tsk_hdl = nullptr;
 TaskHandle_t CAN_TX_tsk_hdl = nullptr;
@@ -29,7 +31,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
 #else
     uint32_t alerts_to_enable = TWAI_ALERT_NONE;
 #endif
-    
+
     twai_general_config_t g_config = {
         .mode = TWAI_MODE_NORMAL,
         .tx_io = (gpio_num_t)CONFIG_CAN_TX,
@@ -99,12 +101,17 @@ void CAN_RX_Task(void *pvParameters)
 {
     ESP_LOGI(TAG, "CAN_RX_Task has started");
     static twai_message_t rxMessage;
-    // Add timeout variable ?
+    CAN_RX_TimedOut = false;
+    static esp_err_t rxErr;
 
     while (true)
     {
-        while (twai_receive(&rxMessage, pdMS_TO_TICKS(CAN_RX_POLL_MS)) == ESP_OK)
+        rxErr = twai_receive(&rxMessage, pdMS_TO_TICKS(CONFIG_CAN_RX_TIMEOUT_MS));
+        switch (rxErr)
         {
+        case ESP_OK:
+        {
+            CAN_RX_TimedOut = false;
             if (dispatchCANFrame == nullptr)
             {
                 ESP_LOGD(TAG, "No Frame dispatcher set up !");
@@ -115,8 +122,20 @@ void CAN_RX_Task(void *pvParameters)
             {
                 ESP_LOGW(TAG, "Frame dispatcher returned an error");
             }
+            break;
         }
-        // vTaskDelay(pdMS_TO_TICKS(CAN_RX_POLL_MS));
+        case ESP_ERR_TIMEOUT:
+        {
+            CAN_RX_TimedOut = true;
+            break;
+        }
+        default:
+        {
+            ESP_LOGE(__func__, "TWAI RX Task experiencing issues, pausing for 1000ms : %s",esp_err_to_name(rxErr));
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            break;
+        }
+        }
     }
 }
 
@@ -127,7 +146,7 @@ void CAN_TX_Task(void *pvParameters)
 
     while (true)
     {
-        while (xQueueReceive(CAN_TX_queue_hdl, &txMessage, pdMS_TO_TICKS(CAN_TX_POLL_MS)) == pdPASS)
+        while (xQueueReceive(CAN_TX_queue_hdl, &txMessage, pdMS_TO_TICKS(CONFIG_CAN_TX_POLLING_RATE_MS)) == pdPASS)
         {
             if (twai_transmit(&txMessage, pdMS_TO_TICKS(5)) != ESP_OK)
             {
