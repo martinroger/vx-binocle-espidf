@@ -17,22 +17,6 @@
 #define CONFIG_CAN_TX 2
 #endif
 
-#ifndef CAN_RX_POLL_MS
-#ifdef CONFIG_CAN_RX_POLLING_RATE_MS
-#define CAN_RX_POLL_MS CONFIG_CAN_RX_POLLING_RATE_MS
-#else
-#define CAN_RX_POLL_MS 50
-#endif
-#endif
-
-#ifndef CAN_TX_POLL_MS
-#ifdef CONFIG_CAN_TX_POLLING_RATE_MS
-#define CAN_TX_POLL_MS CONFIG_CAN_TX_POLLING_RATE_MS
-#else
-#define CAN_TX_POLL_MS 50
-#endif
-#endif
-
 // Only active if the TWAI_WATCHDOG is used
 
 
@@ -42,6 +26,9 @@ typedef esp_err_t frameDispatcher_t(twai_message_t *messageToDispatch);
 
 // Pointer to dispatcher function, attached on init and defined externally
 extern frameDispatcher_t *dispatchCANFrame ;
+
+// RX TimeOut flag. Not necessarily used
+extern bool CAN_RX_TimedOut ;
 
 // Pointer to rx and dispatch task handle
 extern TaskHandle_t CAN_RX_tsk_hdl ;

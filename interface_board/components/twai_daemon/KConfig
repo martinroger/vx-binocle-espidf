@@ -11,7 +11,7 @@ menu "TWAI Daemon"
         int "TX Queue polling interval in ms"
         default 5 
 
-    config CAN_RX_POLLING_RATE_MS
-        int "RX Queue polling interval in ms"
-        default 5 
+    config CAN_RX_TIMEOUT_MS
+        int "RX Timeout in milliseconds"
+        default 3000 
 endmenu
