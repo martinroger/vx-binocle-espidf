@@ -38,6 +38,19 @@
     </form>
     <progress id="uploadProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
     <pre id="result"></pre>
+
+    <h2>Flash over CAN</h2>
+    <form id="uploadCANForm" method="POST" enctype="multipart/form-data">
+        Target ECU: <select name="targetECU" id="targetECU">
+            <option value="RDB">Right Display</option>
+            <option value="LDB">Left Display</option>
+        </select><br><br>
+        Binary file : <input type="file" name="file" id="CANfile"><br><br>
+        <button type="button" onclick="doCANUpload()">Flash over CAN</button>
+    </form>
+    <progress id="flashProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
+
+
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
     <select id="bootsel">
@@ -94,6 +107,41 @@
             xhr.onerror = function () {
                 alert('Upload failed');
                 document.getElementById('uploadProgress').value = 0;
+            };
+            xhr.send(fd);
+        }
+
+        function doCANUpload() {
+            var f = document.getElementById('CANfile').files[0];
+            if (!f) {
+                alert('Choose file');
+                return;
+            }
+            var t = document.getElementById('targetECU').value;
+            var fd = new FormData(); fd.append('file', f);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/flash?targetECU=' + t, true);
+            xhr.upload.onprogress = function (e) {
+                if (e.lengthComputable) {
+                    document.getElementById('flashProgress').value = Math.round(e.loaded / e.total * 100);
+                }
+            };
+            xhr.onload = function () {
+                // try {
+                //     var j = JSON.parse(xhr.responseText);
+                //     document.getElementById('result').innerText = JSON.stringify(j, null, 2);
+                //     if (j.project_name) {
+                //         refreshPartitions();
+                //     }
+                // }
+                // catch (e) {
+                //     document.getElementById('result').innerText = xhr.responseText;
+                // }
+                document.getElementById('flashProgress').value = 0;
+            };
+            xhr.onerror = function () {
+                alert('Upload failed');
+                document.getElementById('flashProgress').value = 0;
             };
             xhr.send(fd);
         }

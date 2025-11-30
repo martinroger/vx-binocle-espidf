@@ -30,10 +30,33 @@
 #include "esp_image_format.h"
 #include "esp_spiffs.h"
 
+#include "binocan.h"
+#include "twai_daemon.h"
+
 #ifdef TAG
 #undef TAG
 #endif
 #define TAG "ITF Factory"
+
+// ESP32 is Little Endian, UDS is BE
+template <typename T>
+T swap_endian(T u)
+{
+	static_assert(CHAR_BIT == 8, "CHAR_BIT != 8");
+
+	union
+	{
+		T u;
+		unsigned char u8[sizeof(T)];
+	} source, dest;
+
+	source.u = u;
+
+	for (size_t k = 0; k < sizeof(T); k++)
+		dest.u8[k] = source.u8[sizeof(T) - k - 1];
+
+	return dest.u;
+}
 
 /// @brief Declares the MDNS instances and sets it up on the Hotspot wifi
 /// @param
@@ -372,7 +395,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	}
 	// Allocate some buffer to receive in segments of 4K
 	const size_t buf_size = 4096;
-	char *buf = malloc(buf_size);
+	char *buf = static_cast<char *>(malloc(buf_size));
 	if (!buf)
 	{
 		ESP_LOGE(__func__, "Could not allocate reception buffer");
@@ -431,17 +454,17 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 		body_start = buf;
 	}
 	// Calculate the size to write by assuming that the delta is the first 4K received bytes, minus the length in bytes between *body_start and *buf memory addresses
-	size_t to_write = receivedBytes - (body_start - buf);
-	ESP_LOGI(__func__, "To write : %d", to_write);
+	size_t initial_to_write = receivedBytes - (body_start - buf);
+	ESP_LOGI(__func__, "To write : %d", initial_to_write);
 	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which is part of the descriptor */
 	const esp_app_desc_t *img_desc = NULL;
 	// Check if the segment that remains is large enough to accomodate an app descriptor
-	if (to_write >= sizeof(esp_app_desc_t))
+	if (initial_to_write >= sizeof(esp_app_desc_t))
 	{
 		// Set a 4-byte scanner pointer, starting it at the memory address of body start
 		ESP_LOGI(__func__, "Scanning for OxABCD5432");
 		uint32_t *scan = (uint32_t *)body_start;
-		uint32_t scan_end = (to_write - sizeof(esp_app_desc_t)) / 4;
+		uint32_t scan_end = (initial_to_write - sizeof(esp_app_desc_t)) / 4;
 		ESP_LOGI(__func__, "Scan length : %lu * 4 bytes");
 		for (uint32_t i = 0; i < scan_end; i++)
 		{
@@ -469,7 +492,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	/* Begin OTA now that image looks valid */
 	esp_ota_handle_t ota_handle;
 	ESP_LOGI(__func__, "Image seems valid, starting OTA to target partition.");
-	esp_err_t err = esp_ota_begin(update_partition, OTA_SIZE_UNKNOWN, &ota_handle);
+	esp_err_t err = esp_ota_begin(update_partition, req->content_len - (body_start - buf), &ota_handle);
 	if (err != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not start OTA, aborting.");
@@ -479,7 +502,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	}
 	// Write the first partial image segment
 	ESP_LOGI(__func__, "Writing first segment to partition.");
-	esp_ota_write(ota_handle, (const void *)body_start, to_write);
+	esp_ota_write(ota_handle, (const void *)body_start, initial_to_write);
 	// Write the next segments until there is no more data
 	while (readTotal < (size_t)req->content_len)
 	{
@@ -528,6 +551,321 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 			 local_desc.project_name, local_desc.version, local_desc.date);
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, out);
+	return ESP_OK;
+}
+
+static esp_err_t flash_post_handler(httpd_req_t *req)
+{
+	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+
+	// Preparing transfer block size and minimum separation time variables
+	uint8_t CANBlockSize = 0;
+	uint8_t STmin_MS = 0;
+	twai_message_t txMsg, rxMsg;
+	txMsg.extd = false;
+	uint32_t UDSRespID = 0;
+	uint8_t CF_SN = 0x01;
+	esp_err_t tx_err;
+	esp_err_t rx_err;
+
+	int remaining = req->content_len;
+	ESP_LOGI(__func__, "Content length: %d", remaining);
+
+	// Check length of remaining content
+	if (remaining <= 0)
+	{
+		ESP_LOGE(__func__, "Invalid content length!");
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Invalid content length");
+		return ESP_FAIL;
+	}
+	// Allocate some buffer to receive in segments of 4K
+	const size_t buf_size = 4096;
+	char *buf = static_cast<char *>(malloc(buf_size));
+	if (!buf)
+	{
+		ESP_LOGE(__func__, "Could not allocate reception buffer");
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to allocate buffer");
+		return ESP_FAIL;
+	}
+	size_t readTotal = 0;
+	// Receive first 4K segment
+	ssize_t receivedBytes = httpd_req_recv(req, buf, buf_size); // Signed size_t
+	if (receivedBytes <= 0)
+	{
+		free(buf);
+		ESP_LOGE(__func__, "Could not receive first 4K of file to look for app header");
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request");
+		return ESP_FAIL;
+	}
+	readTotal += receivedBytes;
+
+	// Find which ECU is targeted
+	char target_label[32] = {0};
+	/* Extract target from query string: /flash?targetECU=RDB or /flash?targetECU=LDB */
+	if (strstr(req->uri, "targetECU=RDB"))
+	{
+		strncpy(target_label, "RDB", sizeof(target_label) - 1);
+		txMsg.identifier = BINOCAN_RDB_UDS_REQ_FRAME_ID;
+		UDSRespID = BINOCAN_RDB_UDS_RESP_FRAME_ID;
+	}
+	else if (strstr(req->uri, "targetECU=LDB"))
+	{
+		strncpy(target_label, "LDB", sizeof(target_label) - 1);
+		txMsg.identifier = BINOCAN_LDB_UDS_REQ_FRAME_ID;
+		UDSRespID = BINOCAN_RDB_UDS_RESP_FRAME_ID;
+	}
+	else
+	{
+		ESP_LOGE(__func__, "No valid target found, aborting");
+		free(buf);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Target ECU unknown");
+		return ESP_FAIL;
+	}
+	ESP_LOGI(__func__, "Target ECU : %s", target_label);
+
+	// Check the file is not garbage
+	/* Find start of file body in first chunk */
+	char *body_start = strstr(buf, "\r\n\r\n");
+	if (body_start)
+	{
+		body_start += 4;
+	}
+	else
+	{
+		body_start = buf;
+	}
+	// Calculate the size to write by assuming that the delta is the first 4K received bytes, minus the length in bytes between *body_start and *buf memory addresses
+	size_t initial_to_write = receivedBytes - (body_start - buf);
+	ESP_LOGI(__func__, "To write : %d", initial_to_write);
+	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which is part of the descriptor */
+	const esp_app_desc_t *img_desc = NULL;
+	// Check if the segment that remains is large enough to accomodate an app descriptor
+	if (initial_to_write >= sizeof(esp_app_desc_t))
+	{
+		// Set a 4-byte scanner pointer, starting it at the memory address of body start
+		ESP_LOGI(__func__, "Scanning for OxABCD5432");
+		uint32_t *scan = (uint32_t *)body_start;
+		uint32_t scan_end = (initial_to_write - sizeof(esp_app_desc_t)) / 4;
+		ESP_LOGI(__func__, "Scan length : %lu * 4 bytes");
+		for (uint32_t i = 0; i < scan_end; i++)
+		{
+			ESP_LOGI(__func__, "Scanning 0x%04lx", (uint32_t)scan + i);
+			if (scan[i] == 0xABCD5432)
+			{
+				ESP_LOGI(__func__, "Found starter bytes.");
+				img_desc = (const esp_app_desc_t *)&scan[i];
+				break;
+			}
+		}
+	}
+	if (!img_desc)
+	{
+		ESP_LOGE(__func__, "Could not find starter bytes, invalid image.");
+		free(buf);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Uploaded binary contains no app descriptor (rejecting)");
+		return ESP_FAIL;
+	}
+	/* Copy descriptor locally before freeing the upload buffer */
+	esp_app_desc_t local_desc;
+	memcpy(&local_desc, img_desc, sizeof(esp_app_desc_t));
+
+	// Here we would check for the ECU to respond, start session etc.
+
+	// Compute size to write
+	uint32_t totalSize = req->content_len - (body_start - buf);
+	uint32_t sentTotal = 0;
+	uint32_t processedTotal = (body_start - buf);
+	uint32_t pos_cursor = (body_start - buf); // 0-indexed cursor that represents position in current buf
+	ESP_LOGI(__func__, "Total size to send over CAN : %lu bytes", totalSize);
+
+	// Suspend normal TWAI Daemon tasks
+	vTaskSuspend(CAN_RX_tsk_hdl);
+	vTaskSuspend(CAN_TX_tsk_hdl);
+	rx_err = twai_clear_receive_queue();
+	if (rx_err != ESP_OK)
+	{
+		ESP_LOGW(__func__,"Could not clear RX queue : %s",esp_err_to_name(rx_err));
+	}
+	
+	// Start with the first frame
+	txMsg.data_length_code = 8;
+	txMsg.data[0] = 0x10; // First Frame PCI
+	txMsg.data[1] = 0x00; // Escape sequence for length
+	*(uint32_t *)(txMsg.data + 2) = (swap_endian<uint32_t>(totalSize));
+	txMsg.data[6] = buf[pos_cursor];
+	printf("%X\n", buf[pos_cursor]);
+	txMsg.data[7] = buf[pos_cursor + 1];
+	pos_cursor += 2;
+	sentTotal += 2;
+	processedTotal += 2;
+	tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(5000));
+	if (tx_err != ESP_OK)
+	{
+		free(buf);
+		ESP_LOGE(__func__, "Impossible to send first frame : %s", esp_err_to_name(tx_err));
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Impossible to send FF");
+		return ESP_FAIL;
+	}
+
+	// Wait for first FC frame
+	int otherFrames = 0; // Useful to get out if too many other frames come in
+	while (otherFrames < 500)
+	{
+		rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
+		if (rx_err == ESP_ERR_TIMEOUT)
+		{
+			ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
+			free(buf);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+			return ESP_FAIL;
+		}
+		else if (rx_err != ESP_OK)
+		{
+			ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
+			free(buf);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
+			return ESP_FAIL;
+		}
+		else
+		{
+			if (rxMsg.identifier == UDSRespID)
+			{
+				ESP_LOGI(__func__, "Received UDS Response frame");
+				otherFrames = 0; // used as a flag of sorts
+				break;
+			}
+			else
+				otherFrames++;
+		}
+	}
+	if (otherFrames != 0) // No FC frame was received out of 500 frames
+	{
+		ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
+		free(buf);
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+		return ESP_FAIL;
+	}
+	else
+	{
+		if (rxMsg.data[0] == 0x30) // It's a CTS FC frame
+		{
+			CANBlockSize = rxMsg.data[1];
+			STmin_MS = rxMsg.data[2];
+		}
+		else
+		{
+			ESP_LOGE(__func__, "Received frame is not FC CTS: %llX",*(uint64_t*)rxMsg.data);
+			free(buf);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
+			return ESP_FAIL;
+		}
+	}
+	
+	// If we have made it here without returning anything, it means that we have received a CTS FC frame
+	int to_process = buf_size;
+	uint8_t blockCounter = 0;
+	int i = 1;										  // Used to position in the txMsg data buffer
+	while (processedTotal < (size_t)req->content_len) // As long as there is content to query
+	{
+		while (pos_cursor < to_process && i < 8) // As long as there are unprocessed bytes in the buffer
+		{
+			txMsg.data[0] = 0x20 + (CF_SN & 0x0F); // Sequence number
+			txMsg.data[i] = buf[pos_cursor];
+			pos_cursor++;
+			i++;
+			processedTotal++;
+			sentTotal++;
+		}
+		if (pos_cursor == to_process && (processedTotal < (size_t)req->content_len)) // Ran out of data in the buffer
+		{
+			ESP_LOGI(__func__,"Fetching next chunk : %lu processed out of %lu",processedTotal,req->content_len);
+			if (to_process > req->content_len - processedTotal) // Check if this might be the last truncated 4K segment
+			{
+				to_process = req->content_len - processedTotal;
+			}
+			receivedBytes = httpd_req_recv(req, buf, to_process); // pull a new buffer
+			if (receivedBytes <= 0)
+			{
+				ESP_LOGW(__func__, "No bytes received despite expecting some");
+				break;
+			}
+			readTotal += receivedBytes;
+			pos_cursor = 0; // Reset the cursor at the start of the buffer and go for another loop
+		}
+		if (i == 8 || (processedTotal == (size_t)req->content_len)) // Message is full or all is processed
+		{
+			i = 1;
+			CF_SN++;
+			if (CANBlockSize > 0 && blockCounter == CANBlockSize) // Case a block size was specified
+			{
+				ESP_LOGW(__func__,"Waiting for FC");
+				otherFrames = 0; // Useful to get out if too many other frames come in
+				while (otherFrames < 500)
+				{
+					rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
+					if (rx_err == ESP_ERR_TIMEOUT)
+					{
+						ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
+						free(buf);
+						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+						return ESP_FAIL;
+					}
+					else if (rx_err != ESP_OK)
+					{
+						ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
+						free(buf);
+						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
+						return ESP_FAIL;
+					}
+					else
+					{
+						if (rxMsg.identifier == UDSRespID)
+						{
+							ESP_LOGI(__func__, "Received UDS Response frame");
+							otherFrames = 0; // used as a flag of sorts
+							break;
+						}
+						else
+							otherFrames++;
+					}
+				}
+				if (otherFrames != 0) // No FC frame was received out of 500 frames
+				{
+					ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
+					free(buf);
+					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+					return ESP_FAIL;
+				}
+				else
+				{
+					if (rxMsg.data[0] == 0x30) // It's a CTS FC frame
+					{
+						CANBlockSize = rxMsg.data[1];
+						STmin_MS = rxMsg.data[2];
+					}
+					else
+					{
+						ESP_LOGE(__func__, "Received frame is not FC CTS: %llX",*(uint64_t*)rxMsg.data);
+						free(buf);
+						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
+						return ESP_FAIL;
+					}
+				}
+				// Received a FC frame that gives the CTS
+				blockCounter = 0; //We can proceed
+			}
+			vTaskDelay(pdMS_TO_TICKS(STmin_MS));
+			tx_err = twai_transmit(&txMsg,pdMS_TO_TICKS(5));
+			blockCounter++;
+		}
+	}
+
+	ESP_LOGI(__func__,"Read total : %lu Sent total : %lu Processed total : %lu Content length : %lu",readTotal,sentTotal,processedTotal,req->content_len);
+
+	// Resume normal TWAI Daemon tasks
+	vTaskResume(CAN_RX_tsk_hdl);
+	vTaskResume(CAN_TX_tsk_hdl);
+	httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
 	return ESP_OK;
 }
 
@@ -639,10 +977,10 @@ static esp_err_t set_trip_odo_post_handler(httpd_req_t *req)
 			return ESP_FAIL;
 		}
 	}
-	if (new_odo_ptr == NULL && new_trip_ptr == NULL) //Gibberish in the request
+	if (new_odo_ptr == NULL && new_trip_ptr == NULL) // Gibberish in the request
 	{
-		ESP_LOGE(__func__,"Invalid update request, no new_trip or new_odo.");
-		httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Malformed request, no correct tags");
+		ESP_LOGE(__func__, "Invalid update request, no new_trip or new_odo.");
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Malformed request, no correct tags");
 		nvs_close(h);
 		return ESP_FAIL;
 	}
@@ -674,6 +1012,8 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &parts_uri);
 	httpd_uri_t upload_uri = {.uri = "/upload", .method = HTTP_POST, .handler = upload_post_handler};
 	httpd_register_uri_handler(server, &upload_uri);
+	httpd_uri_t flash_uri = {.uri = "/flash", .method = HTTP_POST, .handler = flash_post_handler};
+	httpd_register_uri_handler(server, &flash_uri);
 	httpd_uri_t setboot_uri = {.uri = "/set_boot", .method = HTTP_POST, .handler = set_boot_post_handler};
 	httpd_register_uri_handler(server, &setboot_uri);
 	httpd_uri_t reboot_uri = {.uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler};
@@ -709,8 +1049,15 @@ static void start_ap_mode(void)
 	ESP_LOGI(TAG, "Started AP with SSID '%s'", ssid);
 }
 
-void app_main(void)
+extern "C" void app_main(void)
 {
+	ESP_LOGI(__func__, "Starting TWAI");
+	esp_err_t twai_err = initCAN(NULL);
+	if (twai_err != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not start TWAI : %s", esp_err_to_name(twai_err));
+	}
+
 	ESP_LOGI(__func__, "Init default NVS");
 	esp_err_t err = nvs_flash_init();
 	if (err != ESP_OK)
