@@ -79,7 +79,7 @@ struct board_ST
 
 // Used only to selectively update in LVGL
 bool screen_interlock_OK, p_screen_interlock_OK = false; // Checks opposite display status
-uint8_t p_internal_ST = XDB_SM_ST_DEGRADED;                               // Checks internal state in the LVGL elements update routine
+uint8_t p_internal_ST = XDB_SM_ST_DEGRADED;              // Checks internal state in the LVGL elements update routine
 uint8_t itf_board_st, p_itf_board_st = XDB_SM_ST_DEGRADED;
 bool p_CAN_RX_TimedOut = true;
 
@@ -230,14 +230,14 @@ int updateLVGLObjects()
     // Odometer. Might need comparison at the uint level
     if (p_odometer_km != odometer_km)
     {
-        lv_label_set_text_fmt(objects.odometer,"%06.0f",odometer_km);
+        lv_label_set_text_fmt(objects.odometer, "%06.0f", odometer_km);
         p_odometer_km = odometer_km;
         updatedElements++;
     }
     // Trip, might need comparison at the uint level
     if (p_trip_km != trip_km)
     {
-        lv_label_set_text_fmt(objects.trip,"%03.1f",trip_km);
+        lv_label_set_text_fmt(objects.trip, "%03.1f", trip_km);
         p_trip_km = trip_km;
         updatedElements++;
     }
@@ -346,6 +346,26 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     static binocan_itf_board_st_t binocan_itf_board_st_msg;
     static binocan_itf_board_version_t binocan_itf_board_version_msg;
+
+    // Variables reserved for the UDS side of business
+    static uint8_t ST_min = 0x01;
+    static uint8_t BSize = 0x00;
+    static const esp_partition_t *update_partition = NULL;
+    static bool FC_sent = false;
+    static bool FF_received = false;
+    static uint32_t receivedBytes;
+    static bool transferComplete = false;
+    static bool OTA_started = false;
+    static uint32_t image_size;
+    static esp_ota_handle_t ota_handle;
+    twai_message_t UDS_RESP_MSG = {
+        .identifier = BINOCAN_RDB_UDS_REQ_FRAME_ID,
+        .data_length_code = 8};
+
+    esp_err_t ota_err;
+    if (update_partition == NULL) // Only first time
+        update_partition = esp_ota_get_next_update_partition(NULL);
+
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
     static binocan_ldb_st_t binocan_ldb_st_msg;
     static binocan_rdb_uds_req_t binocan_rdb_uds_req_msg;
@@ -693,6 +713,114 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         if (binocan_rdb_uds_req_unpack(&binocan_rdb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
         {
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+            if (OTA_started)
+            {
+                esp_ota_abort(ota_handle);
+                FC_sent = false;
+                FF_received = false;
+                ESP_LOGW(__func__, "OTA was in progress, aborted.");
+            }
+
+            break;
+        }
+        // Check if this is a correct first frame
+        if ((rxMsg->data[0] & 0xF0) == 0x10)
+        {
+            if (OTA_started || FF_received) // Break case
+            {
+                ESP_LOGE(__func__, "New FF received while OTA in progress, aborting.");
+                esp_ota_abort(ota_handle);
+                FC_sent = false;
+                FF_received = false;
+                break;
+            }
+
+            // TODO : check for escape sequence, shorter size type
+            image_size = swap_endian<uint32_t>(*(uint32_t *)(rxMsg->data + 2));
+            receivedBytes = 0;
+            transferComplete = false;
+            ESP_LOGI(__func__, "Received FF, starting OTA for size : %lu bytes on partition %s", image_size, update_partition->label);
+            ota_err = esp_ota_begin(update_partition, (size_t)image_size, &ota_handle);
+            if (ota_err != ESP_OK) // Break if somehow the OTA doesn't start, print error code
+            {
+                ESP_LOGE(__func__, "Could not start OTA : %s", esp_err_to_name(ota_err));
+                OTA_started = false;
+                FF_received = false;
+                break;
+            }
+            ota_err = esp_ota_write(ota_handle, (rxMsg->data + 6), 2);
+            if (ota_err != ESP_OK) // Break if somehow the OTA doesn't write
+            {
+                ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
+                esp_ota_abort(ota_handle);
+                OTA_started = false;
+                FF_received = false;
+                break;
+            }
+            receivedBytes = 2;
+            FF_received = true;
+            OTA_started = true;
+            // Send the FC frame for continuation
+            UDS_RESP_MSG.extd = false;
+            UDS_RESP_MSG.data[0] = 0x30;
+            UDS_RESP_MSG.data[1] = BSize;
+            UDS_RESP_MSG.data[2] = ST_min;
+            for (size_t i = 3; i < 8; i++)
+            {
+                UDS_RESP_MSG.data[i] = 0xAA;
+            }
+            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            {
+                ESP_LOGW(__func__, "Could not queue internal state message in queue");
+            }
+            FC_sent = true;
+            break; // Successful break
+        }
+        else if ((rxMsg->data[0] & 0xF0) == 0x20) // CF is received
+        {
+            if (!OTA_started || !FF_received || !FC_sent) // Weird break case
+            {
+                ESP_LOGE(__func__, "Unexpected CF received");
+                // Should probably reset things here
+                break;
+            }
+            // Check if the whole message can be written to OTA or if something needs to be ignored
+            if (image_size - receivedBytes >= 7)
+            {
+                ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), 7);
+                if (ota_err != ESP_OK) // Break if somehow the OTA doesn't write
+                {
+                    ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
+                    esp_ota_abort(ota_handle);
+                    OTA_started = false;
+                    FF_received = false;
+                    break;
+                }
+                receivedBytes += 7;
+            }
+            else // Only part of the buffer needs to be taken in
+            {
+                ota_err = esp_ota_write(ota_handle, (rxMsg->data +1),image_size-receivedBytes);
+                receivedBytes = image_size;
+                ESP_LOGI(__func__,"Transfer complete");
+                transferComplete = true;
+                OTA_started = false;
+                ota_err = esp_ota_end(ota_handle);
+                if (ota_err != ESP_OK)
+                {
+                    ESP_LOGE(__func__,"OTA not successful : %s",esp_err_to_name(ota_err));
+                }
+                else
+                {
+                    ESP_LOGI(__func__,"OTA image verification OK, setting boot to %s.",update_partition->label);
+                    esp_ota_set_boot_partition(update_partition);
+                }
+            }
+            break; // Successful break
+        }
+        else
+        {
+            ESP_LOGW(__func__,"Unknown frame type received, ignoring.");
             break;
         }
     }
@@ -726,7 +854,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
     }
     break;
-#endif
+#endif // Could be pulled up to include UDS logic
     default:
     {
         ESP_LOGW(__func__, "Unknown CAN frame received: ID = 0x%03X", (uint16_t)rxMsg->identifier);
@@ -957,28 +1085,47 @@ extern "C" void app_main()
 
     vTaskSuspend(CAN_RX_tsk_hdl);
     // Prepare values for the starting/check sequence
-    p_screen_interlock_OK = !screen_interlock_OK; lv_obj_set_style_opa(objects.interlock_state,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_internal_ST = 0xFF; lv_obj_set_style_opa(objects.internal_state,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_itf_board_st = 0xFF; lv_obj_set_style_opa(objects.itf_state,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_CAN_RX_TimedOut = !CAN_RX_TimedOut; lv_obj_set_style_opa(objects.can_state,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_indicatorsOn = !indicatorsOn; lv_obj_set_style_opa(objects.indicators_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_screen_interlock_OK = !screen_interlock_OK;
+    lv_obj_set_style_opa(objects.interlock_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_internal_ST = 0xFF;
+    lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_itf_board_st = 0xFF;
+    lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_CAN_RX_TimedOut = !CAN_RX_TimedOut;
+    lv_obj_set_style_opa(objects.can_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_indicatorsOn = !indicatorsOn;
+    lv_obj_set_style_opa(objects.indicators_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
     p_rightTurnOn = !rightTurnOn;
     p_leftTurnOn = !leftTurnOn;
-    p_highBeamOn = !highBeamOn; lv_obj_set_style_opa(objects.hi_beam_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_lowFuelOn = !lowFuelOn; lv_obj_set_style_opa(objects.low_fuel_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_overTemperatureOn = !overTemperatureOn; lv_obj_set_style_opa(objects.over_temperature_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_brakesOn = !brakesOn; lv_obj_set_style_opa(objects.brakes_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_absOn = !absOn; lv_obj_set_style_opa(objects.abs_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_parkingBrakeOn = !parkingBrakeOn; lv_obj_set_style_opa(objects.parkingbrake_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_lowCoolantOn = !lowCoolantOn; lv_obj_set_style_opa(objects.low_coolant_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_batteryOn = !batteryOn; lv_obj_set_style_opa(objects.battery_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_lowOilOn = !lowOilOn; lv_obj_set_style_opa(objects.low_oil_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_milOn = !milOn; lv_obj_set_style_opa(objects.mil_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-    p_airbagOn = !airbagOn; lv_obj_set_style_opa(objects.airbag_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
-
+    p_highBeamOn = !highBeamOn;
+    lv_obj_set_style_opa(objects.hi_beam_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_lowFuelOn = !lowFuelOn;
+    lv_obj_set_style_opa(objects.low_fuel_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_overTemperatureOn = !overTemperatureOn;
+    lv_obj_set_style_opa(objects.over_temperature_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_brakesOn = !brakesOn;
+    lv_obj_set_style_opa(objects.brakes_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_absOn = !absOn;
+    lv_obj_set_style_opa(objects.abs_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_parkingBrakeOn = !parkingBrakeOn;
+    lv_obj_set_style_opa(objects.parkingbrake_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_lowCoolantOn = !lowCoolantOn;
+    lv_obj_set_style_opa(objects.low_coolant_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_batteryOn = !batteryOn;
+    lv_obj_set_style_opa(objects.battery_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_lowOilOn = !lowOilOn;
+    lv_obj_set_style_opa(objects.low_oil_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_milOn = !milOn;
+    lv_obj_set_style_opa(objects.mil_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_airbagOn = !airbagOn;
+    lv_obj_set_style_opa(objects.airbag_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    lvgl_port_unlock();
+    vTaskDelay(100);
+    ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
+    // This probably needs to be called in a second point
+    lvgl_port_lock(-1);
     animateTargetArcWithDuration(objects.speed_arc, 2400, 1000);
     lvgl_port_unlock();
-    ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
     vTaskDelay(pdMS_TO_TICKS(1600));
     lvgl_port_lock(-1);
     animateTargetArcWithDuration(objects.speed_arc, 0, 500);
