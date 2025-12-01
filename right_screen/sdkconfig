@@ -597,6 +597,13 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# Display Application
+#
+CONFIG_RIGHT_SIDE_DISPLAY=y
+# CONFIG_LEFT_SIDE_DISPLAY is not set
+# end of Display Application
+
+#
 # Compiler options
 #
 # CONFIG_COMPILER_OPTIMIZATION_DEBUG is not set
