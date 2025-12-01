@@ -2,7 +2,7 @@
   "navigation": {
     "selectedUserPageObject": "[rightScreenUI.eez-project]:/userPages/0",
     "selectedThemeObject": "[rightScreenUI.eez-project]:/themes/0",
-    "selectedBitmapObject": "[rightScreenUI.eez-project]:/bitmaps/11",
+    "selectedBitmapObject": "[rightScreenUI.eez-project]:/bitmaps/12",
     "subnavigationSelectedItems": {}
   },
   "layoutModel": {
@@ -118,12 +118,12 @@
             {
               "type": "row",
               "id": "#990c8cf1-1482-4b27-95a8-7b7c8b47a4e0",
-              "weight": 15,
+              "weight": 22.88695652173913,
               "children": [
                 {
                   "type": "tabset",
                   "id": "#a4c7b740-9392-4106-95ee-d68e3491a0d7",
-                  "weight": 1,
+                  "weight": 0.43463263194204904,
                   "selected": 2,
                   "enableClose": false,
                   "children": [
@@ -156,7 +156,7 @@
                 {
                   "type": "tabset",
                   "id": "#771c8ef6-8536-4197-b850-6d0944b2018b",
-                  "weight": 1,
+                  "weight": 2.2576750603656435,
                   "enableClose": false,
                   "children": [
                     {
@@ -167,13 +167,12 @@
                       "enableClose": false,
                       "icon": "svg:hierarchy"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
                   "id": "#f65ae913-328b-41a4-9d18-abd1cd1cfcf1",
-                  "weight": 1,
+                  "weight": 0.3076923076923077,
                   "enableClose": false,
                   "children": [
                     {
@@ -191,7 +190,7 @@
             {
               "type": "tabset",
               "id": "EDITORS",
-              "weight": 65,
+              "weight": 43.91546068121174,
               "enableDeleteWhenEmpty": false,
               "enableClose": false,
               "children": [
@@ -211,7 +210,7 @@
             {
               "type": "row",
               "id": "#c6be5805-766b-4dba-9fef-529130b76f33",
-              "weight": 20,
+              "weight": 33.19758279704913,
               "children": [
                 {
                   "type": "tabset",
@@ -226,7 +225,8 @@
                       "enableClose": false,
                       "icon": "svg:properties"
                     }
-                  ]
+                  ],
+                  "active": true
                 },
                 {
                   "type": "tabset",
@@ -445,10 +445,22 @@
               "type": "tabset",
               "id": "RUNTIME-EDITORS",
               "weight": 60,
-              "selected": -1,
               "enableDeleteWhenEmpty": false,
               "enableClose": false,
-              "children": []
+              "children": [
+                {
+                  "type": "tab",
+                  "id": "#767ebe83-df0d-4c77-8580-667c9633a958",
+                  "name": "mainScr",
+                  "component": "editor",
+                  "config": {
+                    "objectPath": "[rightScreenUI.eez-project]:/userPages/0",
+                    "permanent": false
+                  },
+                  "icon": "svg:page"
+                }
+              ],
+              "active": true
             },
             {
               "type": "row",
@@ -997,20 +1009,20 @@
     "[rightScreenUI.eez-project]:/userPages/0[flow-state]": {
       "selection": {
         "0": {
-          "0": {
-            "0": {}
-          },
-          "2": {
+          "0": {},
+          "2": {},
+          "5": {},
+          "9": {},
+          "11": {
             "$selected": true
           },
-          "8": {},
-          "15": {}
+          "17": {}
         }
       },
       "transform": {
         "translate": {
-          "x": -240,
-          "y": -240
+          "x": -328.1363636363636,
+          "y": -294.55454545454546
         },
         "scale": 1
       },

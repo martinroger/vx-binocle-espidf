@@ -111,7 +111,7 @@ float odometer_km, p_odometer_km = 0.0;
 float trip_km, p_trip_km = 0.0;
 
 // Global UI objects
-lv_obj_t *needleLine = nullptr;
+// lv_obj_t *needleLine = nullptr;
 
 #pragma endregion
 
@@ -126,12 +126,12 @@ int updateLVGLObjects()
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10))
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
-        // animateTargetArc(objects.itf_speed_kph_arc,speed_kph*10);
-        // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
-        // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
-        // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
-        // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
-        lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
+        animateTargetArc(objects.speed_arc,speed_kph*10);
+        // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
+        // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
+        // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
+        // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
+        // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         lv_label_set_text_fmt(objects.speed, "%03ld", (long)speed_kph);
         p_speed_kph = speed_kph;
         updatedElements++;
@@ -146,7 +146,7 @@ int updateLVGLObjects()
     // }
     if (p_fuelLevel_pc != fuelLevel_pc)
     {
-        lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
+        // lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
         lv_label_set_text_fmt(objects.fuel_level, "%03d", fuelLevel_pc);
         p_fuelLevel_pc = fuelLevel_pc;
         updatedElements++;
@@ -798,24 +798,10 @@ extern "C" void app_main()
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
     ui_init();                                                               // Load the UI library and draw it
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
-    // needleLine = lv_line_create(objects.speed_scale); // Create the needle line indicator
-    // lv_obj_set_style_line_color(needleLine, lv_palette_main(LV_PALETTE_RED),LV_PART_MAIN); // Set the needle to red
-    // lv_obj_set_style_line_width(needleLine,8,LV_PART_MAIN);
-    // lv_obj_set_style_length(needleLine, 20, LV_PART_MAIN);
-    // lv_obj_set_style_line_rounded(needleLine,false,LV_PART_MAIN);
-    // lv_obj_set_style_pad_right(needleLine,50,LV_PART_MAIN);
-    // Following only needed when decimation is used
+
     static const char *scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
     lv_scale_set_text_src(objects.speed_scale, scale_labels);
 
-    // Masking circle
-    //  lv_obj_t *maskCircle = lv_obj_create(objects.speed_scale);
-    //  lv_obj_set_size(maskCircle, 300, 300);
-    //  lv_obj_center(maskCircle);
-    //  lv_obj_set_style_radius(maskCircle, LV_RADIUS_CIRCLE,0);
-    //  lv_obj_set_style_bg_color(maskCircle,lv_obj_get_style_bg_color(lv_scr_act(),LV_PART_MAIN),0);
-    //  lv_obj_set_style_bg_opa(maskCircle, LV_OPA_COVER,0);
-    //  lv_obj_set_style_border_width(maskCircle,0,LV_PART_MAIN);
 
     // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
     // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
