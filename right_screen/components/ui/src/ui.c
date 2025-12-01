@@ -61,6 +61,17 @@ void animateTargetArc(lv_obj_t* targetArc, int32_t targetValue) {
     lv_anim_start(&arcAnim);
 }
 
+void animateTargetArcWithDuration(lv_obj_t* targetArc, int32_t targetValue, uint32_t duration) {
+    lv_anim_t arcAnim;
+    lv_anim_init(&arcAnim);
+    lv_anim_set_var(&arcAnim,targetArc);
+    lv_anim_set_values(&arcAnim,lv_arc_get_value(targetArc),targetValue);
+    lv_anim_set_duration(&arcAnim,duration);
+    lv_anim_set_exec_cb(&arcAnim,(lv_anim_exec_xcb_t)lv_arc_set_value);
+    lv_anim_set_path_cb(&arcAnim,lv_anim_path_ease_in_out);
+    lv_anim_start(&arcAnim);
+}
+
 // void action_go_to_next_screen(lv_event_t * e) {
 //     if(currentScreen==3) {
 //         loadScreen(1,true);

@@ -42,16 +42,16 @@ using namespace esp_panel::board;
 template <typename T>
 T swap_endian(T u)
 {
-	static_assert(CHAR_BIT == 8, "CHAR_BIT != 8");
-	union
-	{
-		T u;
-		unsigned char u8[sizeof(T)];
-	} source, dest;
-	source.u = u;
-	for (size_t k = 0; k < sizeof(T); k++)
-		dest.u8[k] = source.u8[sizeof(T) - k - 1];
-	return dest.u;
+    static_assert(CHAR_BIT == 8, "CHAR_BIT != 8");
+    union
+    {
+        T u;
+        unsigned char u8[sizeof(T)];
+    } source, dest;
+    source.u = u;
+    for (size_t k = 0; k < sizeof(T); k++)
+        dest.u8[k] = source.u8[sizeof(T) - k - 1];
+    return dest.u;
 }
 
 #pragma region Global variables
@@ -78,9 +78,10 @@ struct board_ST
 } display_board_st;
 
 // Used only to selectively update in LVGL
-bool screen_interlock_OK,p_screen_interlock_OK = false; // Checks opposite display status
-uint8_t internal_ST,p_internal_ST = 0; // Checks internal state in the LVGL elements update routine
-uint8_t itf_board_st,p_itf_board_st = 0;
+bool screen_interlock_OK, p_screen_interlock_OK = false; // Checks opposite display status
+uint8_t p_internal_ST = XDB_SM_ST_DEGRADED;                               // Checks internal state in the LVGL elements update routine
+uint8_t itf_board_st, p_itf_board_st = XDB_SM_ST_DEGRADED;
+bool p_CAN_RX_TimedOut = true;
 
 // Vehicle variables and previous values retainers
 bool indicatorsOn, p_indicatorsOn = true;
@@ -126,7 +127,7 @@ int updateLVGLObjects()
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10))
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
-        animateTargetArc(objects.speed_arc,speed_kph*10);
+        animateTargetArc(objects.speed_arc, speed_kph * 10);
         // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
@@ -158,24 +159,172 @@ int updateLVGLObjects()
         p_coolant_degC = coolant_degC;
         updatedElements++;
     }
-
+    // Low Fuel computed TT
     if (p_lowFuelOn != lowFuelOn)
     {
         lv_obj_set_style_image_opa(objects.low_fuel_tt, lowFuelOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_lowFuelOn = lowFuelOn;
         updatedElements++;
     }
+    // Over temperature computer TT
     if (p_overTemperatureOn != overTemperatureOn)
     {
         lv_obj_set_style_image_opa(objects.over_temperature_tt, overTemperatureOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_overTemperatureOn = overTemperatureOn;
         updatedElements++;
     }
+    // Left to right screen interlock
+    if (p_screen_interlock_OK != screen_interlock_OK)
+    {
+        lv_obj_set_style_opa(objects.interlock_state, screen_interlock_OK ? LV_OPA_TRANSP : LV_OPA_COVER, LV_STATE_DEFAULT);
+        p_screen_interlock_OK = screen_interlock_OK;
+        updatedElements++;
+    }
+    // Internal state degraded or fault
+    if (p_internal_ST != display_board_st.internal_ST)
+    {
+        switch (display_board_st.internal_ST)
+        {
+        case XDB_SM_ST_DEGRADED:
+            lv_obj_set_style_text_color(objects.internal_state, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+            break;
+        case XDB_SM_ST_FAULT:
+            lv_obj_set_style_text_color(objects.internal_state, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+            break;
+        default:
+            lv_obj_set_style_opa(objects.internal_state, LV_OPA_TRANSP, LV_STATE_DEFAULT);
+            break;
+        }
+        p_internal_ST = display_board_st.internal_ST;
+        updatedElements++;
+    }
+    // Same for CAN-detected ITF board state
+    if (p_itf_board_st != itf_board_st)
+    {
+        switch (itf_board_st)
+        {
+        case XDB_SM_ST_DEGRADED:
+            lv_obj_set_style_text_color(objects.itf_state, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+            break;
+        case XDB_SM_ST_FAULT:
+            lv_obj_set_style_text_color(objects.itf_state, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+            break;
+        default:
+            lv_obj_set_style_opa(objects.itf_state, LV_OPA_TRANSP, LV_STATE_DEFAULT);
+            break;
+        }
+        p_itf_board_st = itf_board_st;
+        updatedElements++;
+    }
+    // Same for CAN Timed out indicator
+    if (CAN_RX_TimedOut != p_CAN_RX_TimedOut)
+    {
+        lv_obj_set_style_opa(objects.can_state, CAN_RX_TimedOut ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_CAN_RX_TimedOut = CAN_RX_TimedOut;
+        updatedElements++;
+    }
+    // Odometer. Might need comparison at the uint level
+    if (p_odometer_km != odometer_km)
+    {
+        lv_label_set_text_fmt(objects.odometer,"%06.0f",odometer_km);
+        p_odometer_km = odometer_km;
+        updatedElements++;
+    }
+    // Trip, might need comparison at the uint level
+    if (p_trip_km != trip_km)
+    {
+        lv_label_set_text_fmt(objects.trip,"%03.1f",trip_km);
+        p_trip_km = trip_km;
+        updatedElements++;
+    }
+    // No receiver for lvVoltage_v
 
+    // Double indicators arrow
     if (p_indicatorsOn != indicatorsOn)
     {
         lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_indicatorsOn = indicatorsOn;
+        updatedElements++;
+    }
+    // Right indicator
+    if (p_rightTurnOn != rightTurnOn)
+    {
+        // lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_rightTurnOn = rightTurnOn;
+        updatedElements++;
+    }
+    // Right indicator
+    if (p_leftTurnOn != leftTurnOn)
+    {
+        // lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_leftTurnOn = leftTurnOn;
+        updatedElements++;
+    }
+    // High beams
+    if (p_highBeamOn != highBeamOn)
+    {
+        lv_obj_set_style_image_opa(objects.hi_beam_tt, highBeamOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_highBeamOn = highBeamOn;
+        updatedElements++;
+    }
+    // Brakes
+    if (p_brakesOn != brakesOn)
+    {
+        lv_obj_set_style_image_opa(objects.brakes_tt, brakesOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_brakesOn = brakesOn;
+        updatedElements++;
+    }
+    // ABS
+    if (p_absOn != absOn)
+    {
+        lv_obj_set_style_image_opa(objects.abs_tt, absOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_absOn = absOn;
+        updatedElements++;
+    }
+    // Parking Brake
+    if (p_parkingBrakeOn != parkingBrakeOn)
+    {
+        lv_obj_set_style_image_opa(objects.parkingbrake_tt, parkingBrakeOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_parkingBrakeOn = parkingBrakeOn;
+        updatedElements++;
+    }
+    // Low Coolant
+    if (p_lowCoolantOn != lowCoolantOn)
+    {
+        lv_obj_set_style_image_opa(objects.low_coolant_tt, lowCoolantOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_lowCoolantOn = lowCoolantOn;
+        updatedElements++;
+    }
+    // Battery/Alternator
+    if (p_batteryOn != batteryOn)
+    {
+        lv_obj_set_style_image_opa(objects.battery_tt, batteryOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_batteryOn = batteryOn;
+        updatedElements++;
+    }
+    // Low Oil Pressure
+    if (p_lowOilOn != lowOilOn)
+    {
+        lv_obj_set_style_image_opa(objects.low_oil_tt, lowOilOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_lowOilOn = lowOilOn;
+        updatedElements++;
+    }
+    // MIL
+    if (p_milOn != milOn)
+    {
+        lv_obj_set_style_image_opa(objects.mil_tt, milOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_milOn = milOn;
+        updatedElements++;
+    }
+    // Airbag
+    if (p_airbagOn != airbagOn)
+    {
+        lv_obj_set_style_image_opa(objects.airbag_tt, airbagOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_airbagOn = airbagOn;
         updatedElements++;
     }
 
@@ -593,6 +742,8 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 #pragma region FreeRTOS tasks
 TaskHandle_t display_board_st_PKG_hdl;
 
+/// @brief Packaging handler that send the board state over CAN
+/// @param pvParameters
 void display_board_st_PKG(void *pvParameters)
 {
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
@@ -798,16 +949,41 @@ extern "C" void app_main()
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
     ui_init();                                                               // Load the UI library and draw it
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
-
     static const char *scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
     lv_scale_set_text_src(objects.speed_scale, scale_labels);
 
-
     // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
     // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
-    lvgl_port_unlock();
 
+    vTaskSuspend(CAN_RX_tsk_hdl);
+    // Prepare values for the starting/check sequence
+    p_screen_interlock_OK = !screen_interlock_OK; lv_obj_set_style_opa(objects.interlock_state,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_internal_ST = 0xFF; lv_obj_set_style_opa(objects.internal_state,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_itf_board_st = 0xFF; lv_obj_set_style_opa(objects.itf_state,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_CAN_RX_TimedOut = !CAN_RX_TimedOut; lv_obj_set_style_opa(objects.can_state,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_indicatorsOn = !indicatorsOn; lv_obj_set_style_opa(objects.indicators_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_rightTurnOn = !rightTurnOn;
+    p_leftTurnOn = !leftTurnOn;
+    p_highBeamOn = !highBeamOn; lv_obj_set_style_opa(objects.hi_beam_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_lowFuelOn = !lowFuelOn; lv_obj_set_style_opa(objects.low_fuel_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_overTemperatureOn = !overTemperatureOn; lv_obj_set_style_opa(objects.over_temperature_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_brakesOn = !brakesOn; lv_obj_set_style_opa(objects.brakes_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_absOn = !absOn; lv_obj_set_style_opa(objects.abs_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_parkingBrakeOn = !parkingBrakeOn; lv_obj_set_style_opa(objects.parkingbrake_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_lowCoolantOn = !lowCoolantOn; lv_obj_set_style_opa(objects.low_coolant_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_batteryOn = !batteryOn; lv_obj_set_style_opa(objects.battery_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_lowOilOn = !lowOilOn; lv_obj_set_style_opa(objects.low_oil_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_milOn = !milOn; lv_obj_set_style_opa(objects.mil_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+    p_airbagOn = !airbagOn; lv_obj_set_style_opa(objects.airbag_tt,LV_OPA_COVER,LV_STATE_DEFAULT);
+
+    animateTargetArcWithDuration(objects.speed_arc, 2400, 1000);
+    lvgl_port_unlock();
     ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
+    vTaskDelay(pdMS_TO_TICKS(1600));
+    lvgl_port_lock(-1);
+    animateTargetArcWithDuration(objects.speed_arc, 0, 500);
+    lvgl_port_unlock();
+    vTaskDelay(pdMS_TO_TICKS(600));
 
     ESP_LOGI(__func__, "Setup done");
     if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
@@ -816,7 +992,7 @@ extern "C" void app_main()
         display_board_st.internal_ST = XDB_SM_ST_OK;
         ESP_LOGI(__func__, "App image is valid.");
     }
-
+    vTaskResume(CAN_RX_tsk_hdl);
 #pragma region Main Loop
     while (true)
     {
