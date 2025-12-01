@@ -72,10 +72,15 @@ T swap_endian(T u)
 
 struct board_ST
 {
-
+    bool screen_interlock_OK = false;
     uint8_t internal_ST = XDB_SM_ST_OFF;
     bool mph_selected = false;
 } display_board_st;
+
+// Used only to selectively update in LVGL
+bool screen_interlock_OK,p_screen_interlock_OK = false; // Checks opposite display status
+uint8_t internal_ST,p_internal_ST = 0; // Checks internal state in the LVGL elements update routine
+uint8_t itf_board_st,p_itf_board_st = 0;
 
 // Vehicle variables and previous values retainers
 bool indicatorsOn, p_indicatorsOn = true;
@@ -493,6 +498,15 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
             break;
         }
+        if (binocan_itf_board_st_itf_sm_st_is_in_range(binocan_itf_board_st_msg.itf_sm_st))
+        {
+            itf_board_st = (uint8_t)binocan_itf_board_st_itf_sm_st_decode(binocan_itf_board_st_msg.itf_sm_st);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "ITF SM Status signal out of range: %d", binocan_itf_board_st_msg.itf_sm_st);
+            itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE; // Default value
+        }
     }
     break;
 
@@ -513,6 +527,15 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
             break;
         }
+        if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
+        {
+            screen_interlock_OK = (binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "LDB SM Status signal out of range: %d", binocan_ldb_st_msg.ldb_sm_st);
+            screen_interlock_OK = false; // Default value
+        }
     }
     break;
 
@@ -532,6 +555,15 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         {
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
             break;
+        }
+        if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
+        {
+            screen_interlock_OK = (binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "RDB SM Status signal out of range: %d", binocan_rdb_st_msg.rdb_sm_st);
+            screen_interlock_OK = false; // Default value
         }
     }
     break;
