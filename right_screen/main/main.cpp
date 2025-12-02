@@ -360,9 +360,9 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
     static esp_ota_handle_t ota_handle;
     twai_message_t UDS_RESP_MSG = {
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
-        .identifier = BINOCAN_RDB_UDS_REQ_FRAME_ID,
+        .identifier = BINOCAN_RDB_UDS_RESP_FRAME_ID,
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
-        .identifier = BINOCAN_LDB_UDS_REQ_FRAME_ID,
+        .identifier = BINOCAN_LDB_UDS_RESP_FRAME_ID,
 #endif
         .data_length_code = 8};
 
@@ -801,6 +801,10 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             {
                 ESP_LOGW(__func__, "Could not queue internal state message in queue");
             }
+            else
+            {
+                ESP_LOGI(__func__,"Flow Control Frame sent.");
+            }
             FC_sent = true;
             break; // Successful break
         }
@@ -840,8 +844,9 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 }
                 else
                 {
-                    ESP_LOGI(__func__, "OTA image verification OK, setting boot to %s.", update_partition->label);
+                    ESP_LOGI(__func__, "OTA image verification OK, setting boot to %s and restarting.", update_partition->label);
                     esp_ota_set_boot_partition(update_partition);
+                    esp_restart();
                 }
             }
             break; // Successful break
