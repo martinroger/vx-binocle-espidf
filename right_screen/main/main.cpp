@@ -359,7 +359,11 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
     static uint32_t image_size;
     static esp_ota_handle_t ota_handle;
     twai_message_t UDS_RESP_MSG = {
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
         .identifier = BINOCAN_RDB_UDS_REQ_FRAME_ID,
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+        .identifier = BINOCAN_LDB_UDS_REQ_FRAME_ID,
+#endif
         .data_length_code = 8};
 
     esp_err_t ota_err;
@@ -711,6 +715,30 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
     case BINOCAN_RDB_UDS_REQ_FRAME_ID:
     {
         if (binocan_rdb_uds_req_unpack(&binocan_rdb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+    case BINOCAN_RDB_ST_FRAME_ID:
+    {
+        if (binocan_rdb_st_unpack(&binocan_rdb_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+        {
+            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+            break;
+        }
+        if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
+        {
+            screen_interlock_OK = (binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "RDB SM Status signal out of range: %d", binocan_rdb_st_msg.rdb_sm_st);
+            screen_interlock_OK = false; // Default value
+        }
+    }
+    break;
+
+    case BINOCAN_LDB_UDS_REQ_FRAME_ID:
+    {
+        if (binocan_ldb_uds_req_unpack(&binocan_ldb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+#endif // Could be pulled up to include UDS logic
         {
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
             if (OTA_started)
@@ -800,19 +828,19 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             }
             else // Only part of the buffer needs to be taken in
             {
-                ota_err = esp_ota_write(ota_handle, (rxMsg->data +1),image_size-receivedBytes);
+                ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), image_size - receivedBytes);
                 receivedBytes = image_size;
-                ESP_LOGI(__func__,"Transfer complete");
+                ESP_LOGI(__func__, "Transfer complete");
                 transferComplete = true;
                 OTA_started = false;
                 ota_err = esp_ota_end(ota_handle);
                 if (ota_err != ESP_OK)
                 {
-                    ESP_LOGE(__func__,"OTA not successful : %s",esp_err_to_name(ota_err));
+                    ESP_LOGE(__func__, "OTA not successful : %s", esp_err_to_name(ota_err));
                 }
                 else
                 {
-                    ESP_LOGI(__func__,"OTA image verification OK, setting boot to %s.",update_partition->label);
+                    ESP_LOGI(__func__, "OTA image verification OK, setting boot to %s.", update_partition->label);
                     esp_ota_set_boot_partition(update_partition);
                 }
             }
@@ -820,41 +848,12 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         else
         {
-            ESP_LOGW(__func__,"Unknown frame type received, ignoring.");
+            ESP_LOGW(__func__, "Unknown frame type received, ignoring.");
             break;
-        }
-    }
-    break;
-#elifdef CONFIG_LEFT_SIDE_DISPLAY
-    case BINOCAN_RDB_ST_FRAME_ID:
-    {
-        if (binocan_rdb_st_unpack(&binocan_rdb_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-        {
-            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-            break;
-        }
-        if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
-        {
-            screen_interlock_OK = (binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "RDB SM Status signal out of range: %d", binocan_rdb_st_msg.rdb_sm_st);
-            screen_interlock_OK = false; // Default value
         }
     }
     break;
 
-    case BINOCAN_LDB_UDS_REQ_FRAME_ID:
-    {
-        if (binocan_ldb_uds_req_unpack(&binocan_ldb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-        {
-            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-            break;
-        }
-    }
-    break;
-#endif // Could be pulled up to include UDS logic
     default:
     {
         ESP_LOGW(__func__, "Unknown CAN frame received: ID = 0x%03X", (uint16_t)rxMsg->identifier);
