@@ -276,7 +276,7 @@ void base_fast_metrics_PKG(void *pvParameters)
     // Only faster metrics
     // speed_kph
     // rpm
-
+    esp_err_t compute_err;
     binocan_itf_fast_metrics_t binocan_itf_fast_metrics;
     binocan_itf_fast_metrics_init(&binocan_itf_fast_metrics);
     twai_message_t tx_msg = {
@@ -287,11 +287,15 @@ void base_fast_metrics_PKG(void *pvParameters)
     {
         // Transport some of the MCPWM logic in there
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_FAST_METRICS_PKG_RATE_MS));
-        compute_freq_dut(&pwm_cap_rpm);
-        compute_freq_dut(&pwm_cap_speed);
+        compute_err = compute_freq_dut(&pwm_cap_rpm);
+        if (compute_err != ESP_OK)
+            ESP_LOGW(__func__,"RPM DutFreq Compute error : %s",esp_err_to_name(compute_err));
+        compute_err = compute_freq_dut(&pwm_cap_speed);
+        if (compute_err != ESP_OK)
+            ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
         float rpm = COEFF_FREQ_TO_RPM_M * pwm_cap_rpm.frequency + COEFF_FREQ_TO_RPM_P;
         float speed = COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P;
-        ESP_LOGD(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
+        ESP_LOGI(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
 
         binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
         binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);

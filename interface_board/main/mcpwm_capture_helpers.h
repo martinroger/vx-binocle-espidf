@@ -40,7 +40,7 @@ esp_err_t compute_freq_dut(volatile pwm_info_t *pwm_info, uint32_t clock_Hz = 80
     {
         pwm_info->frequency = 0;
         pwm_info->duty_cycle = 0;
-        return ESP_FAIL;
+        return ESP_ERR_TIMEOUT;
     }
     // Rare case where the period between two positive edges is 0 ticks
     if (pwm_info->period_ticks == 0)
