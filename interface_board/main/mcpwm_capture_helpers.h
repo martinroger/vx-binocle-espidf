@@ -5,6 +5,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_timer.h"
+#include "driver/gptimer.h"
 
 #ifdef TAG
 #undef TAG
@@ -22,7 +23,25 @@ typedef struct
     uint32_t pulse_counter;
     float duty_cycle = 0.0;
     float frequency = 0.0;
+    gptimer_handle_t timeout_detect_timer;
+    volatile bool timedOut = false;
 } pwm_info_t;
+
+/// @brief GP Timer callback triggered if the timer is not reset within CONFIG_PWM_DETECT_TIMEOUT ms
+/// @param timer 
+/// @param edata 
+/// @param user_data 
+/// @return 
+static bool IRAM_ATTR gptimer_timeout_isr_generic(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data)
+{
+    pwm_info_t *target_pwm_signal = static_cast<pwm_info_t *>(user_data);
+    bool need_yield = false;
+
+    // The timer has expired, meaning no edge detected for 1000ms.
+    target_pwm_signal->timedOut = true;
+
+    return need_yield;
+}
 
 /// @brief Compute frequency and duty cycle
 /// @param pwm_info Target for a specific PWM capture channel
@@ -31,17 +50,23 @@ typedef struct
 esp_err_t compute_freq_dut(volatile pwm_info_t *pwm_info, uint32_t clock_Hz = 80000000)
 {
     // Get current time in microseconds
-    uint64_t now_us = esp_timer_get_time();
+
     // Convert last positive edge timestamp to microseconds (assuming timer ticks at clock_Hz)
     // Timestamp is updated by ISR mcpwm_capture_cb_generic
-    uint64_t last_edge_us = ((uint64_t)pwm_info->pos_edge_ts * 1000000ULL) / clock_Hz;
+    // uint64_t last_edge_us = ((uint64_t)pwm_info->pos_edge_ts * 1000000ULL) / clock_Hz;
     // If last edge was more than 1000ms ago, return 0 -> Case of a 1s timeout
-    if ((now_us > last_edge_us) && ((now_us - last_edge_us) > CONFIG_PWM_DETECT_TIMEOUT * 1000ULL))
+    // CONFIG_PWM_DETECT_TIMEOUT * 1000ULL))
+    // pwm_info->frequency = 0;
+    // pwm_info->duty_cycle = 0;
+    // return ESP_ERR_TIMEOUT;
+    if (pwm_info->timedOut)
     {
         pwm_info->frequency = 0;
         pwm_info->duty_cycle = 0;
         return ESP_ERR_TIMEOUT;
     }
+    
+
     // Rare case where the period between two positive edges is 0 ticks
     if (pwm_info->period_ticks == 0)
     {
@@ -68,6 +93,12 @@ static bool IRAM_ATTR mcpwm_capture_cb_generic(mcpwm_cap_channel_handle_t cap_ch
     pwm_info_t *target_pwm_signal = static_cast<pwm_info_t *>(user_data);
 
     // portENTER_CRITICAL_ISR(&counter_mux);    // Not sure if needed, seems OK without ?
+    // Time Out timer section
+    if (target_pwm_signal->timedOut)
+        target_pwm_signal->timedOut = false;
+    gptimer_stop(target_pwm_signal->timeout_detect_timer);
+    gptimer_set_raw_count(target_pwm_signal->timeout_detect_timer, 0);
+    gptimer_start(target_pwm_signal->timeout_detect_timer);
 
     if (edata->cap_edge == MCPWM_CAP_EDGE_POS) // Event data is a positive edge
     {
@@ -108,7 +139,7 @@ esp_err_t set_capture_channel(mcpwm_cap_channel_handle_t target_cap_chan,
         mcpwm_capture_timer_config_t cap_timer_config = {
             .group_id = 0,
             .clk_src = MCPWM_CAPTURE_CLK_SRC_DEFAULT,
-        };
+            };
         // Create capture timer
         if (mcpwm_new_capture_timer(&cap_timer_config, &cap_timer) != ESP_OK)
         {
@@ -141,6 +172,30 @@ esp_err_t set_capture_channel(mcpwm_cap_channel_handle_t target_cap_chan,
         ESP_LOGI(TAG, "Reusing existing capture timer");
     }
 
+    // Time out GP Timer initialization
+    gptimer_config_t gp_timer_config = {
+        .clk_src = GPTIMER_CLK_SRC_DEFAULT,
+        .direction = GPTIMER_COUNT_UP,
+        .resolution_hz = CONFIG_MCPWM_CAP_TIMER_RESOLUTION,
+    };
+    // Create the timer
+    if (gptimer_new_timer(&gp_timer_config, (gptimer_handle_t *)&(pwm_info_buffer->timeout_detect_timer)) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not instantiate new timer. Aborting.");
+        return ESP_FAIL;
+    }
+
+    // Alarm config
+    gptimer_alarm_config_t alarm_config = {
+        .alarm_count = (CONFIG_PWM_DETECT_TIMEOUT * (CONFIG_MCPWM_CAP_TIMER_RESOLUTION / 1000)),
+        .flags =
+            {.auto_reload_on_alarm = false},
+    };
+    // Generic callback designation
+    gptimer_event_callbacks_t gptimer_alarm_cb = {
+        .on_alarm = gptimer_timeout_isr_generic,
+    };
+
     // MCPWM Capture channel setup. Assuming all signals are positive when active (could be wrong)
     mcpwm_capture_channel_config_t cap_chan_config = {
         .gpio_num = cap_gpio,
@@ -165,7 +220,7 @@ esp_err_t set_capture_channel(mcpwm_cap_channel_handle_t target_cap_chan,
         .on_cap = mcpwm_capture_cb_generic};
     if (mcpwm_capture_channel_register_event_callbacks(target_cap_chan, &cap_cbs, (void *)pwm_info_buffer) != ESP_OK)
     {
-        ESP_LOGE(TAG, "Could register capture callback for MCPWM capture channel");
+        ESP_LOGE(TAG, "Could not register capture callback for MCPWM capture channel");
         return ESP_FAIL;
     }
     // Start the bloody MCPWM capture channel
@@ -182,5 +237,39 @@ esp_err_t set_capture_channel(mcpwm_cap_channel_handle_t target_cap_chan,
         return ESP_FAIL;
         break;
     }
+
+    esp_err_t gp_timer_set_err;
+    
+    // Step 1: Set alarm action
+    gp_timer_set_err = gptimer_set_alarm_action(pwm_info_buffer->timeout_detect_timer, &alarm_config);
+    if (gp_timer_set_err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "GP timer could not set alarm config: %s. Aborting.", esp_err_to_name(gp_timer_set_err));
+        return ESP_FAIL;
+    }    
+    
+    // Step 2: Register event callbacks BEFORE enabling the timer
+    if (gptimer_register_event_callbacks(pwm_info_buffer->timeout_detect_timer, &gptimer_alarm_cb, (void*)(pwm_info_buffer)) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "GP Timer could not attach CB to alarm. Aborting.");
+        return ESP_FAIL;
+    }
+    
+    // Step 3: Enable the timer
+    if (gptimer_enable(pwm_info_buffer->timeout_detect_timer) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "GP Timer could not be enabled. Aborting.");
+        return ESP_FAIL;
+    }
+    
+    // Step 4: Start the timer so it begins counting and the alarm can fire
+    if (gptimer_start(pwm_info_buffer->timeout_detect_timer) != ESP_OK)
+    {
+        ESP_LOGE(TAG, "GP Timer could not be started. Aborting.");
+        return ESP_FAIL;
+    }
+    
+    ESP_LOGI(TAG, "GP timer successfully configured and started.");
+
     return ESP_OK;
 }

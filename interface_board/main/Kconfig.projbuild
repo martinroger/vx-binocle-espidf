@@ -140,6 +140,9 @@ menu "Interface board configuration"
         config SPEED_PWM_CAP_GPIO
             int "GPIO for the capture of the speed PWM"
             default 5 
+        config MCPWM_CAP_TIMER_RESOLUTION
+            int "Resolution in Hz applied to the capture timer"
+            default 100000
     endmenu
 
     menu "CAN frames parameters"

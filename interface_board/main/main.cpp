@@ -227,12 +227,15 @@ void base_slow_metrics_PKG(void *pvParameters)
     twai_message_t tx_msg = {
         .identifier = BINOCAN_ITF_SLOW_METRICS_FRAME_ID,
         .data_length_code = BINOCAN_ITF_SLOW_METRICS_LENGTH};
+    esp_err_t compute_err;
 
     while (true)
     {
         // SMAs should already be protected, and some of the MCPWM logic can be brought in here.
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_SLOW_METRICS_PKG_RATE_MS)); // Waits for notification or one cyclic for frame message
-        compute_freq_dut(&pwm_cap_coolant);
+        compute_err = compute_freq_dut(&pwm_cap_coolant);
+        // if (compute_err != ESP_OK)
+        //     ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
         float coolant_degC = 100.0 * pwm_cap_coolant.duty_cycle * COEFF_DUTY_TO_COOLANT_DEGC_M + COEFF_DUTY_TO_COOLANT_DEGC_P;
         if (coolant_degC < 70)
             coolant_degC = 70;
@@ -288,14 +291,14 @@ void base_fast_metrics_PKG(void *pvParameters)
         // Transport some of the MCPWM logic in there
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_FAST_METRICS_PKG_RATE_MS));
         compute_err = compute_freq_dut(&pwm_cap_rpm);
-        if (compute_err != ESP_OK)
-            ESP_LOGW(__func__,"RPM DutFreq Compute error : %s",esp_err_to_name(compute_err));
+        // if (compute_err != ESP_OK)
+        //     ESP_LOGW(__func__,"RPM DutFreq Compute error : %s",esp_err_to_name(compute_err));
         compute_err = compute_freq_dut(&pwm_cap_speed);
-        if (compute_err != ESP_OK)
-            ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
+        // if (compute_err != ESP_OK)
+        //     ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
         float rpm = COEFF_FREQ_TO_RPM_M * pwm_cap_rpm.frequency + COEFF_FREQ_TO_RPM_P;
         float speed = COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P;
-        ESP_LOGI(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
+        ESP_LOGD(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
 
         binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
         binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
