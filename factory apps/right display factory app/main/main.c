@@ -1,6 +1,6 @@
 /*
  * Interface board Factory App
- * - Start as open AP named ITF-<MAC>
+ * - Start as open AP named RDB-<MAC>
  * - Start mDNS as hostname "interface-board"
  * - Start HTTP server with endpoints:
  *   GET / -> UI
@@ -707,7 +707,7 @@ static void start_ap_mode(void)
 	uint8_t mac[6];
 	esp_read_mac(mac, ESP_MAC_WIFI_STA);
 	char ssid[32];
-	snprintf(ssid, sizeof(ssid), "ITF-%02X%02X%02X", mac[3], mac[4], mac[5]);
+	snprintf(ssid, sizeof(ssid), "RDB-%02X%02X%02X", mac[3], mac[4], mac[5]);
 	strncpy((char *)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
 	wifi_config.ap.ssid_len = strlen(ssid);
 	wifi_config.ap.max_connection = 4;

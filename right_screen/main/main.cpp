@@ -38,16 +38,55 @@ using namespace esp_panel::board;
 #endif
 #define TAG "Main"
 
+// ESP32 is Little Endian, UDS is BE
+template <typename T>
+T swap_endian(T u)
+{
+    static_assert(CHAR_BIT == 8, "CHAR_BIT != 8");
+    union
+    {
+        T u;
+        unsigned char u8[sizeof(T)];
+    } source, dest;
+    source.u = u;
+    for (size_t k = 0; k < sizeof(T); k++)
+        dest.u8[k] = source.u8[sizeof(T) - k - 1];
+    return dest.u;
+}
+
 #pragma region Global variables
+
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+#define XDB_SM_ST_OFF BINOCAN_RDB_ST_RDB_SM_ST_OFF_CHOICE
+#define XDB_SM_ST_INIT BINOCAN_RDB_ST_RDB_SM_ST_INIT_CHOICE
+#define XDB_SM_ST_OK BINOCAN_RDB_ST_RDB_SM_ST_OK_CHOICE
+#define XDB_SM_ST_DEGRADED BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE
+#define XDB_SM_ST_FAULT BINOCAN_RDB_ST_RDB_SM_ST_FAULT_CHOICE
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+#define XDB_SM_ST_OFF BINOCAN_RDB_ST_LDB_SM_ST_OFF_CHOICE
+#define XDB_SM_ST_INIT BINOCAN_RDB_ST_LDB_SM_ST_INIT_CHOICE
+#define XDB_SM_ST_OK BINOCAN_RDB_ST_LDB_SM_ST_OK_CHOICE
+#define XDB_SM_ST_DEGRADED BINOCAN_LDB_ST_RDB_SM_ST_DEGRADED_CHOICE
+#define XDB_SM_ST_FAULT BINOCAN_LDB_ST_RDB_SM_ST_FAULT_CHOICE
+#endif
 
 struct board_ST
 {
-    uint8_t internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_OFF_CHOICE;
-    bool canTimeOut = false;
+    bool screen_interlock_OK = false;
+    uint8_t internal_ST = XDB_SM_ST_OFF;
+    bool mph_selected = false;
 } display_board_st;
+
+// Used only to selectively update in LVGL
+bool screen_interlock_OK, p_screen_interlock_OK = false; // Checks opposite display status
+uint8_t p_internal_ST = XDB_SM_ST_DEGRADED;              // Checks internal state in the LVGL elements update routine
+uint8_t itf_board_st, p_itf_board_st = XDB_SM_ST_DEGRADED;
+bool p_CAN_RX_TimedOut = true;
 
 // Vehicle variables and previous values retainers
 bool indicatorsOn, p_indicatorsOn = true;
+bool rightTurnOn, p_rightTurnOn = true;
+bool leftTurnOn, p_leftTurnOn = true;
 bool highBeamOn, p_highBeamOn = true;
 bool lowFuelOn, p_lowFuelOn = true;
 bool overTemperatureOn, p_overTemperatureOn = true;
@@ -73,37 +112,11 @@ float odometer_km, p_odometer_km = 0.0;
 float trip_km, p_trip_km = 0.0;
 
 // Global UI objects
-lv_obj_t *needleLine = nullptr;
+// lv_obj_t *needleLine = nullptr;
 
 #pragma endregion
 
 #pragma region Helper functions
-
-// bool generatorOn = true;
-
-// /// @brief Random generator for testing
-// void generateValues()
-// {
-//     if (generatorOn)
-//     {
-//         speed_kph = 120.0 + 120.0 * sin((float)(esp_timer_get_time() / 1000) / 10000.0);
-//         rpm = 100 * (uint8_t)((3500 + 3500 * sin((float)(esp_timer_get_time() / 1000) / 10000.0)) / 100);
-//         fuelLevel_pc = 50 + 50 * sin((float)(esp_timer_get_time() / 1000) / 15000.0);
-//         lvVoltage_v = 12 + 2 * sin((float)(esp_timer_get_time() / 1000) / 20000.0);
-//         coolant_degC = 88 + 12 * sin((float)(esp_timer_get_time() / 1000) / 20000.0);
-//         indicatorsOn = ((esp_timer_get_time() / 1000) / 500) % 2 == 0;
-//         highBeamOn = (esp_timer_get_time() / 1000000) % 2 == 0;
-//         lowFuelOn = fuelLevel_pc < 20;
-//         overTemperatureOn = coolant_degC > 95;
-//         brakesOn = (esp_timer_get_time() / 1000000) % 3 == 0;
-//         absOn = (esp_timer_get_time() / 1000000) % 4 == 0;
-//         lowCoolantOn = (esp_timer_get_time() / 1000000) % 5 == 0;
-//         batteryOn = (esp_timer_get_time() / 1000000) % 6 == 0;
-//         lowOilOn = (esp_timer_get_time() / 1000000) % 7 == 0;
-//         milOn = (esp_timer_get_time() / 1000000) % 8 == 0;
-//         airbagOn = (esp_timer_get_time() / 1000000) % 9 == 0;
-//     }
-// }
 
 /// @brief Simple functions that compares internal metrics and updates LVGL objects if the metric has changed.
 /// @return Number of objects updated
@@ -114,12 +127,12 @@ int updateLVGLObjects()
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10))
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
-        // animateTargetArc(objects.itf_speed_kph_arc,speed_kph*10);
-        // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
-        // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
-        // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
-        // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
-        lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
+        animateTargetArc(objects.speed_arc, speed_kph * 10);
+        // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
+        // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
+        // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
+        // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
+        // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         lv_label_set_text_fmt(objects.speed, "%03ld", (long)speed_kph);
         p_speed_kph = speed_kph;
         updatedElements++;
@@ -134,7 +147,7 @@ int updateLVGLObjects()
     // }
     if (p_fuelLevel_pc != fuelLevel_pc)
     {
-        lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
+        // lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
         lv_label_set_text_fmt(objects.fuel_level, "%03d", fuelLevel_pc);
         p_fuelLevel_pc = fuelLevel_pc;
         updatedElements++;
@@ -146,75 +159,172 @@ int updateLVGLObjects()
         p_coolant_degC = coolant_degC;
         updatedElements++;
     }
-
+    // Low Fuel computed TT
     if (p_lowFuelOn != lowFuelOn)
     {
         lv_obj_set_style_image_opa(objects.low_fuel_tt, lowFuelOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_lowFuelOn = lowFuelOn;
         updatedElements++;
     }
+    // Over temperature computer TT
     if (p_overTemperatureOn != overTemperatureOn)
     {
         lv_obj_set_style_image_opa(objects.over_temperature_tt, overTemperatureOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_overTemperatureOn = overTemperatureOn;
         updatedElements++;
     }
-#ifdef STRESS_TEST
-    if (p_absOn != absOn)
+    // Left to right screen interlock
+    if (p_screen_interlock_OK != screen_interlock_OK)
     {
-        lv_obj_set_style_image_opa(objects.abs_al_tt, absOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        p_absOn = absOn;
+        lv_obj_set_style_opa(objects.interlock_state, screen_interlock_OK ? LV_OPA_TRANSP : LV_OPA_COVER, LV_STATE_DEFAULT);
+        p_screen_interlock_OK = screen_interlock_OK;
         updatedElements++;
     }
-    if (p_brakesOn != brakesOn)
+    // Internal state degraded or fault
+    if (p_internal_ST != display_board_st.internal_ST)
     {
-        lv_obj_set_style_image_opa(objects.brakes_tt, brakesOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        p_brakesOn = brakesOn;
+        switch (display_board_st.internal_ST)
+        {
+        case XDB_SM_ST_DEGRADED:
+            lv_obj_set_style_text_color(objects.internal_state, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+            break;
+        case XDB_SM_ST_FAULT:
+            lv_obj_set_style_text_color(objects.internal_state, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+            break;
+        default:
+            lv_obj_set_style_opa(objects.internal_state, LV_OPA_TRANSP, LV_STATE_DEFAULT);
+            break;
+        }
+        p_internal_ST = display_board_st.internal_ST;
         updatedElements++;
     }
-    if (p_lowCoolantOn != lowCoolantOn)
+    // Same for CAN-detected ITF board state
+    if (p_itf_board_st != itf_board_st)
     {
-        lv_obj_set_style_image_opa(objects.itf_coolant_low_al_tt, lowCoolantOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        p_lowCoolantOn = lowCoolantOn;
+        switch (itf_board_st)
+        {
+        case XDB_SM_ST_DEGRADED:
+            lv_obj_set_style_text_color(objects.itf_state, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+            break;
+        case XDB_SM_ST_FAULT:
+            lv_obj_set_style_text_color(objects.itf_state, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+            break;
+        default:
+            lv_obj_set_style_opa(objects.itf_state, LV_OPA_TRANSP, LV_STATE_DEFAULT);
+            break;
+        }
+        p_itf_board_st = itf_board_st;
         updatedElements++;
     }
-    if (p_batteryOn != batteryOn)
+    // Same for CAN Timed out indicator
+    if (CAN_RX_TimedOut != p_CAN_RX_TimedOut)
     {
-        lv_obj_set_style_image_opa(objects.battery_tt, batteryOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        p_batteryOn = batteryOn;
+        lv_obj_set_style_opa(objects.can_state, CAN_RX_TimedOut ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_CAN_RX_TimedOut = CAN_RX_TimedOut;
         updatedElements++;
     }
-    if (p_lowOilOn != lowOilOn)
+    // Odometer. Might need comparison at the uint level
+    if (p_odometer_km != odometer_km)
     {
-        lv_obj_set_style_image_opa(objects.low_oil_tt, lowOilOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        p_lowOilOn = lowOilOn;
+        lv_label_set_text_fmt(objects.odometer, "%06.0f", odometer_km);
+        p_odometer_km = odometer_km;
         updatedElements++;
     }
-    if (p_milOn != milOn)
+    // Trip, might need comparison at the uint level
+    if (p_trip_km != trip_km)
     {
-        lv_obj_set_style_image_opa(objects.mil_tt, milOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        p_milOn = milOn;
+        lv_label_set_text_fmt(objects.trip, "%03.1f", trip_km);
+        p_trip_km = trip_km;
         updatedElements++;
     }
+    // No receiver for lvVoltage_v
+
+    // Double indicators arrow
+    if (p_indicatorsOn != indicatorsOn)
+    {
+        lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_indicatorsOn = indicatorsOn;
+        updatedElements++;
+    }
+    // Right indicator
+    if (p_rightTurnOn != rightTurnOn)
+    {
+        // lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_rightTurnOn = rightTurnOn;
+        updatedElements++;
+    }
+    // Right indicator
+    if (p_leftTurnOn != leftTurnOn)
+    {
+        // lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_leftTurnOn = leftTurnOn;
+        updatedElements++;
+    }
+    // High beams
     if (p_highBeamOn != highBeamOn)
     {
         lv_obj_set_style_image_opa(objects.hi_beam_tt, highBeamOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_highBeamOn = highBeamOn;
         updatedElements++;
     }
-
-    if (p_airbagOn != airbagOn)
+    // Brakes
+    if (p_brakesOn != brakesOn)
     {
-        lv_obj_set_style_image_opa(objects.itf_airbagal_tt, airbagOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        p_airbagOn = airbagOn;
+        lv_obj_set_style_image_opa(objects.brakes_tt, brakesOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_brakesOn = brakesOn;
         updatedElements++;
     }
-#endif
-
-    if (p_indicatorsOn != indicatorsOn)
+    // ABS
+    if (p_absOn != absOn)
     {
-        lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        p_indicatorsOn = indicatorsOn;
+        lv_obj_set_style_image_opa(objects.abs_tt, absOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_absOn = absOn;
+        updatedElements++;
+    }
+    // Parking Brake
+    if (p_parkingBrakeOn != parkingBrakeOn)
+    {
+        lv_obj_set_style_image_opa(objects.parkingbrake_tt, parkingBrakeOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_parkingBrakeOn = parkingBrakeOn;
+        updatedElements++;
+    }
+    // Low Coolant
+    if (p_lowCoolantOn != lowCoolantOn)
+    {
+        lv_obj_set_style_image_opa(objects.low_coolant_tt, lowCoolantOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_lowCoolantOn = lowCoolantOn;
+        updatedElements++;
+    }
+    // Battery/Alternator
+    if (p_batteryOn != batteryOn)
+    {
+        lv_obj_set_style_image_opa(objects.battery_tt, batteryOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_batteryOn = batteryOn;
+        updatedElements++;
+    }
+    // Low Oil Pressure
+    if (p_lowOilOn != lowOilOn)
+    {
+        lv_obj_set_style_image_opa(objects.low_oil_tt, lowOilOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_lowOilOn = lowOilOn;
+        updatedElements++;
+    }
+    // MIL
+    if (p_milOn != milOn)
+    {
+        lv_obj_set_style_image_opa(objects.mil_tt, milOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_milOn = milOn;
+        updatedElements++;
+    }
+    // Airbag
+    if (p_airbagOn != airbagOn)
+    {
+        lv_obj_set_style_image_opa(objects.airbag_tt, airbagOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        p_airbagOn = airbagOn;
         updatedElements++;
     }
 
@@ -226,7 +336,7 @@ int updateLVGLObjects()
 /// @return Error code, if relevant
 esp_err_t dispatchFrame(twai_message_t *rxMsg)
 {
-    
+
     static binocan_itf_active_hi_lo_t binocan_itf_active_hi_lo_msg;
     static binocan_itf_slow_metrics_t binocan_itf_slow_metrics_msg;
     static binocan_itf_fast_metrics_t binocan_itf_fast_metrics_msg;
@@ -236,18 +346,44 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     static binocan_itf_board_st_t binocan_itf_board_st_msg;
     static binocan_itf_board_version_t binocan_itf_board_version_msg;
+
+    // Variables reserved for the UDS side of business
+    static uint8_t ST_min = 0x01;
+    static uint8_t BSize = 0x00;
+    static const esp_partition_t *update_partition = NULL;
+    static bool FC_sent = false;
+    static bool FF_received = false;
+    static uint32_t receivedBytes;
+    static bool transferComplete = false;
+    static bool OTA_started = false;
+    static uint32_t image_size;
+    static esp_ota_handle_t ota_handle;
+    twai_message_t UDS_RESP_MSG = {
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+        .identifier = BINOCAN_RDB_UDS_RESP_FRAME_ID,
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+        .identifier = BINOCAN_LDB_UDS_RESP_FRAME_ID,
+#endif
+        .data_length_code = 8};
+
+    esp_err_t ota_err;
+    if (update_partition == NULL) // Only first time
+        update_partition = esp_ota_get_next_update_partition(NULL);
+
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
     static binocan_ldb_st_t binocan_ldb_st_msg;
     static binocan_rdb_uds_req_t binocan_rdb_uds_req_msg;
-
-    // generatorOn = false;
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+    static binocan_rdb_st_t binocan_rdb_st_msg;
+    static binocan_ldb_uds_req_t binocan_ldb_uds_req_msg;
+#endif
+    // Debug block
     // ESP_LOGI(__func__,"ID: 0x%04LX ",rxMsg->identifier);
     // for (int i = 0; i < rxMsg->data_length_code; i++)
     // {
     //     printf("0x%02X\t",rxMsg->data[i]);
     // }
     // printf("\n");
-
-
 
     switch (rxMsg->identifier)
     {
@@ -374,11 +510,15 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                     (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE)
                 ? indicatorsOn = true
                 : indicatorsOn = false;
+            leftTurnOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE);
+            rightTurnOn = (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
         }
         else
         {
             ESP_LOGW(__func__, "Turn indicators telltale signal out of range: L %d - R %d", binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt, binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt);
             indicatorsOn = true;
+            rightTurnOn = true;
+            leftTurnOn = true;
         }
 
         if (binocan_itf_active_hi_lo_itf_ignition_ah_st_is_in_range(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st))
@@ -531,6 +671,15 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
             break;
         }
+        if (binocan_itf_board_st_itf_sm_st_is_in_range(binocan_itf_board_st_msg.itf_sm_st))
+        {
+            itf_board_st = (uint8_t)binocan_itf_board_st_itf_sm_st_decode(binocan_itf_board_st_msg.itf_sm_st);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "ITF SM Status signal out of range: %d", binocan_itf_board_st_msg.itf_sm_st);
+            itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE; // Default value
+        }
     }
     break;
 
@@ -543,7 +692,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
     }
     break;
-
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
     case BINOCAN_LDB_ST_FRAME_ID:
     {
         if (binocan_ldb_st_unpack(&binocan_ldb_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
@@ -551,14 +700,160 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
             break;
         }
+        if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
+        {
+            screen_interlock_OK = (binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "LDB SM Status signal out of range: %d", binocan_ldb_st_msg.ldb_sm_st);
+            screen_interlock_OK = false; // Default value
+        }
     }
     break;
 
     case BINOCAN_RDB_UDS_REQ_FRAME_ID:
     {
         if (binocan_rdb_uds_req_unpack(&binocan_rdb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+    case BINOCAN_RDB_ST_FRAME_ID:
+    {
+        if (binocan_rdb_st_unpack(&binocan_rdb_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
         {
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+            break;
+        }
+        if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
+        {
+            screen_interlock_OK = (binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "RDB SM Status signal out of range: %d", binocan_rdb_st_msg.rdb_sm_st);
+            screen_interlock_OK = false; // Default value
+        }
+    }
+    break;
+
+    case BINOCAN_LDB_UDS_REQ_FRAME_ID:
+    {
+        if (binocan_ldb_uds_req_unpack(&binocan_ldb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+#endif // Could be pulled up to include UDS logic
+        {
+            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+            if (OTA_started)
+            {
+                esp_ota_abort(ota_handle);
+                FC_sent = false;
+                FF_received = false;
+                ESP_LOGW(__func__, "OTA was in progress, aborted.");
+            }
+
+            break;
+        }
+        // Check if this is a correct first frame
+        if ((rxMsg->data[0] & 0xF0) == 0x10)
+        {
+            if (OTA_started || FF_received) // Break case
+            {
+                ESP_LOGE(__func__, "New FF received while OTA in progress, aborting.");
+                esp_ota_abort(ota_handle);
+                FC_sent = false;
+                FF_received = false;
+                break;
+            }
+
+            // TODO : check for escape sequence, shorter size type
+            image_size = swap_endian<uint32_t>(*(uint32_t *)(rxMsg->data + 2));
+            receivedBytes = 0;
+            transferComplete = false;
+            ESP_LOGI(__func__, "Received FF, starting OTA for size : %lu bytes on partition %s", image_size, update_partition->label);
+            ota_err = esp_ota_begin(update_partition, (size_t)image_size, &ota_handle);
+            if (ota_err != ESP_OK) // Break if somehow the OTA doesn't start, print error code
+            {
+                ESP_LOGE(__func__, "Could not start OTA : %s", esp_err_to_name(ota_err));
+                OTA_started = false;
+                FF_received = false;
+                break;
+            }
+            ota_err = esp_ota_write(ota_handle, (rxMsg->data + 6), 2);
+            if (ota_err != ESP_OK) // Break if somehow the OTA doesn't write
+            {
+                ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
+                esp_ota_abort(ota_handle);
+                OTA_started = false;
+                FF_received = false;
+                break;
+            }
+            receivedBytes = 2;
+            FF_received = true;
+            OTA_started = true;
+            // Send the FC frame for continuation
+            UDS_RESP_MSG.extd = false;
+            UDS_RESP_MSG.data[0] = 0x30;
+            UDS_RESP_MSG.data[1] = BSize;
+            UDS_RESP_MSG.data[2] = ST_min;
+            for (size_t i = 3; i < 8; i++)
+            {
+                UDS_RESP_MSG.data[i] = 0xAA;
+            }
+            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            {
+                ESP_LOGW(__func__, "Could not queue internal state message in queue");
+            }
+            else
+            {
+                ESP_LOGI(__func__,"Flow Control Frame sent.");
+            }
+            FC_sent = true;
+            break; // Successful break
+        }
+        else if ((rxMsg->data[0] & 0xF0) == 0x20) // CF is received
+        {
+            if (!OTA_started || !FF_received || !FC_sent) // Weird break case
+            {
+                ESP_LOGE(__func__, "Unexpected CF received");
+                // Should probably reset things here
+                break;
+            }
+            // Check if the whole message can be written to OTA or if something needs to be ignored
+            if (image_size - receivedBytes >= 7)
+            {
+                ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), 7);
+                if (ota_err != ESP_OK) // Break if somehow the OTA doesn't write
+                {
+                    ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
+                    esp_ota_abort(ota_handle);
+                    OTA_started = false;
+                    FF_received = false;
+                    break;
+                }
+                receivedBytes += 7;
+            }
+            else // Only part of the buffer needs to be taken in
+            {
+                ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), image_size - receivedBytes);
+                receivedBytes = image_size;
+                ESP_LOGI(__func__, "Transfer complete");
+                transferComplete = true;
+                OTA_started = false;
+                ota_err = esp_ota_end(ota_handle);
+                if (ota_err != ESP_OK)
+                {
+                    ESP_LOGE(__func__, "OTA not successful : %s", esp_err_to_name(ota_err));
+                }
+                else
+                {
+                    ESP_LOGI(__func__, "OTA image verification OK, setting boot to %s and restarting.", update_partition->label);
+                    esp_ota_set_boot_partition(update_partition);
+                    esp_restart();
+                }
+            }
+            break; // Successful break
+        }
+        else
+        {
+            ESP_LOGW(__func__, "Unknown frame type received, ignoring.");
             break;
         }
     }
@@ -567,7 +862,6 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
     default:
     {
         ESP_LOGW(__func__, "Unknown CAN frame received: ID = 0x%03X", (uint16_t)rxMsg->identifier);
-        // generatorOn = true;
     }
     break;
     }
@@ -580,22 +874,34 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 #pragma region FreeRTOS tasks
 TaskHandle_t display_board_st_PKG_hdl;
 
+/// @brief Packaging handler that send the board state over CAN
+/// @param pvParameters
 void display_board_st_PKG(void *pvParameters)
 {
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
     binocan_rdb_st_t binocan_rdb_st;
     binocan_rdb_st_init(&binocan_rdb_st);
     twai_message_t tx_msg = {
         .identifier = BINOCAN_RDB_ST_FRAME_ID,
         .data_length_code = BINOCAN_RDB_ST_LENGTH};
-
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+    binocan_ldb_st_t binocan_ldb_st;
+    binocan_ldb_st_init(&binocan_ldb_st);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_LDB_ST_FRAME_ID,
+        .data_length_code = BINOCAN_LDB_ST_LENGTH};
+#endif
     while (true)
     {
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_RDB_ST_CYCLE_TIME_MS));
-
         binocan_rdb_st.rdb_sm_st = binocan_rdb_st_rdb_sm_st_encode(display_board_st.internal_ST);
-
         binocan_rdb_st_pack(tx_msg.data, &binocan_rdb_st, BINOCAN_RDB_ST_LENGTH);
-
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_LDB_ST_CYCLE_TIME_MS));
+        binocan_ldb_st.ldb_sm_st = binocan_ldb_st_ldb_sm_st_encode(display_board_st.internal_ST);
+        binocan_ldb_st_pack(tx_msg.data, &binocan_ldb_st, BINOCAN_LDB_ST_LENGTH);
+#endif
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(__func__, "Could not queue internal state message in queue");
@@ -609,9 +915,8 @@ void display_board_st_PKG(void *pvParameters)
 /// @brief Main app
 extern "C" void app_main()
 {
-
     // Declare board state
-    display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_INIT_CHOICE;
+    display_board_st.internal_ST = XDB_SM_ST_INIT;
 
 #pragma region OTA and Rollback check
 
@@ -637,7 +942,7 @@ extern "C" void app_main()
     if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
     {
         ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
-        display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE;
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         if (rollBackPossible)
         {
             ESP_LOGW(__func__, "Activating rollback on next reboot.");
@@ -679,13 +984,13 @@ extern "C" void app_main()
             ESP_LOGW(__func__, "Activating rollback on next reboot.");
             esp_ota_mark_app_invalid_rollback();
         }
-        display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE;
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
     }
     // Set up state transmission over CAN
-    if (xTaskCreate(display_board_st_PKG, "RDB_ST_PKG", 4096, NULL, 3, &display_board_st_PKG_hdl) != pdPASS)
+    if (xTaskCreate(display_board_st_PKG, "XDB_ST_PKG", 4096, NULL, 3, &display_board_st_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create display state package task");
-        display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE;
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         if (rollBackPossible)
             esp_ota_mark_app_invalid_rollback();
         else
@@ -699,7 +1004,7 @@ extern "C" void app_main()
     if (!(board->init()))
     {
         ESP_LOGW(__func__, "Could not initialize board.");
-        display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE;
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         if (rollBackPossible)
             esp_ota_mark_app_invalid_rollback();
         else
@@ -711,7 +1016,7 @@ extern "C" void app_main()
         if (!(lcd->configFrameBufferNumber(LVGL_PORT_BUFFER_NUM)))
         {
             ESP_LOGW(__func__, "Could not set up framebuffers.");
-            display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE;
+            display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
             if (rollBackPossible)
                 esp_ota_mark_app_invalid_rollback();
             else
@@ -727,7 +1032,7 @@ extern "C" void app_main()
                 if (!(static_cast<BusRGB *>(lcd_bus)->configRGB_BounceBufferSize(lcd->getFrameWidth() * 20)))
                 {
                     ESP_LOGW(__func__, "Could not set up bounce buffer.");
-                    display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE;
+                    display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
                     if (rollBackPossible)
                         esp_ota_mark_app_invalid_rollback();
                     else
@@ -740,7 +1045,7 @@ extern "C" void app_main()
         if (!(board->begin()))
         {
             ESP_LOGW(__func__, "Could not begin() board.");
-            display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE;
+            display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
             if (rollBackPossible)
                 esp_ota_mark_app_invalid_rollback();
             else
@@ -764,7 +1069,7 @@ extern "C" void app_main()
     if (!(lvgl_port_init(board->getLCD(), board->getTouch())))
     {
         ESP_LOGW(__func__, "Could not start LVGL port.");
-        display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE;
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         if (rollBackPossible)
             esp_ota_mark_app_invalid_rollback();
         else
@@ -776,40 +1081,69 @@ extern "C" void app_main()
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
     ui_init();                                                               // Load the UI library and draw it
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
-    // needleLine = lv_line_create(objects.speed_scale); // Create the needle line indicator
-    // lv_obj_set_style_line_color(needleLine, lv_palette_main(LV_PALETTE_RED),LV_PART_MAIN); // Set the needle to red
-    // lv_obj_set_style_line_width(needleLine,8,LV_PART_MAIN);
-    // lv_obj_set_style_length(needleLine, 20, LV_PART_MAIN);
-    // lv_obj_set_style_line_rounded(needleLine,false,LV_PART_MAIN);
-    // lv_obj_set_style_pad_right(needleLine,50,LV_PART_MAIN);
-    // Following only needed when decimation is used
     static const char *scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
     lv_scale_set_text_src(objects.speed_scale, scale_labels);
 
-    // Masking circle
-    //  lv_obj_t *maskCircle = lv_obj_create(objects.speed_scale);
-    //  lv_obj_set_size(maskCircle, 300, 300);
-    //  lv_obj_center(maskCircle);
-    //  lv_obj_set_style_radius(maskCircle, LV_RADIUS_CIRCLE,0);
-    //  lv_obj_set_style_bg_color(maskCircle,lv_obj_get_style_bg_color(lv_scr_act(),LV_PART_MAIN),0);
-    //  lv_obj_set_style_bg_opa(maskCircle, LV_OPA_COVER,0);
-    //  lv_obj_set_style_border_width(maskCircle,0,LV_PART_MAIN);
-
     // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
     // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
-    lvgl_port_unlock();
 
+    vTaskSuspend(CAN_RX_tsk_hdl);
+    // Prepare values for the starting/check sequence
+    p_screen_interlock_OK = !screen_interlock_OK;
+    lv_obj_set_style_opa(objects.interlock_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_internal_ST = 0xFF;
+    lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_itf_board_st = 0xFF;
+    lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_CAN_RX_TimedOut = !CAN_RX_TimedOut;
+    lv_obj_set_style_opa(objects.can_state, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_indicatorsOn = !indicatorsOn;
+    lv_obj_set_style_opa(objects.indicators_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_rightTurnOn = !rightTurnOn;
+    p_leftTurnOn = !leftTurnOn;
+    p_highBeamOn = !highBeamOn;
+    lv_obj_set_style_opa(objects.hi_beam_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_lowFuelOn = !lowFuelOn;
+    lv_obj_set_style_opa(objects.low_fuel_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_overTemperatureOn = !overTemperatureOn;
+    lv_obj_set_style_opa(objects.over_temperature_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_brakesOn = !brakesOn;
+    lv_obj_set_style_opa(objects.brakes_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_absOn = !absOn;
+    lv_obj_set_style_opa(objects.abs_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_parkingBrakeOn = !parkingBrakeOn;
+    lv_obj_set_style_opa(objects.parkingbrake_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_lowCoolantOn = !lowCoolantOn;
+    lv_obj_set_style_opa(objects.low_coolant_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_batteryOn = !batteryOn;
+    lv_obj_set_style_opa(objects.battery_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_lowOilOn = !lowOilOn;
+    lv_obj_set_style_opa(objects.low_oil_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_milOn = !milOn;
+    lv_obj_set_style_opa(objects.mil_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    p_airbagOn = !airbagOn;
+    lv_obj_set_style_opa(objects.airbag_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
+    lvgl_port_unlock();
+    vTaskDelay(100);
     ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
+    // This probably needs to be called in a second point
+    lvgl_port_lock(-1);
+    animateTargetArcWithDuration(objects.speed_arc, 2400, 1000);
+    lvgl_port_unlock();
+    vTaskDelay(pdMS_TO_TICKS(1600));
+    lvgl_port_lock(-1);
+    animateTargetArcWithDuration(objects.speed_arc, 0, 500);
+    lvgl_port_unlock();
+    vTaskDelay(pdMS_TO_TICKS(600));
 
     ESP_LOGI(__func__, "Setup done");
-    if (display_board_st.internal_ST != BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE )
+    if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
     {
         esp_ota_mark_app_valid_cancel_rollback();
-        display_board_st.internal_ST = BINOCAN_RDB_ST_RDB_SM_ST_OK_CHOICE;
-        ESP_LOGI(__func__,"App image is valid.");
+        display_board_st.internal_ST = XDB_SM_ST_OK;
+        ESP_LOGI(__func__, "App image is valid.");
     }
-        
-
+    vTaskResume(CAN_RX_tsk_hdl);
 #pragma region Main Loop
     while (true)
     {
