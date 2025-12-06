@@ -14,7 +14,7 @@
 #define COEFF_FREQ_TO_SPEED_KPH_M (double)(7651.0 / 31285.0)
 #define COEFF_FREQ_TO_SPEED_KPH_P (double)(0.0)
 
-#define COEFF_PULSES_TO_METER (double)(COEFF_FREQ_TO_SPEED_KPH_M * 3.6)
+#define COEFF_PULSES_TO_METER (double)(COEFF_FREQ_TO_SPEED_KPH_M / 3.6)
 
 #define COEFF_SPEED_MPH_TO_FREQ_M (double)(17182.0 / 2611.0)
 #define COEFF_SPEED_MPH_TO_FREQ_P (double)(0.0)

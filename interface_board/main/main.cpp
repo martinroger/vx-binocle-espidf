@@ -243,7 +243,7 @@ void base_slow_metrics_PKG(void *pvParameters)
             coolant_degC = 130;
         interface_board_st.overTemp = (coolant_degC >= 106 ? true : false);
         // Comment in for debug
-        ESP_LOGD(TAG, "Coolant: %.2f - %.1f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle, coolant_degC);
+        ESP_LOGD(TAG, "Coolant: %.2f - %.2f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle*100.0, coolant_degC);
 
         float fuel_level_raw = sma_get_avg(adc_channels[0].sma);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
