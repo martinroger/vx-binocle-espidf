@@ -232,7 +232,7 @@ void base_slow_metrics_PKG(void *pvParameters)
     while (true)
     {
         // SMAs should already be protected, and some of the MCPWM logic can be brought in here.
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_SLOW_METRICS_PKG_RATE_MS)); // Waits for notification or one cyclic for frame message
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS)); // Waits for notification or one cyclic for frame message
         compute_err = compute_freq_dut(&pwm_cap_coolant);
         // if (compute_err != ESP_OK)
         //     ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
@@ -243,7 +243,7 @@ void base_slow_metrics_PKG(void *pvParameters)
             coolant_degC = 130;
         interface_board_st.overTemp = (coolant_degC >= 106 ? true : false);
         // Comment in for debug
-        ESP_LOGD(TAG, "Coolant: %.2f - %.2f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle*100.0, coolant_degC);
+        ESP_LOGD(TAG, "Coolant: %.2f - %.2f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0, coolant_degC);
 
         float fuel_level_raw = sma_get_avg(adc_channels[0].sma);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
@@ -259,7 +259,7 @@ void base_slow_metrics_PKG(void *pvParameters)
         float lv_v = lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P;
 
         // Comment in for debug
-        ESP_LOGD(TAG, "Fuel : %.2f - %.2fV - %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
+        ESP_LOGD(TAG, "Fuel : %.2f - %.3fV/%.3f - %.2fR- %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v,COEFF_FUEL_FULL_V, 1000.0 * fuel_level_v / COEFF_LOW_CALIBER_CURRENT, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
 
         binocan_itf_slow_metrics.itf_coolant_temp = binocan_itf_slow_metrics_itf_coolant_temp_encode(coolant_degC);
         binocan_itf_slow_metrics.itf_fuel_level_pc = binocan_itf_slow_metrics_itf_fuel_level_pc_encode(fuel_level_pc);
@@ -289,7 +289,7 @@ void base_fast_metrics_PKG(void *pvParameters)
     while (true)
     {
         // Transport some of the MCPWM logic in there
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_FAST_METRICS_PKG_RATE_MS));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS));
         compute_err = compute_freq_dut(&pwm_cap_rpm);
         // if (compute_err != ESP_OK)
         //     ESP_LOGW(__func__,"RPM DutFreq Compute error : %s",esp_err_to_name(compute_err));
@@ -326,7 +326,7 @@ void base_active_hilo_PKG(void *pvParameters)
 
     while (true)
     {
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_ACTIVE_HILO_PKG_RATE_MS));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS));
         if (tca95x5_port_read(&tca_slave, &raw) != ESP_OK)
         {
             ESP_LOGE(TAG, "Impossible to fetch register from expander");
