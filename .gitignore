@@ -3,3 +3,6 @@
 /.vscode/settings.json
 .vscode/settings.json
 factory apps/ITF factory app/index.html
+/factory apps/left display factory app/.vscode
+/factory apps/left display factory app/build
+/factory apps/left display factory app/managed_components
