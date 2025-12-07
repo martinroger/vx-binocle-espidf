@@ -58,6 +58,150 @@ T swap_endian(T u)
 	return dest.u;
 }
 
+#pragma endregion
+
+#pragma region Global variables
+// Should be extended to more ?
+struct board_ST
+{
+	bool EN_hi_R_sense_ST = false;
+	bool EN_5_V_ST = false;
+	bool EN_5_V_AUX_ST = false;
+	uint8_t internal_ST = 0x00;
+	bool expander_ST = true;
+	bool adc_ST = true;
+	float mcu_temperature = 0.0;
+	bool LDB_check_alive_ST = false;
+	bool RDB_check_alive_ST = false;
+	bool lowFuel = false;
+	bool overTemp = false;
+
+} interface_board_st;
+
+uint16_t fuel_lvl_comp_factor = 1000; // Is divided by 1000.0 later
+uint16_t fuel_low_level_threshold_pc = 20;
+uint16_t coolant_overtemp_threshold_degC = 106;
+
+#pragma endregion
+
+#pragma region 5V management
+// 5V control functions
+esp_err_t init_5V_ctrl(void)
+{
+	esp_err_t ret = ESP_FAIL;
+	ESP_LOGI(TAG, "Initializing 5V and 5V Aux control pins");
+	ret = gpio_set_direction((gpio_num_t)CONFIG_5V_EN_GPIO, GPIO_MODE_INPUT_OUTPUT);
+	ret = gpio_set_direction((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, GPIO_MODE_INPUT_OUTPUT);
+	ret = gpio_set_pull_mode((gpio_num_t)CONFIG_5V_EN_GPIO, GPIO_PULLDOWN_ONLY);
+	ret = gpio_set_pull_mode((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, GPIO_PULLDOWN_ONLY);
+	ret = gpio_pulldown_en((gpio_num_t)CONFIG_5V_EN_GPIO);
+	ret = gpio_pulldown_en((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
+	ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 0);
+	ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 0);
+	interface_board_st.EN_5_V_AUX_ST = false;
+	interface_board_st.EN_5_V_ST = false;
+	if (ret != ESP_OK)
+	{
+		ESP_LOGE(TAG, "Issue setting up control pins for 5V outputs");
+	}
+	return ret;
+}
+
+esp_err_t init_XDB_alive_check(void)
+{
+	esp_err_t ret = ESP_FAIL;
+	ret = gpio_set_direction((gpio_num_t)CONFIG_LD_ALIVE_IO, GPIO_MODE_INPUT);
+	ret = gpio_set_pull_mode((gpio_num_t)CONFIG_LD_ALIVE_IO, GPIO_PULLDOWN_ONLY);
+	ret = gpio_pulldown_en((gpio_num_t)CONFIG_LD_ALIVE_IO);
+	if (ret != ESP_OK)
+		ESP_LOGW(__func__, "Could not set up LDB alive check !");
+	ret = gpio_set_pull_mode((gpio_num_t)CONFIG_RD_ALIVE_IO, GPIO_PULLDOWN_ONLY);
+	ret = gpio_set_direction((gpio_num_t)CONFIG_RD_ALIVE_IO, GPIO_MODE_INPUT);
+	ret = gpio_pulldown_en((gpio_num_t)CONFIG_RD_ALIVE_IO);
+	if (ret != ESP_OK)
+		ESP_LOGW(__func__, "Could not set up RDB alive check !");
+	return ret;
+}
+
+bool check_LD_alive() {
+	bool ret = gpio_get_level((gpio_num_t)CONFIG_LD_ALIVE_IO);
+	return ret;
+}
+
+bool check_RD_alive() {
+	bool ret = gpio_get_level((gpio_num_t)CONFIG_RD_ALIVE_IO);
+	return ret;
+}
+
+esp_err_t enable_5V(void)
+{
+	esp_err_t ret = ESP_FAIL;
+	ESP_LOGD(TAG, "Enabling 5V output.");
+	ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 1);
+	if (ret != ESP_OK)
+	{
+		interface_board_st.EN_5_V_ST = false;
+		ESP_LOGW(TAG, "Could not enable 5V output, continuing.");
+	}
+	else
+	{
+		interface_board_st.EN_5_V_ST = true;
+	}
+	return ret;
+}
+
+esp_err_t enable_5V_AUX(void)
+{
+	esp_err_t ret = ESP_FAIL;
+	ESP_LOGD(TAG, "Enabling 5V auxiliary output.");
+	ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 1);
+	if (ret != ESP_OK)
+	{
+		interface_board_st.EN_5_V_AUX_ST = false;
+		ESP_LOGW(TAG, "Could not enable 5V auxiliary output, continuing.");
+	}
+	else
+	{
+		interface_board_st.EN_5_V_AUX_ST = true;
+	}
+	return ret;
+}
+
+esp_err_t disable_5V(void)
+{
+	esp_err_t ret = ESP_FAIL;
+	ESP_LOGD(TAG, "Disabling 5V output.");
+	ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 0);
+	if (ret != ESP_OK)
+	{
+		interface_board_st.EN_5_V_ST = true;
+		ESP_LOGW(TAG, "Could not disable 5V output, continuing.");
+	}
+	else
+	{
+		interface_board_st.EN_5_V_ST = false;
+	}
+	return ret;
+}
+
+esp_err_t disable_5V_AUX(void)
+{
+	esp_err_t ret = ESP_FAIL;
+	ESP_LOGD(TAG, "Disabling 5V auxiliary output.");
+	ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 0);
+	if (ret != ESP_OK)
+	{
+		interface_board_st.EN_5_V_AUX_ST = true;
+		ESP_LOGW(TAG, "Could not disable 5V auxiliary output, continuing.");
+	}
+	else
+	{
+		interface_board_st.EN_5_V_AUX_ST = false;
+	}
+	return ret;
+}
+#pragma endregion
+
 /// @brief Declares the MDNS instances and sets it up on the Hotspot wifi
 /// @param
 static void start_mdns(void)
@@ -368,9 +512,9 @@ static esp_err_t calibration_get_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
 
-	uint16_t fuel_lvl_comp_factor; // Is divided by 1000.0 later
-	uint16_t fuel_low_level_threshold_pc;
-	uint16_t coolant_overtemp_threshold_degC;
+	// uint16_t fuel_lvl_comp_factor; // Is divided by 1000.0 later
+	// uint16_t fuel_low_level_threshold_pc;
+	// uint16_t coolant_overtemp_threshold_degC;
 	nvs_handle_t h;
 	esp_err_t err = ESP_FAIL;
 
@@ -750,12 +894,47 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		strncpy(target_label, "RDB", sizeof(target_label) - 1);
 		txMsg.identifier = BINOCAN_RDB_UDS_REQ_FRAME_ID;
 		UDSRespID = BINOCAN_RDB_UDS_RESP_FRAME_ID;
+		ESP_LOGI(__func__, "Enabling 5V output for RDB...");
+		if (enable_5V() != ESP_OK)
+		{
+			ESP_LOGE(__func__, "Could not start 5V for RDB");
+			free(buf);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V");
+			return ESP_FAIL;
+		}
+		vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
+		if (!check_RD_alive())
+		{
+			ESP_LOGE(__func__, "Could not check RD is powered up");
+			free(buf);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check RD state");
+			disable_5V();
+			return ESP_FAIL;
+		}
+
 	}
 	else if (strstr(req->uri, "targetECU=LDB"))
 	{
 		strncpy(target_label, "LDB", sizeof(target_label) - 1);
 		txMsg.identifier = BINOCAN_LDB_UDS_REQ_FRAME_ID;
 		UDSRespID = BINOCAN_LDB_UDS_RESP_FRAME_ID;
+		ESP_LOGI(__func__, "Enabling 5V output for LDB...");
+		if (enable_5V_AUX() != ESP_OK)
+		{
+			ESP_LOGE(__func__, "Could not start 5V for LDB");
+			free(buf);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V AUX");
+			return ESP_FAIL;
+		}
+		vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
+		if (!check_LD_alive())
+		{
+			ESP_LOGE(__func__, "Could not check LD is powered up");
+			free(buf);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check LD state");
+			disable_5V_AUX();
+			return ESP_FAIL;
+		}
 	}
 	else
 	{
@@ -806,6 +985,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "Could not find starter bytes, invalid image.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Uploaded binary contains no app descriptor (rejecting)");
+		disable_5V(); disable_5V_AUX();
 		return ESP_FAIL;
 	}
 	/* Copy descriptor locally before freeing the upload buffer */
@@ -847,6 +1027,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		free(buf);
 		ESP_LOGE(__func__, "Impossible to send first frame : %s", esp_err_to_name(tx_err));
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Impossible to send FF");
+		disable_5V(); disable_5V_AUX();
 		return ESP_FAIL;
 	}
 
@@ -860,6 +1041,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+			disable_5V(); disable_5V_AUX();
 			return ESP_FAIL;
 		}
 		else if (rx_err != ESP_OK)
@@ -867,6 +1049,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
+			disable_5V(); disable_5V_AUX();
 			return ESP_FAIL;
 		}
 		else
@@ -886,6 +1069,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+		disable_5V(); disable_5V_AUX();
 		return ESP_FAIL;
 	}
 	else
@@ -900,6 +1084,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
+			disable_5V(); disable_5V_AUX();
 			return ESP_FAIL;
 		}
 	}
@@ -951,6 +1136,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+						disable_5V();
+						disable_5V_AUX();
 						return ESP_FAIL;
 					}
 					else if (rx_err != ESP_OK)
@@ -958,6 +1145,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
+						disable_5V(); disable_5V_AUX();
 						return ESP_FAIL;
 					}
 					else
@@ -977,6 +1165,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 					free(buf);
 					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+					disable_5V(); disable_5V_AUX();
 					return ESP_FAIL;
 				}
 				else
@@ -991,6 +1180,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
+						disable_5V(); disable_5V_AUX();
 						return ESP_FAIL;
 					}
 				}
@@ -1211,6 +1401,16 @@ extern "C" void app_main(void)
 	{
 		ESP_LOGE(__func__, "Could not start TWAI : %s", esp_err_to_name(twai_err));
 	}
+
+	ESP_LOGI(__func__,"Initialising 5V control");
+	esp_err_t V5_ctrl_err = init_5V_ctrl();
+	if (V5_ctrl_err != ESP_OK)
+		ESP_LOGE(__func__,"Could not start 5V control ");
+
+	ESP_LOGI(__func__,"Configuring XDB Check alive...");
+	esp_err_t check_alive_err = init_XDB_alive_check();
+	if (check_alive_err!=ESP_OK)
+		ESP_LOGE(__func__,"Could not start XDB check alive IOs");
 
 	ESP_LOGI(__func__, "Init default NVS");
 	esp_err_t err = nvs_flash_init();
