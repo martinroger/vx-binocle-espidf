@@ -16,7 +16,7 @@ extern "C" {
 #define NVS_STORAGE_NAMESPACE "storage"
 
 // Initialize NVS flash. Handles erase-if-needed case.
-esp_err_t nvs_init_flash(void);
+esp_err_t nvs_init_odo_flash(void);
 
 // Try to read a u32 from NVS. If the key is not found, *found is set to false and ESP_OK is returned.
 esp_err_t nvs_get_u32_optional(const char *ns, const char *key, uint32_t *out_val, bool *found);
