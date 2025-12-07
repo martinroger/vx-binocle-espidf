@@ -11,9 +11,30 @@
     <div id="info">Loading...</div>
     <div>Odometer: <span id="odometer">-</span> m &nbsp; Trip: <span id="trip">-</span> m</div>
     <div>
-        New Odometer (m): <input id="new_odo" type="number"> <button type="button"onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set odometer</button><br>
-        New Trip (m): <input id="new_trip" type="number"> <button type="button" onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set trip</button><br>
+        New Odometer (m): <input id="new_odo" type="number"> <button type="button"
+            onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
+            odometer</button><br>
+        New Trip (m): <input id="new_trip" type="number"> <button type="button"
+            onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
+            trip</button><br>
     </div>
+    <h2>Calibration values</h2>
+    <div>
+        Fuel level correction factor: <span id="fuel_level_corr">-</span>/1000<br>
+        Fuel low level alarm threshold: <span id="low_fuel_threshold">-</span>%<br>
+        Coolant alarm temperature: <span id="overtemp_threshold">-</span>°C<br>
+    </div>
+    <div>
+        New fuel correction factor : <input id="new_fuel_level_corr" type="number"> <button type="button"
+            onclick="fetch('/set_cal?new_fuel_level_corr='+document.getElementById('new_fuel_level_corr').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
+        New fuel low level threshold : <input id="new_low_fuel_threshold" type="number"> <button type="button"
+            onclick="fetch('/set_cal?new_low_fuel_threshold='+document.getElementById('new_low_fuel_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
+        New over temperature alarm threshold : <input id="new_overtemp_threshold" type="number"> <button type="button"
+            onclick="fetch('/set_cal?new_overtemp_threshold='+document.getElementById('new_overtemp_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
+
+
+    </div>
+
     <h2>Partitions</h2>
 
     <div>
@@ -49,7 +70,7 @@
         <button type="button" onclick="doCANUpload()">Flash over CAN</button>
     </form>
     <progress id="flashProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
-
+    <pre id="flashresult"></pre>
 
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
@@ -62,18 +83,36 @@
         onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
         Boot and Reboot</button>
     <script>
+        function refreshCalVariables() {
+            fetch('/calibration').then(r => r.json()).then(j => {
+                if (j.fuel_level_corr) {
+                    document.getElementById('fuel_level_corr').innerText = j.fuel_level_corr || '-';
+                    document.getElementById('new_fuel_level_corr').value = parseInt(j.fuel_level_corr);
+                }
+                if (j.low_fuel_threshold) {
+                    document.getElementById('low_fuel_threshold').innerText = j.low_fuel_threshold || '-';
+                    document.getElementById('new_low_fuel_threshold').value = parseInt(j.low_fuel_threshold);
+                }
+                if (j.overtemp_threshold) {
+                    document.getElementById('overtemp_threshold').innerText = j.overtemp_threshold || '-';
+                    document.getElementById('new_overtemp_threshold').value = parseInt(j.overtemp_threshold);
+                }
+            });
+        }
+
+
         function refreshPartitions() {
             fetch('/partitions').then(r => r.json()).then(j => {
                 if (j.factory) { document.getElementById('factory_project').innerText = j.factory.project_name || '-'; document.getElementById('factory_version').innerText = j.factory.version || '-'; }
-                if (j.ota_0) { document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-'; document.getElementById('ota0_version').innerText = (j.ota_0.version+' '+j.ota_0.state) || '-'; }
-                if (j.ota_1) { document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-'; document.getElementById('ota1_version').innerText = (j.ota_1.version+' '+j.ota_1.state) || '-'; }
+                if (j.ota_0) { document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-'; document.getElementById('ota0_version').innerText = (j.ota_0.version + ' ' + j.ota_0.state) || '-'; }
+                if (j.ota_1) { document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-'; document.getElementById('ota1_version').innerText = (j.ota_1.version + ' ' + j.ota_1.state) || '-'; }
             });
-            fetch('/prevboot').then(r => r.json()).then(j => { 
-                document.getElementById('bootPart').innerText = j.bootPart; 
-                document.getElementById('prevRunningPart').innerText = j.prevRunningPart; 
+            fetch('/prevboot').then(r => r.json()).then(j => {
+                document.getElementById('bootPart').innerText = j.bootPart;
+                document.getElementById('prevRunningPart').innerText = j.prevRunningPart;
                 document.getElementById('recOTAPart').innerText = j.recOTAPart;
                 document.getElementById('bootsel').value = j.bootPart;
-                document.getElementById('target').value = j.recOTAPart 
+                document.getElementById('target').value = j.recOTAPart
             });
         }
         function doUpload() {
@@ -127,16 +166,16 @@
                 }
             };
             xhr.onload = function () {
-                // try {
-                //     var j = JSON.parse(xhr.responseText);
-                //     document.getElementById('result').innerText = JSON.stringify(j, null, 2);
-                //     if (j.project_name) {
-                //         refreshPartitions();
-                //     }
-                // }
-                // catch (e) {
-                //     document.getElementById('result').innerText = xhr.responseText;
-                // }
+                try {
+                    var j = JSON.parse(xhr.responseText);
+                    document.getElementById('flashresult').innerText = "Upload finished " + JSON.stringify(j, null, 2);
+                    // if (j.project_name) {
+                    //     refreshPartitions();
+                    // }
+                }
+                catch (e) {
+                    document.getElementById('flashresult').innerText = xhr.responseText;
+                }
                 document.getElementById('flashProgress').value = 0;
             };
             xhr.onerror = function () {
@@ -147,16 +186,17 @@
         }
 
         window.addEventListener('load', function () {
+            refreshCalVariables();
             refreshPartitions();
             // fetch('/prevboot').then(r => r.json()).then(j => { document.getElementById('bootPart').innerText = j.bootPart; document.getElementById('prevRunningPart').innerText = j.prevRunningPart; document.getElementById('recOTAPart').innerText = j.recOTAPart });
-            fetch('/odometer').then(r => r.json()).then(j => { 
+            fetch('/odometer').then(r => r.json()).then(j => {
                 document.getElementById('odometer').innerText = j.odometer_m;
                 document.getElementById('new_odo').value = parseInt(j.odometer_m);
                 document.getElementById('trip').innerText = j.trip_m;
-                document.getElementById('new_trip').value = parseInt(j.trip_m); 
+                document.getElementById('new_trip').value = parseInt(j.trip_m);
             });
-            fetch('/version').then(r => r.json()).then(j => { 
-                document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date) 
+            fetch('/version').then(r => r.json()).then(j => {
+                document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date)
             });
         });
     </script>

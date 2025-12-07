@@ -364,6 +364,146 @@ static esp_err_t odometer_get_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+static esp_err_t calibration_get_handler(httpd_req_t *req)
+{
+	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+
+	uint16_t fuel_lvl_comp_factor; // Is divided by 1000.0 later
+	uint16_t fuel_low_level_threshold_pc;
+	uint16_t coolant_overtemp_threshold_degC;
+	nvs_handle_t h;
+	esp_err_t err = ESP_FAIL;
+
+	err = nvs_open("storage", NVS_READONLY, &h);
+	if (err != ESP_OK)
+	{
+		ESP_LOGW(__func__, "Could not open the base NVS 'storage' namespace.");
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS open failed");
+		return ESP_FAIL;
+	}
+	if (nvs_get_u16(h, "fuel_comp", &fuel_lvl_comp_factor) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the fuel level compensation factor in nvs.");
+		fuel_lvl_comp_factor = 1000;
+	}
+	if (nvs_get_u16(h, "lo_fuel_th", &fuel_low_level_threshold_pc) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the low fuel level threshold in nvs.");
+		fuel_low_level_threshold_pc = 20;
+	}
+	if (nvs_get_u16(h, "overtemp_th", &coolant_overtemp_threshold_degC) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the coolant overtemperature threshold in nvs.");
+		coolant_overtemp_threshold_degC = 103;
+	}
+	nvs_close(h);
+	char out[256];
+	snprintf(out, sizeof(out), "{\"fuel_level_corr\":%u,\"low_fuel_threshold\":%u,\"overtemp_threshold\":%u}", fuel_lvl_comp_factor, fuel_low_level_threshold_pc, coolant_overtemp_threshold_degC);
+	httpd_resp_set_type(req, "application/json");
+	httpd_resp_sendstr(req, out);
+	return ESP_OK;
+}
+
+static esp_err_t set_cal_post_handler(httpd_req_t *req)
+{
+	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+
+	nvs_handle_t h;
+	esp_err_t nvserr = nvs_open("storage", NVS_READWRITE, &h);
+	if (nvserr != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not open nvs -> storage, error %s", esp_err_to_name(nvserr));
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not load NVS");
+		return ESP_FAIL;
+	}
+	// Prepare pointers to substrings
+	const char *new_fuel_level_corr_ptr = strstr(req->uri, "new_fuel_level_corr=");
+	const char *new_low_fuel_th_ptr = strstr(req->uri, "new_low_fuel_threshold=");
+	const char *new_overtemp_th_ptr = strstr(req->uri, "new_overtemp_threshold=");
+	long detectedNumber = 0;
+	// Check if "new_fuel_level_corr=" is a valid pointer (detected)
+	if (new_fuel_level_corr_ptr != NULL)
+	{
+		// Construct pointer at the first supposed numerical character
+		const char *newFLCFToParse = new_fuel_level_corr_ptr + sizeof("new_fuel_level_corr=") - 1;
+		// atol is not checking anything. Let's check that at least the first character is either numerical or +-
+		if ((newFLCFToParse[0] == '-') || (newFLCFToParse[0] == '+') || ((newFLCFToParse[0] >= '0') && (newFLCFToParse[0] <= '9')))
+		{
+			ESP_LOGI(__func__, "Numeral or compatible detected, atol sorta safe to use.");
+			detectedNumber = atol(newFLCFToParse);
+			if (detectedNumber < 0)
+				detectedNumber *= -1;
+			if (detectedNumber > UINT16_MAX)
+				detectedNumber = UINT16_MAX;
+			nvs_set_u16(h, "fuel_comp", (uint16_t)detectedNumber);
+			ESP_LOGI(__func__, "Fuel Level Compensation factor updated to %u /1000", (uint16_t)detectedNumber);
+			nvs_commit(h);
+		}
+		else
+		{
+			ESP_LOGE(__func__, "Invalid starting character %s for atol, reporting error", newFLCFToParse[0]);
+			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in set request");
+			nvs_close(h);
+			return ESP_FAIL;
+		}
+	}
+	if (new_low_fuel_th_ptr != NULL)
+	{
+		const char *newLFTToParse = new_low_fuel_th_ptr + sizeof("new_low_fuel_threshold=") - 1;
+		if ((newLFTToParse[0] == '-') || (newLFTToParse[0] == '+') || ((newLFTToParse[0] >= '0') && (newLFTToParse[0] <= '9')))
+		{
+			detectedNumber = atol(newLFTToParse);
+			if (detectedNumber < 0)
+				detectedNumber *= -1;
+			if (detectedNumber > UINT16_MAX)
+				detectedNumber = UINT16_MAX;
+			nvs_set_u16(h, "lo_fuel_th", (uint16_t)detectedNumber);
+			ESP_LOGI(__func__, "Low fuel level threshold updated to %u %", (uint16_t)detectedNumber);
+			nvs_commit(h);
+		}
+		else
+		{
+			ESP_LOGE(__func__, "Invalid starting character %s for atol, reporting error", newLFTToParse[0]);
+			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in set request");
+			nvs_close(h);
+			return ESP_FAIL;
+		}
+	}
+	if (new_overtemp_th_ptr != NULL)
+	{
+		const char *newOVTToParse = new_overtemp_th_ptr + sizeof("new_overtemp_threshold=") - 1;
+		if ((newOVTToParse[0] == '-') || (newOVTToParse[0] == '+') || ((newOVTToParse[0] >= '0') && (newOVTToParse[0] <= '9')))
+		{
+			detectedNumber = atol(newOVTToParse);
+			if (detectedNumber < 0)
+				detectedNumber *= -1;
+			if (detectedNumber > UINT16_MAX)
+				detectedNumber = UINT16_MAX;
+			nvs_set_u16(h, "overtemp_th", (uint16_t)detectedNumber);
+			ESP_LOGI(__func__, "Coolant overtemp threshold updated to %u °C", (uint16_t)detectedNumber);
+			nvs_commit(h);
+		}
+		else
+		{
+			ESP_LOGE(__func__, "Invalid starting character %s for atol, reporting error", newOVTToParse[0]);
+			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in set request");
+			nvs_close(h);
+			return ESP_FAIL;
+		}
+	}
+	if (new_low_fuel_th_ptr == NULL && new_fuel_level_corr_ptr == NULL && new_overtemp_th_ptr == NULL) // Gibberish in the request
+	{
+		ESP_LOGE(__func__, "Invalid update request, no valid calibration input.");
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Malformed request, no correct tags");
+		nvs_close(h);
+		return ESP_FAIL;
+	}
+	// Close NVS if nothing returned before
+	nvs_close(h);
+	httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
+	return ESP_OK;
+}
+
 /// @brief Handler for the Reboot button
 /// @param req POST /reboot
 /// @return
@@ -554,6 +694,9 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+/// @brief Handler for the ECU update over CAN (brutal)
+/// @param req POST /flash?targetECU=
+/// @return
 static esp_err_t flash_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
@@ -578,8 +721,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Invalid content length");
 		return ESP_FAIL;
 	}
-	// Allocate some buffer to receive in segments of 4K
-	const size_t buf_size = 4096;
+	// Allocate some buffer to receive in segments of 1K
+	const size_t buf_size = 1024;
 	char *buf = static_cast<char *>(malloc(buf_size));
 	if (!buf)
 	{
@@ -593,7 +736,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	if (receivedBytes <= 0)
 	{
 		free(buf);
-		ESP_LOGE(__func__, "Could not receive first 4K of file to look for app header");
+		ESP_LOGE(__func__, "Could not receive first 1K of file to look for app header");
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request");
 		return ESP_FAIL;
 	}
@@ -612,7 +755,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	{
 		strncpy(target_label, "LDB", sizeof(target_label) - 1);
 		txMsg.identifier = BINOCAN_LDB_UDS_REQ_FRAME_ID;
-		UDSRespID = BINOCAN_RDB_UDS_RESP_FRAME_ID;
+		UDSRespID = BINOCAN_LDB_UDS_RESP_FRAME_ID;
 	}
 	else
 	{
@@ -684,9 +827,9 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	rx_err = twai_clear_receive_queue();
 	if (rx_err != ESP_OK)
 	{
-		ESP_LOGW(__func__,"Could not clear RX queue : %s",esp_err_to_name(rx_err));
+		ESP_LOGW(__func__, "Could not clear RX queue : %s", esp_err_to_name(rx_err));
 	}
-	
+
 	// Start with the first frame
 	txMsg.data_length_code = 8;
 	txMsg.data[0] = 0x10; // First Frame PCI
@@ -754,13 +897,13 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		}
 		else
 		{
-			ESP_LOGE(__func__, "Received frame is not FC CTS: %llX",*(uint64_t*)rxMsg.data);
+			ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
 			return ESP_FAIL;
 		}
 	}
-	
+
 	// If we have made it here without returning anything, it means that we have received a CTS FC frame
 	int to_process = buf_size;
 	uint8_t blockCounter = 0;
@@ -778,7 +921,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		}
 		if (pos_cursor == to_process && (processedTotal < (size_t)req->content_len)) // Ran out of data in the buffer
 		{
-			ESP_LOGI(__func__,"Fetching next chunk : %lu processed out of %lu",processedTotal,req->content_len);
+			ESP_LOGI(__func__, "Fetching next chunk : %lu processed out of %lu", processedTotal, req->content_len);
 			if (to_process > req->content_len - processedTotal) // Check if this might be the last truncated 4K segment
 			{
 				to_process = req->content_len - processedTotal;
@@ -798,7 +941,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			CF_SN++;
 			if (CANBlockSize > 0 && blockCounter == CANBlockSize) // Case a block size was specified
 			{
-				ESP_LOGW(__func__,"Waiting for FC");
+				ESP_LOGW(__func__, "Waiting for FC");
 				otherFrames = 0; // Useful to get out if too many other frames come in
 				while (otherFrames < 500)
 				{
@@ -845,28 +988,35 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					}
 					else
 					{
-						ESP_LOGE(__func__, "Received frame is not FC CTS: %llX",*(uint64_t*)rxMsg.data);
+						ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
 						return ESP_FAIL;
 					}
 				}
 				// Received a FC frame that gives the CTS
-				blockCounter = 0; //We can proceed
+				blockCounter = 0; // We can proceed
 			}
 			vTaskDelay(pdMS_TO_TICKS(STmin_MS));
-			tx_err = twai_transmit(&txMsg,pdMS_TO_TICKS(5));
+			tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(5));
 			blockCounter++;
 		}
 	}
 
-	ESP_LOGI(__func__,"Read total : %lu Sent total : %lu Processed total : %lu Content length : %lu",readTotal,sentTotal,processedTotal,req->content_len);
+	ESP_LOGI(__func__, "Read total : %lu Sent total : %lu Processed total : %lu Content length : %lu", readTotal, sentTotal, processedTotal, req->content_len);
 
 	// Resume normal TWAI Daemon tasks
 	vTaskResume(CAN_RX_tsk_hdl);
 	vTaskResume(CAN_TX_tsk_hdl);
-	httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
+	/* Respond with JSON including app metadata in id "result"*/
+	char out[256];
+	snprintf(out, sizeof(out), "{\"status\":\"ok\",\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\"}",
+			 local_desc.project_name, local_desc.version, local_desc.date);
+	httpd_resp_set_type(req, "application/json");
+	httpd_resp_sendstr(req, out);
 	return ESP_OK;
+	// httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
+	// return ESP_OK;
 }
 
 /// @brief Handler to set the boot partition and reboot on it
@@ -1020,10 +1170,14 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &reboot_uri);
 	httpd_uri_t odo_uri = {.uri = "/odometer", .method = HTTP_GET, .handler = odometer_get_handler};
 	httpd_register_uri_handler(server, &odo_uri);
+	httpd_uri_t calibration_uri = {.uri = "/calibration", .method = HTTP_GET, .handler = calibration_get_handler};
+	httpd_register_uri_handler(server, &calibration_uri);
 	httpd_uri_t bootPart_uri = {.uri = "/prevboot", .method = HTTP_GET, .handler = prevboot_get_handler};
 	httpd_register_uri_handler(server, &bootPart_uri);
 	httpd_uri_t set_trip_odo_uri = {.uri = "/set_trip_odo", .method = HTTP_POST, .handler = set_trip_odo_post_handler};
 	httpd_register_uri_handler(server, &set_trip_odo_uri);
+	httpd_uri_t set_cal_uri = {.uri = "/set_cal", .method = HTTP_POST, .handler = set_cal_post_handler};
+	httpd_register_uri_handler(server, &set_cal_uri);
 	return server;
 }
 
