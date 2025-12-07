@@ -9,17 +9,12 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 
-
-#ifndef CAN_RX
-#define CAN_RX 43
+#ifndef CONFIG_CAN_RX
+#define CONFIG_CAN_RX 3
 #endif
 
-#ifndef CAN_TX
-#define CAN_TX 44
-#endif
-
-#ifndef CAN_POLL_MS
-#define CAN_POLL_MS 50
+#ifndef CONFIG_CAN_TX
+#define CONFIG_CAN_TX 2
 #endif
 
 // Only active if the TWAI_WATCHDOG is used
@@ -30,10 +25,17 @@
 typedef esp_err_t frameDispatcher_t(twai_message_t *messageToDispatch);
 
 // Pointer to dispatcher function, attached on init and defined externally
-static frameDispatcher_t *dispatchCANFrame = nullptr;
+extern frameDispatcher_t *dispatchCANFrame ;
+
+// RX TimeOut flag. Not necessarily used
+extern bool CAN_RX_TimedOut ;
 
 // Pointer to rx and dispatch task handle
-static TaskHandle_t CANTaskHandle = nullptr;
+extern TaskHandle_t CAN_RX_tsk_hdl ;
+extern TaskHandle_t CAN_TX_tsk_hdl ;
+
+/// @brief Queue for messages to be sent out
+extern QueueHandle_t CAN_TX_queue_hdl ;
 
 /// @brief Initialises the TWAI driver and attaches the frame dispatcher function
 /// @param frameDispatcher 
@@ -42,4 +44,8 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher);
 
 /// @brief FreeRTOS task that receives and send frames to the dispatcher function
 /// @param arg 
-void CANTask(void *arg);
+void CAN_RX_Task(void *pvParameters);
+
+/// @brief FreeRTOS task that periodically sends messages stored in a queue.
+/// @param pvParameters 
+void CAN_TX_Task(void *pvParameters);

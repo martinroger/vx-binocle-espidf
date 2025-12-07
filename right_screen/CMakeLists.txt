@@ -5,6 +5,6 @@
 cmake_minimum_required(VERSION 3.5)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
-include_directories(${CMAKE_CURRENT_LIST_DIR}/main/conf)
+# include_directories(${CMAKE_CURRENT_LIST_DIR}/main/conf)
 project(right_screen)
 

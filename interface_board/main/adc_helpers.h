@@ -1,3 +1,12 @@
+/*
+Core wrapper of the ADS1115 functions : 
+- Create the slave ADS object
+- Initializes it after i2cdev_init is called before.
+- Provides a mutex-protected way to call for raw measurements. The mutex assumes that the libraries used are not running concurrently with other I2C handlers.
+*/
+
+
+
 #pragma once
 #include <stdio.h>
 #include <string.h>
@@ -31,7 +40,6 @@ esp_err_t initialize_ADC()
         return ESP_FAIL;
     }
     ESP_LOGI(TAG, "Set mode OK.");
-
     if (ads111x_set_data_rate(&adc_slave, ADS111X_DATA_RATE_128) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set ADC data rate");
@@ -80,7 +88,6 @@ esp_err_t initialize_ADC()
         break;
     }
 
-    
     ESP_LOGW(TAG, "Conversion delay interval set to %lu ms", conversion_interval_ms);
 
     if (ads111x_set_input_mux(&adc_slave, ADS111X_MUX_0_GND) != ESP_OK)
@@ -111,7 +118,7 @@ int16_t adc_measure_channel_raw(uint8_t channel_num)
     case 0:
         if (ads111x_set_input_mux(&adc_slave, ADS111X_MUX_0_GND) != ESP_OK)
         {
-            ESP_LOGE(TAG, "Could not swith ADC Mux");
+            ESP_LOGE(TAG, "Could not switch ADC Mux");
             return 0;
         }
 
@@ -119,7 +126,7 @@ int16_t adc_measure_channel_raw(uint8_t channel_num)
     case 1:
         if (ads111x_set_input_mux(&adc_slave, ADS111X_MUX_1_GND) != ESP_OK)
         {
-            ESP_LOGE(TAG, "Could not swith ADC Mux");
+            ESP_LOGE(TAG, "Could not switch ADC Mux");
             return 0;
         }
 
@@ -127,7 +134,7 @@ int16_t adc_measure_channel_raw(uint8_t channel_num)
     case 2:
         if (ads111x_set_input_mux(&adc_slave, ADS111X_MUX_2_GND) != ESP_OK)
         {
-            ESP_LOGE(TAG, "Could not swith ADC Mux");
+            ESP_LOGE(TAG, "Could not switch ADC Mux");
             return 0;
         }
 
@@ -135,7 +142,7 @@ int16_t adc_measure_channel_raw(uint8_t channel_num)
     case 3:
         if (ads111x_set_input_mux(&adc_slave, ADS111X_MUX_3_GND) != ESP_OK)
         {
-            ESP_LOGE(TAG, "Could not swith ADC Mux");
+            ESP_LOGE(TAG, "Could not switch ADC Mux");
             return 0;
         }
 

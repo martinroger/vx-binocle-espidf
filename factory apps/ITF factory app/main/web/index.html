@@ -1,0 +1,165 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Interface board factory app</title>
+</head>
+
+<body>
+    <h1>Interface board setup</h1>
+    <div id="info">Loading...</div>
+    <div>Odometer: <span id="odometer">-</span> m &nbsp; Trip: <span id="trip">-</span> m</div>
+    <div>
+        New Odometer (m): <input id="new_odo" type="number"> <button type="button"onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set odometer</button><br>
+        New Trip (m): <input id="new_trip" type="number"> <button type="button" onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set trip</button><br>
+    </div>
+    <h2>Partitions</h2>
+
+    <div>
+        Factory: <span id="factory_project">-</span> (<span id="factory_version">-</span>)<br>
+        OTA0: <span id="ota0_project">-</span> (<span id="ota0_version">-</span>)<br>
+        OTA1: <span id="ota1_project">-</span> (<span id="ota1_version">-</span>)<br>
+    </div>
+    <div>
+        <button onclick="refreshPartitions()">Refresh Partitions info</button>
+        <button onclick="fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting...'))">Reboot</button>
+    </div>
+    <h2>Upload Firmware</h2>
+    <div>Previously running partition: <span id="prevRunningPart">-</span></div>
+    <div>Recommended OTA partition: <span id="recOTAPart">-</span><br><br></div>
+    <form id="uploadForm" method="POST" enctype="multipart/form-data">
+        Target partition: <select name="target" id="target">
+            <option value="ota_0">ota_0</option>
+            <option value="ota_1">ota_1</option>
+        </select><br><br>
+        File: <input type="file" name="file" id="file"><br><br>
+        <button type="button" onclick="doUpload()">Upload and flash</button>
+    </form>
+    <progress id="uploadProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
+    <pre id="result"></pre>
+
+    <h2>Flash over CAN</h2>
+    <form id="uploadCANForm" method="POST" enctype="multipart/form-data">
+        Target ECU: <select name="targetECU" id="targetECU">
+            <option value="RDB">Right Display</option>
+            <option value="LDB">Left Display</option>
+        </select><br><br>
+        Binary file : <input type="file" name="file" id="CANfile"><br><br>
+        <button type="button" onclick="doCANUpload()">Flash over CAN</button>
+    </form>
+    <progress id="flashProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
+
+
+    <h2>Set Boot Partition</h2>
+    <div>Currently selected: <span id="bootPart">-</span></div>
+    <select id="bootsel">
+        <option value="factory">factory</option>
+        <option value="ota_0">ota_0</option>
+        <option value="ota_1">ota_1</option>
+    </select>
+    <button
+        onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
+        Boot and Reboot</button>
+    <script>
+        function refreshPartitions() {
+            fetch('/partitions').then(r => r.json()).then(j => {
+                if (j.factory) { document.getElementById('factory_project').innerText = j.factory.project_name || '-'; document.getElementById('factory_version').innerText = j.factory.version || '-'; }
+                if (j.ota_0) { document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-'; document.getElementById('ota0_version').innerText = (j.ota_0.version+' '+j.ota_0.state) || '-'; }
+                if (j.ota_1) { document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-'; document.getElementById('ota1_version').innerText = (j.ota_1.version+' '+j.ota_1.state) || '-'; }
+            });
+            fetch('/prevboot').then(r => r.json()).then(j => { 
+                document.getElementById('bootPart').innerText = j.bootPart; 
+                document.getElementById('prevRunningPart').innerText = j.prevRunningPart; 
+                document.getElementById('recOTAPart').innerText = j.recOTAPart;
+                document.getElementById('bootsel').value = j.bootPart;
+                document.getElementById('target').value = j.recOTAPart 
+            });
+        }
+        function doUpload() {
+            var f = document.getElementById('file').files[0];
+            if (!f) {
+                alert('Choose file');
+                return;
+            }
+            var t = document.getElementById('target').value;
+            var fd = new FormData(); fd.append('file', f);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload?target=' + t, true);
+            xhr.upload.onprogress = function (e) {
+                if (e.lengthComputable) {
+                    document.getElementById('uploadProgress').value = Math.round(e.loaded / e.total * 100);
+                }
+            };
+            xhr.onload = function () {
+                try {
+                    var j = JSON.parse(xhr.responseText);
+                    document.getElementById('result').innerText = JSON.stringify(j, null, 2);
+                    if (j.project_name) {
+                        refreshPartitions();
+                    }
+                }
+                catch (e) {
+                    document.getElementById('result').innerText = xhr.responseText;
+                }
+                document.getElementById('uploadProgress').value = 0;
+            };
+            xhr.onerror = function () {
+                alert('Upload failed');
+                document.getElementById('uploadProgress').value = 0;
+            };
+            xhr.send(fd);
+        }
+
+        function doCANUpload() {
+            var f = document.getElementById('CANfile').files[0];
+            if (!f) {
+                alert('Choose file');
+                return;
+            }
+            var t = document.getElementById('targetECU').value;
+            var fd = new FormData(); fd.append('file', f);
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', '/flash?targetECU=' + t, true);
+            xhr.upload.onprogress = function (e) {
+                if (e.lengthComputable) {
+                    document.getElementById('flashProgress').value = Math.round(e.loaded / e.total * 100);
+                }
+            };
+            xhr.onload = function () {
+                // try {
+                //     var j = JSON.parse(xhr.responseText);
+                //     document.getElementById('result').innerText = JSON.stringify(j, null, 2);
+                //     if (j.project_name) {
+                //         refreshPartitions();
+                //     }
+                // }
+                // catch (e) {
+                //     document.getElementById('result').innerText = xhr.responseText;
+                // }
+                document.getElementById('flashProgress').value = 0;
+            };
+            xhr.onerror = function () {
+                alert('Upload failed');
+                document.getElementById('flashProgress').value = 0;
+            };
+            xhr.send(fd);
+        }
+
+        window.addEventListener('load', function () {
+            refreshPartitions();
+            // fetch('/prevboot').then(r => r.json()).then(j => { document.getElementById('bootPart').innerText = j.bootPart; document.getElementById('prevRunningPart').innerText = j.prevRunningPart; document.getElementById('recOTAPart').innerText = j.recOTAPart });
+            fetch('/odometer').then(r => r.json()).then(j => { 
+                document.getElementById('odometer').innerText = j.odometer_m;
+                document.getElementById('new_odo').value = parseInt(j.odometer_m);
+                document.getElementById('trip').innerText = j.trip_m;
+                document.getElementById('new_trip').value = parseInt(j.trip_m); 
+            });
+            fetch('/version').then(r => r.json()).then(j => { 
+                document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date) 
+            });
+        });
+    </script>
+</body>
+
+</html>

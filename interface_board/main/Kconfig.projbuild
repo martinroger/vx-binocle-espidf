@@ -1,13 +1,32 @@
 menu "Interface board configuration"
+
+    menu "Interrupt GPIOs"
+        config BUTTON_IRQ_GPIO
+            int "BUTTON interrupt GPIO"
+            default 10
+        config FULL_BEAMS_IRQ_GPIO
+            int "Full/Hi beams interrupt GPIO"
+            default 11
+            
+    endmenu
+
+    menu "5V Control"
+        config 5V_EN_GPIO
+            int "5V enable GPIO"
+            default 48
+        config 5V_AUX_EN_GPIO
+            int "5V Auxiliary enable GPIO"
+            default 47
+    endmenu
     
     menu "I²C configuration"
         config SDA_PIN
             int "SDA GPIO for I2C"
-            default 12
+            default 3
 
         config SCL_PIN
             int "SCL GPIO for I2C"
-            default 13
+            default 9
 
     endmenu
 
@@ -19,6 +38,28 @@ menu "Interface board configuration"
             help
                 Sets the default address for the ADC. 
                 0x48 for a ADS1115 without address bits set.
+        
+        config SET_HIGH_CAL_GPIO
+            int "GPIO to set high caliber sense resistor for channel A"
+            default 15
+
+        config FUEL_LEVEL_SENSE_ADC_CHANNEL
+            int "ADC channel for the fuel level sensing"
+            default 0
+        
+        config BATTERY_VOLT_SENSE_ADC_CHANNEL
+            int "ADC channel for the battery voltage sensing"
+            default 1
+
+        # choice ADC_DATA_RATE
+        #     prompt "Choose target conversion data rate"
+        #     config ADS111X_DATA_RATE_8
+        #         bool "ADS111X_DATA_RATE_8"
+        #     config ADS111X_DATA_RATE_16
+        #         bool "ADS111X_DATA_RATE_16"
+        #     config ADS111X_DATA_RATE_128
+        #         bool "ADS111X_DATA_RATE_128"
+        # endchoice
         
         config ADC_TO_SMA_POLLING_RATE_MS
             int "Polling interval to add an element to the SMA"
@@ -55,7 +96,7 @@ menu "Interface board configuration"
 
         config EXP_INT_PIN
             int "Interrupt pin for primary expander"
-            default 11
+            default 7
             help
                 Interrupt pin for the primary expander. Might be reversed logic!
 
@@ -75,29 +116,36 @@ menu "Interface board configuration"
             default 0x20
             help
                 Sets the default address value for the primary GPIO expander. 
-                0x20 for a PCF8574 with A0->A2 = 0.
+                0x20 for a TCA9555 with A0->A2 = 0.
 
     endmenu
 
     menu "MCPWM configuration"
+        config PWM_DETECT_TIMEOUT
+            int "Timeout in ms for which 0Hz and 0% will be declared for a PWM signal"
+            default 1000
+
         config LOOP_LOG_MCPWM
             bool "Read MCPWM values in main loop."
-            default true
+            default false
 
         config COOLANT_PWM_CAP_GPIO
             int "GPIO for the capture of the coolant PWM"
-            default 7
+            default 4
 
         config RPM_PWM_CAP_GPIO
             int "GPIO for the capture of the RPM pulses"
-            default 8
+            default 6
 
         config SPEED_PWM_CAP_GPIO
             int "GPIO for the capture of the speed PWM"
-            default 9 
+            default 5 
+        config MCPWM_CAP_TIMER_RESOLUTION
+            int "Resolution in Hz applied to the capture timer"
+            default 100000
     endmenu
 
-    menu "CAN interface parameters"
+    menu "CAN frames parameters"
         config SLOW_METRICS_PKG_RATE_MS
             int "Slow metrics package and queue rate in ms"
             default 500
@@ -116,17 +164,48 @@ menu "Interface board configuration"
             help
                 Default is 200ms
 
-        config CAN_RX_POLLING_RATE_MS
-            int "Polling rate on the RX side of the CAN transceiver"
-            default 10
-            help 
-                Default is 10ms
+    endmenu
 
-        config CAN_TX_POLLING_RATE_MS
-            int "Polling rate for the TX bursts of the CAN transceiver"
-            default 5
-            help
-                Default is 5ms
+    menu "Display control"
+        menu "Left Display"
+            config LD_GP0_IO
+                int "Display boot GPIO"
+                default 21
+            
+            config LD_ALIVE_IO
+                int "Display alive signal GPIO"
+                default 12 
+            
+            config LD_TXD_IO
+                int "Display TXD GPIO"
+                default 13
+            
+            config LD_RXD_IO
+                int "Display RXD GPIO"
+                default 14
+            
+
+        endmenu
+        menu "Right Display"
+            config RD_GP0_IO
+                int "Display boot GPIO"
+                default 40
+            
+            config RD_ALIVE_IO
+                int "Display alive signal GPIO"
+                default 2 
+            
+            config RD_TXD_IO
+                int "Display TXD GPIO"
+                default 42
+            
+            config RD_RXD_IO
+                int "Display RXD GPIO"
+                default 41
+            
+                
+        endmenu
+        
     endmenu
 
 endmenu

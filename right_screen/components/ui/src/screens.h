@@ -11,13 +11,12 @@ extern "C" {
 typedef struct _objects_t {
     lv_obj_t *main_scr;
     lv_obj_t *speed_scale;
-    lv_obj_t *simple_needle;
     lv_obj_t *speed;
-    lv_obj_t *fuel_bar;
     lv_obj_t *fuel_level;
     lv_obj_t *coolant;
     lv_obj_t *low_fuel_tt;
     lv_obj_t *over_temperature_tt;
+    lv_obj_t *parkingbrake_tt;
     lv_obj_t *brakes_tt;
     lv_obj_t *abs_tt;
     lv_obj_t *low_coolant_tt;
@@ -27,6 +26,13 @@ typedef struct _objects_t {
     lv_obj_t *hi_beam_tt;
     lv_obj_t *indicators_tt;
     lv_obj_t *airbag_tt;
+    lv_obj_t *speed_arc;
+    lv_obj_t *odometer;
+    lv_obj_t *trip;
+    lv_obj_t *can_state;
+    lv_obj_t *internal_state;
+    lv_obj_t *itf_state;
+    lv_obj_t *interlock_state;
 } objects_t;
 
 extern objects_t objects;
