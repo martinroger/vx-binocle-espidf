@@ -31,7 +31,6 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
 #else
     uint32_t alerts_to_enable = TWAI_ALERT_NONE;
 #endif
-
     twai_general_config_t g_config = {
         .mode = TWAI_MODE_NORMAL,
         .tx_io = (gpio_num_t)CONFIG_CAN_TX,
@@ -150,7 +149,7 @@ void CAN_TX_Task(void *pvParameters)
         {
             if (twai_transmit(&txMessage, pdMS_TO_TICKS(5)) != ESP_OK)
             {
-                ESP_LOGE(TAG, "Could not TX TWAI message!");
+                ESP_LOGD(TAG, "Could not TX TWAI message!");
             }
         }
         // vTaskDelay(pdMS_TO_TICKS(CAN_TX_POLL_MS));

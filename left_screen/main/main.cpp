@@ -124,6 +124,8 @@ int updateLVGLObjects()
 {
     int updatedElements = 0;
 
+    #ifdef CONFIG_RIGHT_SIDE_DISPLAY
+
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10))
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
@@ -133,18 +135,26 @@ int updateLVGLObjects()
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
-        lv_label_set_text_fmt(objects.speed, "%03ld", (long)speed_kph);
+        if ((long)speed_kph != (long)p_speed_kph)
+            lv_label_set_text_fmt(objects.speed, "%03ld", (long)speed_kph);
         p_speed_kph = speed_kph;
         updatedElements++;
     }
-    // if (p_rpm != rpm)
-    // {
-    //     // lv_arc_set_value(objects.rpm_arc, rpm);
-    //     lv_scale_set_line_needle_value(objects.rpm_scale,objects.rpm_needle,180,rpm/100);
-    //     lv_label_set_text_fmt(objects.rpm, "%04ld", rpm);
-    //     p_rpm = rpm;
-    // updatedElements++;
-    // }
+    #elifdef CONFIG_LEFT_SIDE_DISPLAY
+    if (p_rpm/10 != rpm/10)
+    {
+        // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
+        animateTargetArc(objects.rpm_arc, rpm );
+        // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
+        // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
+        // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
+        // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
+        // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
+        lv_label_set_text_fmt(objects.rpm, "%04ld", (long)rpm);
+        p_rpm = rpm;
+        updatedElements++;
+    }
+    #endif
     if (p_fuelLevel_pc != fuelLevel_pc)
     {
         // lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
@@ -1080,9 +1090,9 @@ extern "C" void app_main()
     ESP_LOGI(__func__, "Loading UI");
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
     ui_init();                                                               // Load the UI library and draw it
-    lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
-    static const char *scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
-    lv_scale_set_text_src(objects.speed_scale, scale_labels);
+    lv_obj_set_style_pad_radial(objects.rpm_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
+    static const char *scale_labels[10] = {"0", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000", NULL};
+    lv_scale_set_text_src(objects.rpm_scale, scale_labels);
 
     // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
     // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
@@ -1128,11 +1138,11 @@ extern "C" void app_main()
     ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
     // This probably needs to be called in a second point
     lvgl_port_lock(-1);
-    animateTargetArcWithDuration(objects.speed_arc, 2400, 1000);
+    animateTargetArcWithDuration(objects.rpm_arc, 8000, 1000);
     lvgl_port_unlock();
     vTaskDelay(pdMS_TO_TICKS(1600));
     lvgl_port_lock(-1);
-    animateTargetArcWithDuration(objects.speed_arc, 0, 500);
+    animateTargetArcWithDuration(objects.rpm_arc, 0, 500);
     lvgl_port_unlock();
     vTaskDelay(pdMS_TO_TICKS(600));
 

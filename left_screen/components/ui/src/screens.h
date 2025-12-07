@@ -10,8 +10,8 @@ extern "C" {
 
 typedef struct _objects_t {
     lv_obj_t *main_scr;
-    lv_obj_t *speed_scale;
-    lv_obj_t *speed;
+    lv_obj_t *rpm_scale;
+    lv_obj_t *rpm;
     lv_obj_t *fuel_level;
     lv_obj_t *coolant;
     lv_obj_t *low_fuel_tt;
@@ -26,7 +26,7 @@ typedef struct _objects_t {
     lv_obj_t *hi_beam_tt;
     lv_obj_t *indicators_tt;
     lv_obj_t *airbag_tt;
-    lv_obj_t *speed_arc;
+    lv_obj_t *rpm_arc;
     lv_obj_t *odometer;
     lv_obj_t *trip;
     lv_obj_t *can_state;
