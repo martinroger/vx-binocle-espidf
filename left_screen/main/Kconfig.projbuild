@@ -1,0 +1,14 @@
+menu "Display Application"
+    
+    choice DISPLAY_SIDE
+        prompt "Select the side on which the display is mounted"
+
+        config RIGHT_SIDE_DISPLAY
+            bool "Right Display Board"
+            
+        config LEFT_SIDE_DISPLAY
+            bool "Left Display Board"
+                
+        
+    endchoice
+endmenu
