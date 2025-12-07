@@ -1,3 +1,5 @@
 build/
 managed_components/
-.vscode/settings.json
+.vscode/
+partition_table/
+.devcontainer/
