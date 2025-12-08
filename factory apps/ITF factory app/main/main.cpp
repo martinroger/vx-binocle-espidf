@@ -902,7 +902,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V");
 			return ESP_FAIL;
 		}
-		vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
+		// vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
 		if (!check_RD_alive())
 		{
 			ESP_LOGE(__func__, "Could not check RD is powered up");
@@ -925,7 +925,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V AUX");
 			return ESP_FAIL;
 		}
-		vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
+		// vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
 		if (!check_LD_alive())
 		{
 			ESP_LOGE(__func__, "Could not check LD is powered up");

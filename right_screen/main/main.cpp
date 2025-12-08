@@ -844,6 +844,8 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                     break;
                 }
                 receivedBytes += 7;
+                // ESP_LOGI(__func__,"Received : %lu / %lu - %.2f %",receivedBytes,image_size,100.0*((float)receivedBytes)/((float)image_size));
+                odometer_km = receivedBytes;
             }
             else // Only part of the buffer needs to be taken in
             {
