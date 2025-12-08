@@ -346,6 +346,55 @@
               "recolor": false
             },
             {
+              "objID": "bedf1dcf-c340-46b5-df27-36753181adf3",
+              "type": "LVGLLabelWidget",
+              "left": 1,
+              "top": 70,
+              "width": 45,
+              "height": 13,
+              "customInputs": [],
+              "customOutputs": [],
+              "style": {
+                "objID": "e53c6332-616e-43e6-fdeb-35f71d63217e",
+                "useStyle": "default",
+                "conditionalStyles": [],
+                "childStyles": []
+              },
+              "timeline": [],
+              "eventHandlers": [],
+              "identifier": "voltage_lvl",
+              "leftUnit": "px",
+              "topUnit": "px",
+              "widthUnit": "content",
+              "heightUnit": "content",
+              "children": [],
+              "widgetFlags": "",
+              "hiddenFlagType": "literal",
+              "clickableFlag": false,
+              "clickableFlagType": "literal",
+              "flagScrollbarMode": "",
+              "flagScrollDirection": "",
+              "checkedStateType": "literal",
+              "disabledStateType": "literal",
+              "states": "",
+              "localStyles": {
+                "objID": "709d05d5-f4ab-4188-8563-00e41d2e0b0b",
+                "definition": {
+                  "MAIN": {
+                    "DEFAULT": {
+                      "text_font": "whiteRabbit_16px",
+                      "align": "CENTER"
+                    }
+                  }
+                }
+              },
+              "groupIndex": 0,
+              "text": "99.9V",
+              "textType": "literal",
+              "longMode": "WRAP",
+              "recolor": false
+            },
+            {
               "objID": "20c892fc-86c8-4682-8ba3-3e9548feaaf5",
               "type": "LVGLLabelWidget",
               "left": 21,

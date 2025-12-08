@@ -13,6 +13,7 @@ typedef struct _objects_t {
     lv_obj_t *rpm_scale;
     lv_obj_t *rpm;
     lv_obj_t *fuel_level;
+    lv_obj_t *voltage_lvl;
     lv_obj_t *coolant;
     lv_obj_t *low_fuel_tt;
     lv_obj_t *over_temperature_tt;

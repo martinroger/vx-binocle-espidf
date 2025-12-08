@@ -1236,7 +1236,7 @@
                 "conditionalStyles": [],
                 "childStyles": []
               },
-              "hiddenInEditor": true,
+              "hiddenInEditor": false,
               "timeline": [],
               "eventHandlers": [],
               "identifier": "speed_arc",
@@ -1592,6 +1592,55 @@
               },
               "groupIndex": 0,
               "text": "ITLK",
+              "textType": "literal",
+              "longMode": "WRAP",
+              "recolor": false
+            },
+            {
+              "objID": "9c2ebb1c-81fd-4df7-88a2-6f74d870565d",
+              "type": "LVGLLabelWidget",
+              "left": 1,
+              "top": 70,
+              "width": 45,
+              "height": 13,
+              "customInputs": [],
+              "customOutputs": [],
+              "style": {
+                "objID": "b3ed8562-c25c-4e9f-a4f6-1f9e5c75ca55",
+                "useStyle": "default",
+                "conditionalStyles": [],
+                "childStyles": []
+              },
+              "timeline": [],
+              "eventHandlers": [],
+              "identifier": "voltage_lvl",
+              "leftUnit": "px",
+              "topUnit": "px",
+              "widthUnit": "content",
+              "heightUnit": "content",
+              "children": [],
+              "widgetFlags": "",
+              "hiddenFlagType": "literal",
+              "clickableFlag": false,
+              "clickableFlagType": "literal",
+              "flagScrollbarMode": "",
+              "flagScrollDirection": "",
+              "checkedStateType": "literal",
+              "disabledStateType": "literal",
+              "states": "",
+              "localStyles": {
+                "objID": "195592a5-ff83-4257-96e5-572b12e42262",
+                "definition": {
+                  "MAIN": {
+                    "DEFAULT": {
+                      "text_font": "whiteRabbit_16px",
+                      "align": "CENTER"
+                    }
+                  }
+                }
+              },
+              "groupIndex": 0,
+              "text": "99.9V",
               "textType": "literal",
               "longMode": "WRAP",
               "recolor": false

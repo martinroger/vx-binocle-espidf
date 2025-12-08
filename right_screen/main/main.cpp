@@ -79,7 +79,8 @@ struct board_ST
 
 // Used only to selectively update in LVGL
 bool screen_interlock_OK, p_screen_interlock_OK = false; // Checks opposite display status
-uint8_t p_internal_ST = XDB_SM_ST_DEGRADED;              // Checks internal state in the LVGL elements update routine
+int64_t last_interlock_ts;
+uint8_t p_internal_ST = XDB_SM_ST_DEGRADED; // Checks internal state in the LVGL elements update routine
 uint8_t itf_board_st, p_itf_board_st = XDB_SM_ST_DEGRADED;
 bool p_CAN_RX_TimedOut = true;
 
@@ -124,6 +125,8 @@ int updateLVGLObjects()
 {
     int updatedElements = 0;
 
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10))
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
@@ -133,55 +136,85 @@ int updateLVGLObjects()
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
-        lv_label_set_text_fmt(objects.speed, "%03ld", (long)speed_kph);
+        if ((long)round(speed_kph) != (long)round(p_speed_kph))
+            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph));
         p_speed_kph = speed_kph;
         updatedElements++;
     }
-    // if (p_rpm != rpm)
-    // {
-    //     // lv_arc_set_value(objects.rpm_arc, rpm);
-    //     lv_scale_set_line_needle_value(objects.rpm_scale,objects.rpm_needle,180,rpm/100);
-    //     lv_label_set_text_fmt(objects.rpm, "%04ld", rpm);
-    //     p_rpm = rpm;
-    // updatedElements++;
-    // }
-    if (p_fuelLevel_pc != fuelLevel_pc)
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+    if (p_rpm / 10 != rpm / 10)
+    {
+        // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
+        animateTargetArc(objects.rpm_arc, rpm);
+        // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
+        // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
+        // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
+        // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
+        // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
+        lv_label_set_text_fmt(objects.rpm, "%04ld", (long)((rpm / 10) * 10));
+        p_rpm = rpm;
+        updatedElements++;
+    }
+#endif
+    if (CAN_RX_TimedOut) // Turn all on if there is a CAN Timeout
+    {
+        screen_interlock_OK = false;
+        indicatorsOn = true;
+        rightTurnOn = true;
+        leftTurnOn = true;
+        highBeamOn = true;
+        brakesOn = true;
+        absOn = true;
+        parkingBrakeOn = true;
+        lowCoolantOn = true;
+        batteryOn = true;
+        milOn = true;
+        airbagOn = true;
+        ESP_LOGD(__func__, "Turn all on - placeholder");
+    }
+
+    if ((esp_timer_get_time() - last_interlock_ts) > 1000000)
+        screen_interlock_OK = false;
+
+    if (p_fuelLevel_pc != fuelLevel_pc) // Fuel level percentage
     {
         // lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
         lv_label_set_text_fmt(objects.fuel_level, "%03d", fuelLevel_pc);
         p_fuelLevel_pc = fuelLevel_pc;
         updatedElements++;
     }
-    if (p_coolant_degC != coolant_degC)
+    if (p_coolant_degC != coolant_degC) // Coolant temperature
     {
         // lv_bar_set_value(objects.coolant_bar, coolant_degC, LV_ANIM_OFF);
         lv_label_set_text_fmt(objects.coolant, "%03d", coolant_degC);
         p_coolant_degC = coolant_degC;
         updatedElements++;
     }
-    // Low Fuel computed TT
-    if (p_lowFuelOn != lowFuelOn)
+    if (p_lvVoltage_v != lvVoltage_v) // 12V Voltage value
+    {
+        lv_label_set_text_fmt(objects.voltage_lvl, "%04.1fV", lvVoltage_v);
+        p_lvVoltage_v = lvVoltage_v;
+        updatedElements++;
+    }
+    if (p_lowFuelOn != lowFuelOn) // Low Fuel computed TT
     {
         lv_obj_set_style_image_opa(objects.low_fuel_tt, lowFuelOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_lowFuelOn = lowFuelOn;
         updatedElements++;
     }
-    // Over temperature computer TT
-    if (p_overTemperatureOn != overTemperatureOn)
+    if (p_overTemperatureOn != overTemperatureOn) // Over temperature computer TT
     {
         lv_obj_set_style_image_opa(objects.over_temperature_tt, overTemperatureOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_overTemperatureOn = overTemperatureOn;
         updatedElements++;
     }
-    // Left to right screen interlock
-    if (p_screen_interlock_OK != screen_interlock_OK)
+    if (p_screen_interlock_OK != screen_interlock_OK) // Left to right screen interlock
     {
         lv_obj_set_style_opa(objects.interlock_state, screen_interlock_OK ? LV_OPA_TRANSP : LV_OPA_COVER, LV_STATE_DEFAULT);
         p_screen_interlock_OK = screen_interlock_OK;
         updatedElements++;
     }
-    // Internal state degraded or fault
-    if (p_internal_ST != display_board_st.internal_ST)
+    if (p_internal_ST != display_board_st.internal_ST) // Internal state degraded or fault
     {
         switch (display_board_st.internal_ST)
         {
@@ -200,8 +233,7 @@ int updateLVGLObjects()
         p_internal_ST = display_board_st.internal_ST;
         updatedElements++;
     }
-    // Same for CAN-detected ITF board state
-    if (p_itf_board_st != itf_board_st)
+    if (p_itf_board_st != itf_board_st) // Same for CAN-detected ITF board state
     {
         switch (itf_board_st)
         {
@@ -220,114 +252,96 @@ int updateLVGLObjects()
         p_itf_board_st = itf_board_st;
         updatedElements++;
     }
-    // Same for CAN Timed out indicator
-    if (CAN_RX_TimedOut != p_CAN_RX_TimedOut)
+    if (CAN_RX_TimedOut != p_CAN_RX_TimedOut) // Same for CAN Timed out indicator
     {
         lv_obj_set_style_opa(objects.can_state, CAN_RX_TimedOut ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_CAN_RX_TimedOut = CAN_RX_TimedOut;
         updatedElements++;
     }
-    // Odometer. Might need comparison at the uint level
-    if (p_odometer_km != odometer_km)
+    if (p_odometer_km != odometer_km) // Odometer. Might need comparison at the uint level
     {
         lv_label_set_text_fmt(objects.odometer, "%06.0f", odometer_km);
         p_odometer_km = odometer_km;
         updatedElements++;
     }
-    // Trip, might need comparison at the uint level
-    if (p_trip_km != trip_km)
+    if (p_trip_km != trip_km) // Trip, might need comparison at the uint level
     {
-        lv_label_set_text_fmt(objects.trip, "%03.1f", trip_km);
+        lv_label_set_text_fmt(objects.trip, "%05.1f", trip_km);
         p_trip_km = trip_km;
         updatedElements++;
     }
-    // No receiver for lvVoltage_v
-
-    // Double indicators arrow
-    if (p_indicatorsOn != indicatorsOn)
+    if (p_indicatorsOn != indicatorsOn) // Double indicators arrow
     {
         lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_indicatorsOn = indicatorsOn;
         updatedElements++;
     }
-    // Right indicator
-    if (p_rightTurnOn != rightTurnOn)
+    if (p_rightTurnOn != rightTurnOn) // Right indicator
     {
         // lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_rightTurnOn = rightTurnOn;
         updatedElements++;
     }
-    // Right indicator
-    if (p_leftTurnOn != leftTurnOn)
+    if (p_leftTurnOn != leftTurnOn) // Right indicator
     {
         // lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_leftTurnOn = leftTurnOn;
         updatedElements++;
     }
-    // High beams
-    if (p_highBeamOn != highBeamOn)
+    if (p_highBeamOn != highBeamOn) // High beams
     {
         lv_obj_set_style_image_opa(objects.hi_beam_tt, highBeamOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_highBeamOn = highBeamOn;
         updatedElements++;
     }
-    // Brakes
-    if (p_brakesOn != brakesOn)
+    if (p_brakesOn != brakesOn) // Brakes
     {
         lv_obj_set_style_image_opa(objects.brakes_tt, brakesOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_brakesOn = brakesOn;
         updatedElements++;
     }
-    // ABS
-    if (p_absOn != absOn)
+    if (p_absOn != absOn) // ABS
     {
         lv_obj_set_style_image_opa(objects.abs_tt, absOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_absOn = absOn;
         updatedElements++;
     }
-    // Parking Brake
-    if (p_parkingBrakeOn != parkingBrakeOn)
+    if (p_parkingBrakeOn != parkingBrakeOn) // Parking Brake
     {
         lv_obj_set_style_image_opa(objects.parkingbrake_tt, parkingBrakeOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_parkingBrakeOn = parkingBrakeOn;
         updatedElements++;
     }
-    // Low Coolant
-    if (p_lowCoolantOn != lowCoolantOn)
+    if (p_lowCoolantOn != lowCoolantOn) // Low Coolant
     {
         lv_obj_set_style_image_opa(objects.low_coolant_tt, lowCoolantOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_lowCoolantOn = lowCoolantOn;
         updatedElements++;
     }
-    // Battery/Alternator
-    if (p_batteryOn != batteryOn)
+    if (p_batteryOn != batteryOn) // Battery/Alternator
     {
         lv_obj_set_style_image_opa(objects.battery_tt, batteryOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_batteryOn = batteryOn;
         updatedElements++;
     }
-    // Low Oil Pressure
-    if (p_lowOilOn != lowOilOn)
+    if (p_lowOilOn != lowOilOn) // Low Oil Pressure
     {
         lv_obj_set_style_image_opa(objects.low_oil_tt, lowOilOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_lowOilOn = lowOilOn;
         updatedElements++;
     }
-    // MIL
-    if (p_milOn != milOn)
+    if (p_milOn != milOn) // MIL
     {
         lv_obj_set_style_image_opa(objects.mil_tt, milOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_milOn = milOn;
         updatedElements++;
     }
-    // Airbag
-    if (p_airbagOn != airbagOn)
+    if (p_airbagOn != airbagOn) // Airbag
     {
         lv_obj_set_style_image_opa(objects.airbag_tt, airbagOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_airbagOn = airbagOn;
         updatedElements++;
     }
-
     return updatedElements;
 }
 
@@ -396,7 +410,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         if (binocan_itf_active_hi_lo_itf_abs_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_abs_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_ON_CHOICE ? absOn = true : absOn = false;
+            absOn = !(binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -406,7 +420,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_airbag_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_ON_CHOICE ? airbagOn = true : airbagOn = false;
+            airbagOn = !(binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -416,7 +430,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_cel_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_cel_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_cel_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_cel_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_CEL_AL_TT_ON_CHOICE ? milOn = true : milOn = false;
+            milOn = !(binocan_itf_active_hi_lo_itf_cel_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_cel_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_CEL_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -426,7 +440,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt))
         {
-            binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_HI_BEAMS_AH_TT_ON_CHOICE ? highBeamOn = true : highBeamOn = false;
+            highBeamOn = (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_HI_BEAMS_AH_TT_ON_CHOICE);
         }
         else
         {
@@ -436,7 +450,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_brake_low_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_brake_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BRAKE_LOW_AL_TT_ON_CHOICE ? brakesOn = true : brakesOn = false;
+            brakesOn = !(binocan_itf_active_hi_lo_itf_brake_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BRAKE_LOW_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -446,7 +460,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_coolant_low_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_coolant_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AL_TT_ON_CHOICE ? lowCoolantOn = true : lowCoolantOn = false;
+            lowCoolantOn = !(binocan_itf_active_hi_lo_itf_coolant_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -456,7 +470,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_fuel_low_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_fuel_low_tt))
         {
-            binocan_itf_active_hi_lo_itf_fuel_low_tt_decode(binocan_itf_active_hi_lo_msg.itf_fuel_low_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_FUEL_LOW_TT_ON_CHOICE ? lowFuelOn = true : lowFuelOn = false;
+            lowFuelOn = (binocan_itf_active_hi_lo_itf_fuel_low_tt_decode(binocan_itf_active_hi_lo_msg.itf_fuel_low_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_FUEL_LOW_TT_ON_CHOICE);
         }
         else
         {
@@ -466,7 +480,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OIL_PRESSURE_AL_TT_ON_CHOICE ? lowOilOn = true : lowOilOn = false;
+            lowOilOn = !(binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OIL_PRESSURE_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -476,7 +490,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_alternator_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_alternator_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALTERNATOR_AL_TT_ON_CHOICE ? batteryOn = true : batteryOn = false;
+            batteryOn = !(binocan_itf_active_hi_lo_itf_alternator_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALTERNATOR_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -486,7 +500,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_over_temperature_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_over_temperature_tt))
         {
-            binocan_itf_active_hi_lo_itf_over_temperature_tt_decode(binocan_itf_active_hi_lo_msg.itf_over_temperature_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OVER_TEMPERATURE_TT_ON_CHOICE ? overTemperatureOn = true : overTemperatureOn = false;
+            overTemperatureOn = (binocan_itf_active_hi_lo_itf_over_temperature_tt_decode(binocan_itf_active_hi_lo_msg.itf_over_temperature_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OVER_TEMPERATURE_TT_ON_CHOICE);
         }
         else
         {
@@ -496,7 +510,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_parking_brake_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_parking_brake_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_PARKING_BRAKE_AL_TT_ON_CHOICE ? parkingBrakeOn = true : parkingBrakeOn = false;
+            parkingBrakeOn = !(binocan_itf_active_hi_lo_itf_parking_brake_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_PARKING_BRAKE_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -506,10 +520,8 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) && binocan_itf_active_hi_lo_itf_right_turn_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt))
         {
-            (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE) ||
-                    (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE)
-                ? indicatorsOn = true
-                : indicatorsOn = false;
+            indicatorsOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE) ||
+                           (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
             leftTurnOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE);
             rightTurnOn = (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
         }
@@ -523,7 +535,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_ignition_ah_st_is_in_range(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st))
         {
-            binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_ON_CHOICE ? ignitionST = true : ignitionST = false;
+            ignitionST = (binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_ON_CHOICE);
         }
         else
         {
@@ -547,7 +559,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_slow_metrics_itf_coolant_temp_is_in_range(binocan_itf_slow_metrics_msg.itf_coolant_temp))
         {
-            coolant_degC = (uint8_t)binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp);
+            coolant_degC = (uint8_t)round(binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp));
         }
         else
         {
@@ -558,7 +570,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_slow_metrics_itf_fuel_level_pc_is_in_range(binocan_itf_slow_metrics_msg.itf_fuel_level_pc))
         {
-            fuelLevel_pc = (uint8_t)binocan_itf_slow_metrics_itf_fuel_level_pc_decode(binocan_itf_slow_metrics_msg.itf_fuel_level_pc);
+            fuelLevel_pc = (uint8_t)round(binocan_itf_slow_metrics_itf_fuel_level_pc_decode(binocan_itf_slow_metrics_msg.itf_fuel_level_pc));
         }
         else
         {
@@ -591,7 +603,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         if (binocan_itf_fast_metrics_itf_rpm_is_in_range(binocan_itf_fast_metrics_msg.itf_rpm))
         {
-            rpm = (uint32_t)binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm);
+            rpm = (uint32_t)round(binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm));
         }
         else
         {
@@ -703,6 +715,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
         {
             screen_interlock_OK = (binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
+            last_interlock_ts = esp_timer_get_time();
         }
         else
         {
@@ -726,6 +739,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
         {
             screen_interlock_OK = (binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
+            last_interlock_ts = esp_timer_get_time();
         }
         else
         {
@@ -803,7 +817,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             }
             else
             {
-                ESP_LOGI(__func__,"Flow Control Frame sent.");
+                ESP_LOGI(__func__, "Flow Control Frame sent.");
             }
             FC_sent = true;
             break; // Successful break
@@ -1079,10 +1093,16 @@ extern "C" void app_main()
     // UI loading and mofidifiers
     ESP_LOGI(__func__, "Loading UI");
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
-    ui_init();                                                               // Load the UI library and draw it
+    ui_init(); // Load the UI library and draw it
+#ifdef CONFIG_LEFT_SIDE_DISPLAY
+    lv_obj_set_style_pad_radial(objects.rpm_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
+    static const char *scale_labels[10] = {"0", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000", NULL};
+    lv_scale_set_text_src(objects.rpm_scale, scale_labels);
+#elifdef CONFIG_RIGHT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     static const char *scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
     lv_scale_set_text_src(objects.speed_scale, scale_labels);
+#endif
 
     // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
     // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
@@ -1128,11 +1148,19 @@ extern "C" void app_main()
     ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
     // This probably needs to be called in a second point
     lvgl_port_lock(-1);
+#ifdef CONFIG_LEFT_SIDE_DISPLAY
+    animateTargetArcWithDuration(objects.rpm_arc, 8000, 1000);
+    lvgl_port_unlock();
+    vTaskDelay(pdMS_TO_TICKS(1600));
+    lvgl_port_lock(-1);
+    animateTargetArcWithDuration(objects.rpm_arc, 0, 500);
+#elifdef CONFIG_RIGHT_SIDE_DISPLAY
     animateTargetArcWithDuration(objects.speed_arc, 2400, 1000);
     lvgl_port_unlock();
     vTaskDelay(pdMS_TO_TICKS(1600));
     lvgl_port_lock(-1);
     animateTargetArcWithDuration(objects.speed_arc, 0, 500);
+#endif
     lvgl_port_unlock();
     vTaskDelay(pdMS_TO_TICKS(600));
 

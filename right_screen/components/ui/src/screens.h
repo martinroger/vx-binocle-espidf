@@ -33,6 +33,7 @@ typedef struct _objects_t {
     lv_obj_t *internal_state;
     lv_obj_t *itf_state;
     lv_obj_t *interlock_state;
+    lv_obj_t *voltage_lvl;
 } objects_t;
 
 extern objects_t objects;
