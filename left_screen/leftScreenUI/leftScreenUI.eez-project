@@ -1288,7 +1288,7 @@
               "groupIndex": 0,
               "rangeMin": 0,
               "rangeMinType": "literal",
-              "rangeMax": 2400,
+              "rangeMax": 8000,
               "rangeMaxType": "literal",
               "value": 500,
               "valueType": "literal",

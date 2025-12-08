@@ -79,7 +79,8 @@ struct board_ST
 
 // Used only to selectively update in LVGL
 bool screen_interlock_OK, p_screen_interlock_OK = false; // Checks opposite display status
-uint8_t p_internal_ST = XDB_SM_ST_DEGRADED;              // Checks internal state in the LVGL elements update routine
+int64_t last_interlock_ts;
+uint8_t p_internal_ST = XDB_SM_ST_DEGRADED; // Checks internal state in the LVGL elements update routine
 uint8_t itf_board_st, p_itf_board_st = XDB_SM_ST_DEGRADED;
 bool p_CAN_RX_TimedOut = true;
 
@@ -124,7 +125,7 @@ int updateLVGLObjects()
 {
     int updatedElements = 0;
 
-    #ifdef CONFIG_RIGHT_SIDE_DISPLAY
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
 
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10))
     {
@@ -140,11 +141,11 @@ int updateLVGLObjects()
         p_speed_kph = speed_kph;
         updatedElements++;
     }
-    #elifdef CONFIG_LEFT_SIDE_DISPLAY
-    if (p_rpm/10 != rpm/10)
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+    if (p_rpm / 10 != rpm / 10)
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
-        animateTargetArc(objects.rpm_arc, rpm );
+        animateTargetArc(objects.rpm_arc, rpm);
         // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
@@ -154,8 +155,13 @@ int updateLVGLObjects()
         p_rpm = rpm;
         updatedElements++;
     }
-    #endif
-    if (p_fuelLevel_pc != fuelLevel_pc)
+#endif
+if (CAN_RX_TimedOut)
+{
+    ESP_LOGW(__func__,"Turn all on - placeholder");
+}    
+
+if (p_fuelLevel_pc != fuelLevel_pc)
     {
         // lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
         lv_label_set_text_fmt(objects.fuel_level, "%03d", fuelLevel_pc);
@@ -184,6 +190,8 @@ int updateLVGLObjects()
         updatedElements++;
     }
     // Left to right screen interlock
+    if((esp_timer_get_time()-last_interlock_ts)>1000000)
+        screen_interlock_OK = false;
     if (p_screen_interlock_OK != screen_interlock_OK)
     {
         lv_obj_set_style_opa(objects.interlock_state, screen_interlock_OK ? LV_OPA_TRANSP : LV_OPA_COVER, LV_STATE_DEFAULT);
@@ -406,7 +414,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         if (binocan_itf_active_hi_lo_itf_abs_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_abs_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_ON_CHOICE ? absOn = true : absOn = false;
+            absOn = !(binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -416,7 +424,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_airbag_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_ON_CHOICE ? airbagOn = true : airbagOn = false;
+            airbagOn =!(binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -713,6 +721,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
         {
             screen_interlock_OK = (binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
+            last_interlock_ts = esp_timer_get_time();
         }
         else
         {
@@ -736,6 +745,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
         {
             screen_interlock_OK = (binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
+            last_interlock_ts = esp_timer_get_time();
         }
         else
         {
@@ -813,7 +823,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             }
             else
             {
-                ESP_LOGI(__func__,"Flow Control Frame sent.");
+                ESP_LOGI(__func__, "Flow Control Frame sent.");
             }
             FC_sent = true;
             break; // Successful break
@@ -1089,7 +1099,7 @@ extern "C" void app_main()
     // UI loading and mofidifiers
     ESP_LOGI(__func__, "Loading UI");
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
-    ui_init();                                                               // Load the UI library and draw it
+    ui_init();                                                             // Load the UI library and draw it
     lv_obj_set_style_pad_radial(objects.rpm_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     static const char *scale_labels[10] = {"0", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000", NULL};
     lv_scale_set_text_src(objects.rpm_scale, scale_labels);

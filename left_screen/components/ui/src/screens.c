@@ -264,7 +264,7 @@ void create_screen_main_scr() {
             objects.rpm_arc = obj;
             lv_obj_set_pos(obj, 0, 0);
             lv_obj_set_size(obj, 478, 478);
-            lv_arc_set_range(obj, 0, 2400);
+            lv_arc_set_range(obj, 0, 8000);
             lv_arc_set_value(obj, 500);
             lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);

@@ -1,8 +1,6 @@
 {
   "navigation": {
-    "selectedUserPageObject": "[../../right_screen/rightScreenUI/rightScreenUI.eez-project]:/userPages/0",
-    "selectedThemeObject": "[../../right_screen/rightScreenUI/rightScreenUI.eez-project]:/themes/0",
-    "selectedBitmapObject": "[../../right_screen/rightScreenUI/rightScreenUI.eez-project]:/bitmaps/12",
+    "selectedUserPageObject": "[leftScreenUI.eez-project]:/userPages/0",
     "subnavigationSelectedItems": {}
   },
   "layoutModel": {
@@ -199,11 +197,11 @@
                   "children": [
                     {
                       "type": "tab",
-                      "id": "#d36f31e8-aab2-4508-b20d-91130c7d1c67",
+                      "id": "#3afc4b58-7a14-4856-8d87-272db039489d",
                       "name": "mainScr",
                       "component": "editor",
                       "config": {
-                        "objectPath": "[../../right_screen/rightScreenUI/rightScreenUI.eez-project]:/userPages/0",
+                        "objectPath": "[leftScreenUI.eez-project]:/userPages/0",
                         "permanent": false
                       },
                       "icon": "svg:page"
@@ -984,18 +982,19 @@
     "[leftScreenUI.eez-project]:/userPages/0[flow-state]": {
       "selection": {
         "0": {
-          "0": {
+          "0": {},
+          "1": {},
+          "21": {
             "$selected": true
-          },
-          "1": {}
+          }
         }
       },
       "transform": {
         "translate": {
           "x": -243.8825757575758,
-          "y": -526.4242424242425
+          "y": -220.4242424242425
         },
-        "scale": 1.25
+        "scale": 1
       },
       "timeline": {
         "isEditorActive": false,
