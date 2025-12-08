@@ -168,6 +168,7 @@ int updateLVGLObjects()
         parkingBrakeOn = true;
         lowCoolantOn = true;
         batteryOn = true;
+        lowOilOn = true;
         milOn = true;
         airbagOn = true;
         ESP_LOGD(__func__, "Turn all on - placeholder");
