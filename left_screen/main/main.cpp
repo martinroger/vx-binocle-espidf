@@ -136,8 +136,8 @@ int updateLVGLObjects()
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
-        if ((long)speed_kph != (long)p_speed_kph)
-            lv_label_set_text_fmt(objects.speed, "%03ld", (long)speed_kph);
+        if ((long)round(speed_kph) != (long)round(p_speed_kph))
+            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph));
         p_speed_kph = speed_kph;
         updatedElements++;
     }
@@ -151,17 +151,17 @@ int updateLVGLObjects()
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
-        lv_label_set_text_fmt(objects.rpm, "%04ld", (long)rpm);
+        lv_label_set_text_fmt(objects.rpm, "%04ld", (long)((rpm / 10) * 10));
         p_rpm = rpm;
         updatedElements++;
     }
 #endif
-if (CAN_RX_TimedOut)
-{
-    ESP_LOGW(__func__,"Turn all on - placeholder");
-}    
+    if (CAN_RX_TimedOut)
+    {
+        ESP_LOGW(__func__, "Turn all on - placeholder");
+    }
 
-if (p_fuelLevel_pc != fuelLevel_pc)
+    if (p_fuelLevel_pc != fuelLevel_pc)
     {
         // lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
         lv_label_set_text_fmt(objects.fuel_level, "%03d", fuelLevel_pc);
@@ -190,7 +190,7 @@ if (p_fuelLevel_pc != fuelLevel_pc)
         updatedElements++;
     }
     // Left to right screen interlock
-    if((esp_timer_get_time()-last_interlock_ts)>1000000)
+    if ((esp_timer_get_time() - last_interlock_ts) > 1000000)
         screen_interlock_OK = false;
     if (p_screen_interlock_OK != screen_interlock_OK)
     {
@@ -424,7 +424,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_airbag_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt))
         {
-            airbagOn =!(binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_ON_CHOICE);
+            airbagOn = !(binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -434,7 +434,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_cel_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_cel_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_cel_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_cel_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_CEL_AL_TT_ON_CHOICE ? milOn = true : milOn = false;
+            milOn = !(binocan_itf_active_hi_lo_itf_cel_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_cel_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_CEL_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -444,7 +444,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt))
         {
-            binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_HI_BEAMS_AH_TT_ON_CHOICE ? highBeamOn = true : highBeamOn = false;
+            highBeamOn = (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_HI_BEAMS_AH_TT_ON_CHOICE);
         }
         else
         {
@@ -454,7 +454,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_brake_low_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_brake_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BRAKE_LOW_AL_TT_ON_CHOICE ? brakesOn = true : brakesOn = false;
+            brakesOn = !(binocan_itf_active_hi_lo_itf_brake_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BRAKE_LOW_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -464,7 +464,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_coolant_low_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_coolant_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AL_TT_ON_CHOICE ? lowCoolantOn = true : lowCoolantOn = false;
+            lowCoolantOn = !(binocan_itf_active_hi_lo_itf_coolant_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -474,7 +474,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_fuel_low_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_fuel_low_tt))
         {
-            binocan_itf_active_hi_lo_itf_fuel_low_tt_decode(binocan_itf_active_hi_lo_msg.itf_fuel_low_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_FUEL_LOW_TT_ON_CHOICE ? lowFuelOn = true : lowFuelOn = false;
+            lowFuelOn = (binocan_itf_active_hi_lo_itf_fuel_low_tt_decode(binocan_itf_active_hi_lo_msg.itf_fuel_low_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_FUEL_LOW_TT_ON_CHOICE);
         }
         else
         {
@@ -484,7 +484,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OIL_PRESSURE_AL_TT_ON_CHOICE ? lowOilOn = true : lowOilOn = false;
+            lowOilOn = !(binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OIL_PRESSURE_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -494,7 +494,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_alternator_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_alternator_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALTERNATOR_AL_TT_ON_CHOICE ? batteryOn = true : batteryOn = false;
+            batteryOn = !(binocan_itf_active_hi_lo_itf_alternator_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALTERNATOR_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -504,7 +504,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_over_temperature_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_over_temperature_tt))
         {
-            binocan_itf_active_hi_lo_itf_over_temperature_tt_decode(binocan_itf_active_hi_lo_msg.itf_over_temperature_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OVER_TEMPERATURE_TT_ON_CHOICE ? overTemperatureOn = true : overTemperatureOn = false;
+            overTemperatureOn = (binocan_itf_active_hi_lo_itf_over_temperature_tt_decode(binocan_itf_active_hi_lo_msg.itf_over_temperature_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OVER_TEMPERATURE_TT_ON_CHOICE);
         }
         else
         {
@@ -514,7 +514,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_parking_brake_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt))
         {
-            binocan_itf_active_hi_lo_itf_parking_brake_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_PARKING_BRAKE_AL_TT_ON_CHOICE ? parkingBrakeOn = true : parkingBrakeOn = false;
+            parkingBrakeOn = !(binocan_itf_active_hi_lo_itf_parking_brake_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_PARKING_BRAKE_AL_TT_ON_CHOICE);
         }
         else
         {
@@ -524,10 +524,8 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) && binocan_itf_active_hi_lo_itf_right_turn_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt))
         {
-            (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE) ||
-                    (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE)
-                ? indicatorsOn = true
-                : indicatorsOn = false;
+            indicatorsOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE) ||
+                           (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
             leftTurnOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE);
             rightTurnOn = (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
         }
@@ -541,7 +539,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_active_hi_lo_itf_ignition_ah_st_is_in_range(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st))
         {
-            binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_ON_CHOICE ? ignitionST = true : ignitionST = false;
+            ignitionST = (binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_ON_CHOICE);
         }
         else
         {
@@ -565,7 +563,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_slow_metrics_itf_coolant_temp_is_in_range(binocan_itf_slow_metrics_msg.itf_coolant_temp))
         {
-            coolant_degC = (uint8_t)binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp);
+            coolant_degC = (uint8_t)round(binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp));
         }
         else
         {
@@ -576,7 +574,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
         if (binocan_itf_slow_metrics_itf_fuel_level_pc_is_in_range(binocan_itf_slow_metrics_msg.itf_fuel_level_pc))
         {
-            fuelLevel_pc = (uint8_t)binocan_itf_slow_metrics_itf_fuel_level_pc_decode(binocan_itf_slow_metrics_msg.itf_fuel_level_pc);
+            fuelLevel_pc = (uint8_t)round(binocan_itf_slow_metrics_itf_fuel_level_pc_decode(binocan_itf_slow_metrics_msg.itf_fuel_level_pc));
         }
         else
         {
@@ -609,7 +607,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         if (binocan_itf_fast_metrics_itf_rpm_is_in_range(binocan_itf_fast_metrics_msg.itf_rpm))
         {
-            rpm = (uint32_t)binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm);
+            rpm = (uint32_t)round(binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm));
         }
         else
         {
