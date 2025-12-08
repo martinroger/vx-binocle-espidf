@@ -599,8 +599,8 @@ CONFIG_PARTITION_TABLE_MD5=y
 #
 # Display Application
 #
-CONFIG_RIGHT_SIDE_DISPLAY=y
-# CONFIG_LEFT_SIDE_DISPLAY is not set
+# CONFIG_RIGHT_SIDE_DISPLAY is not set
+CONFIG_LEFT_SIDE_DISPLAY=y
 # end of Display Application
 
 #

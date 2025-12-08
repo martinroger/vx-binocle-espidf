@@ -908,7 +908,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Could not check RD is powered up");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check RD state");
-			disable_5V();
 			return ESP_FAIL;
 		}
 
@@ -932,7 +931,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Could not check LD is powered up");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check LD state");
-			disable_5V_AUX();
 			return ESP_FAIL;
 		}
 	}
@@ -985,7 +983,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "Could not find starter bytes, invalid image.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Uploaded binary contains no app descriptor (rejecting)");
-		disable_5V(); disable_5V_AUX();
 		return ESP_FAIL;
 	}
 	/* Copy descriptor locally before freeing the upload buffer */
@@ -1027,7 +1024,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		free(buf);
 		ESP_LOGE(__func__, "Impossible to send first frame : %s", esp_err_to_name(tx_err));
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Impossible to send FF");
-		disable_5V(); disable_5V_AUX();
 		return ESP_FAIL;
 	}
 
@@ -1041,7 +1037,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
-			disable_5V(); disable_5V_AUX();
 			return ESP_FAIL;
 		}
 		else if (rx_err != ESP_OK)
@@ -1049,7 +1044,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
-			disable_5V(); disable_5V_AUX();
 			return ESP_FAIL;
 		}
 		else
@@ -1069,7 +1063,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
-		disable_5V(); disable_5V_AUX();
 		return ESP_FAIL;
 	}
 	else
@@ -1084,7 +1077,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
-			disable_5V(); disable_5V_AUX();
 			return ESP_FAIL;
 		}
 	}
@@ -1136,8 +1128,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
-						disable_5V();
-						disable_5V_AUX();
 						return ESP_FAIL;
 					}
 					else if (rx_err != ESP_OK)
@@ -1145,7 +1135,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
-						disable_5V(); disable_5V_AUX();
 						return ESP_FAIL;
 					}
 					else
@@ -1165,7 +1154,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 					free(buf);
 					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
-					disable_5V(); disable_5V_AUX();
 					return ESP_FAIL;
 				}
 				else
@@ -1180,7 +1168,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
-						disable_5V(); disable_5V_AUX();
 						return ESP_FAIL;
 					}
 				}
@@ -1395,22 +1382,30 @@ static void start_ap_mode(void)
 
 extern "C" void app_main(void)
 {
+	ESP_LOGI(__func__,"Initialising 5V control");
+	esp_err_t V5_ctrl_err = init_5V_ctrl();
+	if (V5_ctrl_err != ESP_OK)
+		ESP_LOGE(__func__,"Could not start 5V control ");
+	V5_ctrl_err = enable_5V();
+	if (V5_ctrl_err != ESP_OK)
+		ESP_LOGE(__func__,"Could not start 5V main");
+	V5_ctrl_err = enable_5V_AUX();
+	if (V5_ctrl_err != ESP_OK)
+		ESP_LOGE(__func__,"Could not start 5V auxiliary");
+
+
+	ESP_LOGI(__func__,"Configuring XDB Check alive...");
+	esp_err_t check_alive_err = init_XDB_alive_check();
+	if (check_alive_err!=ESP_OK)
+		ESP_LOGE(__func__,"Could not start XDB check alive IOs");
+	
+	
 	ESP_LOGI(__func__, "Starting TWAI");
 	esp_err_t twai_err = initCAN(NULL);
 	if (twai_err != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not start TWAI : %s", esp_err_to_name(twai_err));
 	}
-
-	ESP_LOGI(__func__,"Initialising 5V control");
-	esp_err_t V5_ctrl_err = init_5V_ctrl();
-	if (V5_ctrl_err != ESP_OK)
-		ESP_LOGE(__func__,"Could not start 5V control ");
-
-	ESP_LOGI(__func__,"Configuring XDB Check alive...");
-	esp_err_t check_alive_err = init_XDB_alive_check();
-	if (check_alive_err!=ESP_OK)
-		ESP_LOGE(__func__,"Could not start XDB check alive IOs");
 
 	ESP_LOGI(__func__, "Init default NVS");
 	esp_err_t err = nvs_flash_init();
