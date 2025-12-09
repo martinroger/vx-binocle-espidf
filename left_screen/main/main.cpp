@@ -392,6 +392,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
     static binocan_rdb_st_t binocan_rdb_st_msg;
     static binocan_ldb_uds_req_t binocan_ldb_uds_req_msg;
 #endif
+    UDS_RESP_MSG.ss = 0;
     // Debug block
     // ESP_LOGI(__func__,"ID: 0x%04LX ",rxMsg->identifier);
     // for (int i = 0; i < rxMsg->data_length_code; i++)

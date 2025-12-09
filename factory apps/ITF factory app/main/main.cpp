@@ -850,6 +850,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	uint8_t STmin_MS = 0;
 	twai_message_t txMsg, rxMsg;
 	txMsg.extd = false;
+	txMsg.ss = false;
 	uint32_t UDSRespID = 0;
 	uint8_t CF_SN = 0x01;
 	esp_err_t tx_err;
