@@ -352,7 +352,7 @@ void itf_active_hilo_PKG(void *pvParameters)
                 active_hi_lo_grp.AH_hi_beams = !read_bitmask(raw, EXP_IO_8_BITMASK);  // Inverted
                 active_hi_lo_grp.AL_button = read_bitmask(raw, EXP_IO_9_BITMASK);
                 active_hi_lo_grp.AL_alternator = read_bitmask(raw, EXP_IO_10_BITMASK);
-                active_hi_lo_grp.AL_coolant_low = !read_bitmask(raw, EXP_IO_11_BITMASK); // Inverted
+                active_hi_lo_grp.AH_coolant_low = !read_bitmask(raw, EXP_IO_11_BITMASK); // Inverted
                 active_hi_lo_grp.AH_left_turn = !read_bitmask(raw, EXP_IO_12_BITMASK);   // Inverted
                 active_hi_lo_grp.AL_door = read_bitmask(raw, EXP_IO_13_BITMASK);
                 active_hi_lo_grp.AH_right_turn = !read_bitmask(raw, EXP_IO_14_BITMASK); // Inverted
@@ -370,7 +370,7 @@ void itf_active_hilo_PKG(void *pvParameters)
                 binocan_itf_active_hi_lo.itf_left_turn_ah_tt = binocan_itf_active_hi_lo_itf_left_turn_ah_tt_encode(active_hi_lo_grp.AH_left_turn);
                 binocan_itf_active_hi_lo.itf_abs_al_tt = binocan_itf_active_hi_lo_itf_abs_al_tt_encode(active_hi_lo_grp.AL_ABS);
                 binocan_itf_active_hi_lo.itf_door_al_tt = binocan_itf_active_hi_lo_itf_door_al_tt_encode(active_hi_lo_grp.AL_door);
-                binocan_itf_active_hi_lo.itf_coolant_low_al_tt = binocan_itf_active_hi_lo_itf_coolant_low_al_tt_encode(active_hi_lo_grp.AL_coolant_low);
+                binocan_itf_active_hi_lo.itf_coolant_low_ah_tt = binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_encode(active_hi_lo_grp.AH_coolant_low);
                 binocan_itf_active_hi_lo.itf_button_al = binocan_itf_active_hi_lo_itf_button_al_encode(active_hi_lo_grp.AL_button);
                 binocan_itf_active_hi_lo.itf_alarm_ah = binocan_itf_active_hi_lo_itf_alarm_ah_encode(active_hi_lo_grp.AH_alarm);
                 binocan_itf_active_hi_lo.itf_backlight_ah = binocan_itf_active_hi_lo_itf_backlight_ah_encode(active_hi_lo_grp.AH_backlight);
