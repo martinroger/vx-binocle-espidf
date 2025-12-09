@@ -174,7 +174,7 @@ int updateLVGLObjects()
         ESP_LOGD(__func__, "Turn all on - placeholder");
     }
 
-    if ((esp_timer_get_time() - last_interlock_ts) > 1000000)
+    if ((esp_timer_get_time() - last_interlock_ts) > 2000000) //If last interlock was over 2s ago
         screen_interlock_OK = false;
 
     if (p_fuelLevel_pc != fuelLevel_pc) // Fuel level percentage
@@ -845,7 +845,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 }
                 receivedBytes += 7;
                 // ESP_LOGI(__func__,"Received : %lu / %lu - %.2f %",receivedBytes,image_size,100.0*((float)receivedBytes)/((float)image_size));
-                odometer_km = receivedBytes;
+                odometer_km = image_size - receivedBytes;
             }
             else // Only part of the buffer needs to be taken in
             {
@@ -870,7 +870,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         else
         {
-            ESP_LOGW(__func__, "Unknown frame type received, ignoring.");
+            ESP_LOGD(__func__, "Unknown frame type received, ignoring.");
             break;
         }
     }
@@ -878,7 +878,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     default:
     {
-        ESP_LOGW(__func__, "Unknown CAN frame received: ID = 0x%03X", (uint16_t)rxMsg->identifier);
+        ESP_LOGD(__func__, "Unknown CAN frame received: ID = 0x%03X", (uint16_t)rxMsg->identifier);
     }
     break;
     }
