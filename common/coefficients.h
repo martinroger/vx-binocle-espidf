@@ -9,6 +9,8 @@
 #define COEFF_FREQ_TO_RPM_M (double)(30.0)
 #define COEFF_FREQ_TO_RPM_P (double)(0)
 
+#define COEFF_MPH_TO_KPH (double)1.609344
+
 #define COEFF_SPEED_KPH_TO_FREQ_M (double)(31285.0 / 7651.0)
 #define COEFF_SPEED_KPH_TO_FREQ_P (double)(0.0)
 #define COEFF_FREQ_TO_SPEED_KPH_M (double)(7651.0 / 31285.0)

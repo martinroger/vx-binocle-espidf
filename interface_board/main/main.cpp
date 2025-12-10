@@ -49,7 +49,9 @@ struct board_ST
     parsed_app_meta_t *app_metadata;
 } interface_board_st;
 
-// const esp_app_desc_t *app_metadata;
+uint16_t fuel_lvl_comp_factor = 1000; // Is divided by 1000.0 later
+uint16_t fuel_low_level_threshold_pc = 20;
+uint16_t coolant_overtemp_threshold_degC = 106;
 
 #pragma endregion
 
@@ -206,16 +208,16 @@ mcpwm_cap_channel_handle_t cap_chan_speed = NULL;
 
 #pragma region FreeRTOS tasks for CAN packaging
 // FreeRTOS handles
-TaskHandle_t base_slow_metrics_PKG_hdl;
-TaskHandle_t base_fast_metrics_PKG_hdl;
+TaskHandle_t itf_slow_metrics_PKG_hdl;
+TaskHandle_t itf_fast_metrics_PKG_hdl;
 // exp_act_hilo_proc_task_hdl for active high lows is already defined in tca9555_helpers because of interrupt wrapping
-TaskHandle_t base_odometer_PKG_hdl;
-TaskHandle_t interface_brd_ST_PKG_hdl;
-TaskHandle_t interface_brd_version_PKG_hdl;
+TaskHandle_t itf_odometer_PKG_hdl;
+TaskHandle_t itf_board_st_PKG_hdl;
+TaskHandle_t itf_board_version_PKG_hdl;
 
 /// @brief Packaging task for base_slow_metrics
 /// @param pvParameters
-void base_slow_metrics_PKG(void *pvParameters)
+void itf_slow_metrics_PKG(void *pvParameters)
 {
     // SMA-ed slower metrics :
     // coolant_temp
@@ -241,25 +243,25 @@ void base_slow_metrics_PKG(void *pvParameters)
             coolant_degC = 70;
         if (coolant_degC > 130)
             coolant_degC = 130;
-        interface_board_st.overTemp = (coolant_degC >= 106 ? true : false);
+        interface_board_st.overTemp = (coolant_degC >= coolant_overtemp_threshold_degC ? true : false);
         // Comment in for debug
         ESP_LOGD(TAG, "Coolant: %.2f - %.2f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0, coolant_degC);
 
         float fuel_level_raw = sma_get_avg(adc_channels[0].sma);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        float fuel_level_pc = COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P;
+        float fuel_level_pc = (float)(fuel_lvl_comp_factor / 1000.0) * COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P;
         if (fuel_level_pc > 100.0)
             fuel_level_pc = 100;
         if (fuel_level_pc < 0)
             fuel_level_pc = 0;
-        interface_board_st.lowFuel = (fuel_level_pc < 20 ? true : false);
+        interface_board_st.lowFuel = (fuel_level_pc < fuel_low_level_threshold_pc ? true : false);
 
         float lv_raw = sma_get_avg(adc_channels[1].sma);
         float lv_raw_v = lv_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float lv_v = lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P;
 
         // Comment in for debug
-        ESP_LOGD(TAG, "Fuel : %.2f - %.3fV/%.3f - %.2fR- %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v,COEFF_FUEL_FULL_V, 1000.0 * fuel_level_v / COEFF_LOW_CALIBER_CURRENT, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
+        ESP_LOGD(TAG, "Fuel : %.2f - %.3fV/%.3f - %.2fR- %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, COEFF_FUEL_FULL_V, 1000.0 * fuel_level_v / COEFF_LOW_CALIBER_CURRENT, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
 
         binocan_itf_slow_metrics.itf_coolant_temp = binocan_itf_slow_metrics_itf_coolant_temp_encode(coolant_degC);
         binocan_itf_slow_metrics.itf_fuel_level_pc = binocan_itf_slow_metrics_itf_fuel_level_pc_encode(fuel_level_pc);
@@ -274,7 +276,7 @@ void base_slow_metrics_PKG(void *pvParameters)
 
 /// @brief Packaging task for base_fast_metrics
 /// @param pvParameters
-void base_fast_metrics_PKG(void *pvParameters)
+void itf_fast_metrics_PKG(void *pvParameters)
 {
     // Only faster metrics
     // speed_kph
@@ -312,7 +314,7 @@ void base_fast_metrics_PKG(void *pvParameters)
 
 /// @brief Packaging task for base_active_hi_lo
 /// @param pvParameters
-void base_active_hilo_PKG(void *pvParameters)
+void itf_active_hilo_PKG(void *pvParameters)
 {
     // Will need to be using notifications and delay
     // Essentially direct from expander + a couple virtual telltales
@@ -350,7 +352,7 @@ void base_active_hilo_PKG(void *pvParameters)
                 active_hi_lo_grp.AH_hi_beams = !read_bitmask(raw, EXP_IO_8_BITMASK);  // Inverted
                 active_hi_lo_grp.AL_button = read_bitmask(raw, EXP_IO_9_BITMASK);
                 active_hi_lo_grp.AL_alternator = read_bitmask(raw, EXP_IO_10_BITMASK);
-                active_hi_lo_grp.AL_coolant_low = !read_bitmask(raw, EXP_IO_11_BITMASK); // Inverted
+                active_hi_lo_grp.AH_coolant_low = !read_bitmask(raw, EXP_IO_11_BITMASK); // Inverted
                 active_hi_lo_grp.AH_left_turn = !read_bitmask(raw, EXP_IO_12_BITMASK);   // Inverted
                 active_hi_lo_grp.AL_door = read_bitmask(raw, EXP_IO_13_BITMASK);
                 active_hi_lo_grp.AH_right_turn = !read_bitmask(raw, EXP_IO_14_BITMASK); // Inverted
@@ -368,7 +370,7 @@ void base_active_hilo_PKG(void *pvParameters)
                 binocan_itf_active_hi_lo.itf_left_turn_ah_tt = binocan_itf_active_hi_lo_itf_left_turn_ah_tt_encode(active_hi_lo_grp.AH_left_turn);
                 binocan_itf_active_hi_lo.itf_abs_al_tt = binocan_itf_active_hi_lo_itf_abs_al_tt_encode(active_hi_lo_grp.AL_ABS);
                 binocan_itf_active_hi_lo.itf_door_al_tt = binocan_itf_active_hi_lo_itf_door_al_tt_encode(active_hi_lo_grp.AL_door);
-                binocan_itf_active_hi_lo.itf_coolant_low_al_tt = binocan_itf_active_hi_lo_itf_coolant_low_al_tt_encode(active_hi_lo_grp.AL_coolant_low);
+                binocan_itf_active_hi_lo.itf_coolant_low_ah_tt = binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_encode(active_hi_lo_grp.AH_coolant_low);
                 binocan_itf_active_hi_lo.itf_button_al = binocan_itf_active_hi_lo_itf_button_al_encode(active_hi_lo_grp.AL_button);
                 binocan_itf_active_hi_lo.itf_alarm_ah = binocan_itf_active_hi_lo_itf_alarm_ah_encode(active_hi_lo_grp.AH_alarm);
                 binocan_itf_active_hi_lo.itf_backlight_ah = binocan_itf_active_hi_lo_itf_backlight_ah_encode(active_hi_lo_grp.AH_backlight);
@@ -389,7 +391,7 @@ void base_active_hilo_PKG(void *pvParameters)
 
 /// @brief Packaging task for the odometer and trip
 /// @param pvParameters
-void base_odometer_PKG(void *pvParameters)
+void itf_odometer_PKG(void *pvParameters)
 {
     binocan_itf_odometer_t binocan_itf_odometer;
     binocan_itf_odometer_init(&binocan_itf_odometer);
@@ -437,7 +439,7 @@ void base_odometer_PKG(void *pvParameters)
 
 /// @brief Gathering and packaging task for the internal state indicators
 /// @param pvParameters
-void interface_brd_ST_PKG(void *pvParameters)
+void itf_board_st_PKG(void *pvParameters)
 {
     temperature_sensor_handle_t temp_sensor = NULL;
     temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 100);
@@ -497,7 +499,7 @@ void interface_brd_ST_PKG(void *pvParameters)
 
 /// @brief Generates the commit and version information and regularly broadcasts them on the bus
 /// @param pvParameters
-void interface_brd_version_PKG(void *pvParameters)
+void itf_board_version_PKG(void *pvParameters)
 {
     uint8_t message_mux = 0;
     binocan_itf_board_version_t binocan_itf_board_version;
@@ -549,6 +551,7 @@ void interface_brd_version_PKG(void *pvParameters)
 #pragma region Main App
 extern "C" void app_main(void)
 {
+#pragma region OTA pre-checks
     bool rollBackPossible = esp_ota_check_rollback_is_possible();
     ESP_LOGI(__func__, "Rollback Possible ? %u", rollBackPossible);
     const esp_partition_t *runningPart = esp_ota_get_running_partition();
@@ -556,6 +559,7 @@ extern "C" void app_main(void)
     esp_ota_get_state_partition(runningPart, &imageState);
     bool firstBoot = (imageState == ESP_OTA_IMG_PENDING_VERIFY);
     ESP_LOGI(__func__, "First boot ? %u", firstBoot);
+#pragma endregion
 
     interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_INIT_CHOICE;
 
@@ -715,7 +719,7 @@ extern "C" void app_main(void)
     }
 
     // Initialize NVS and try to read persisted u32 values: odometer_m and trip_m
-    esp_err_t nvs_err = nvs_init_flash();
+    esp_err_t nvs_err = nvs_init_odo_flash(); // initialises the odo partition, subcases handled internally
     if (nvs_err != ESP_OK)
     {
         ESP_LOGW(TAG, "NVS init failed (%d). Continuing without persisted odometer/trip, invalidated and rollback on next boot.", nvs_err);
@@ -724,9 +728,10 @@ extern "C" void app_main(void)
         else
             ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
-    else
+    else // Successfully initialized the odo NVS
     {
         bool found = false;
+        // Look for odometer
         odometer_m = odometer_get(&found);
         if (found)
         {
@@ -744,7 +749,7 @@ extern "C" void app_main(void)
                     ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
             }
         }
-
+        // Look for trip
         trip_m = trip_get(&found);
         if (found)
         {
@@ -760,6 +765,78 @@ extern "C" void app_main(void)
                     esp_ota_mark_app_invalid_rollback();
                 else
                     ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
+            }
+        }
+        // Switch back to normal NVS and look for calibration values
+        esp_err_t nvs_err;
+        nvs_err = nvs_flash_init();
+        if (nvs_err == ESP_ERR_NVS_NO_FREE_PAGES || nvs_err == ESP_ERR_NVS_NEW_VERSION_FOUND)
+        {
+            nvs_err = nvs_flash_erase();
+            nvs_err = nvs_flash_init();
+        }
+        if (nvs_err != ESP_OK)
+        {
+            ESP_LOGE(TAG, "Could not init normal NVS partition");
+            if (rollBackPossible)
+                esp_ota_mark_app_invalid_rollback();
+            else
+                ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
+        }
+        else // Successfully entered base NVS
+        {
+            nvs_handle_t nvs_h;
+            nvs_err = nvs_open("storage", NVS_READWRITE, &nvs_h);
+            if (nvs_err != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Could not open normal NVS partition");
+                if (rollBackPossible)
+                    esp_ota_mark_app_invalid_rollback();
+                else
+                    ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
+            }
+            else // "storage" namespace is open for business
+            {
+                // FUel compensation factor
+                nvs_err = nvs_get_u16(nvs_h, "fuel_comp", &fuel_lvl_comp_factor);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND) // Write if not found
+                {
+                    ESP_LOGW(TAG, "Fuel compensation factor not found in memory, initializing");
+                    nvs_err = nvs_set_u16(nvs_h, "fuel_comp", fuel_lvl_comp_factor);
+                    if (nvs_err != ESP_OK)
+                        ESP_LOGE(TAG, "Could not set Fuel Comp in NVS");
+                    else
+                        nvs_commit(nvs_h);
+                }
+
+                ESP_LOGI(TAG, "Fuel compensation factor : %u / 1000", fuel_lvl_comp_factor);
+                // Low fuel threshold
+                nvs_err = nvs_get_u16(nvs_h, "lo_fuel_thr", &fuel_low_level_threshold_pc); // Write if not found
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG, "Fuel low threshold not found in memory, initializing");
+                    nvs_err = nvs_set_u16(nvs_h, "lo_fuel_thr", fuel_low_level_threshold_pc);
+                    if (nvs_err != ESP_OK)
+                        ESP_LOGE(TAG, "Could not set Fuel Low LVL in NVS");
+                    else
+                        nvs_commit(nvs_h);
+                }
+
+                ESP_LOGI(TAG, "Low fuel threshold : %u pc", fuel_low_level_threshold_pc);
+                // Coolant overtemp threshold
+                nvs_err = nvs_get_u16(nvs_h, "overtemp_th", &coolant_overtemp_threshold_degC); // Write if not found
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG, "Coolant overtemp threshold not found in memory, initializing");
+                    nvs_err = nvs_set_u16(nvs_h, "overtemp_th", coolant_overtemp_threshold_degC);
+                    if (nvs_err != ESP_OK)
+                        ESP_LOGE(TAG, "Could not set Overtmp in NVS");
+                    else
+                        nvs_commit(nvs_h);
+                }
+
+                ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", fuel_low_level_threshold_pc);
+                nvs_close(nvs_h);
             }
         }
     }
@@ -840,7 +917,7 @@ extern "C" void app_main(void)
     }
 
     // Set up the packaging and queuing tasks
-    if (xTaskCreate(interface_brd_ST_PKG, "ITF_ST_PKG", 4096, NULL, 3, &interface_brd_ST_PKG_hdl) != pdPASS)
+    if (xTaskCreate(itf_board_st_PKG, "ITF_ST", 4096, NULL, 3, &itf_board_st_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface state package task");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
@@ -850,7 +927,7 @@ extern "C" void app_main(void)
         else
             ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
-    if (xTaskCreate(base_active_hilo_PKG, "B_AHL_PKG", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
+    if (xTaskCreate(itf_active_hilo_PKG, "ITF_AHL", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base ActHiLo package task");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
@@ -860,7 +937,7 @@ extern "C" void app_main(void)
         else
             ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
-    if (xTaskCreate(base_slow_metrics_PKG, "B_SLO_M_PKG", 4096, NULL, 3, &base_slow_metrics_PKG_hdl) != pdPASS)
+    if (xTaskCreate(itf_slow_metrics_PKG, "ITF_SLO_M", 4096, NULL, 3, &itf_slow_metrics_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base slow metrics package task");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
@@ -870,7 +947,7 @@ extern "C" void app_main(void)
         else
             ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
-    if (xTaskCreate(base_fast_metrics_PKG, "B_FST_M_PKG", 4096, NULL, 3, &base_fast_metrics_PKG_hdl) != pdPASS)
+    if (xTaskCreate(itf_fast_metrics_PKG, "ITF_FST_M", 4096, NULL, 3, &itf_fast_metrics_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
@@ -880,7 +957,7 @@ extern "C" void app_main(void)
         else
             ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
-    if (xTaskCreate(base_odometer_PKG, "B_ODO_PKG", 4096, NULL, 3, &base_odometer_PKG_hdl) != pdPASS)
+    if (xTaskCreate(itf_odometer_PKG, "ITF_ODO", 4096, NULL, 3, &itf_odometer_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base odometer package task");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
@@ -890,7 +967,7 @@ extern "C" void app_main(void)
         else
             ESP_LOGW(TAG, "Rollback impossible, image could not be invalidated.");
     }
-    if (xTaskCreate(interface_brd_version_PKG, "B_VER_PKG", 4096, NULL, 3, &interface_brd_version_PKG_hdl) != pdPASS)
+    if (xTaskCreate(itf_board_version_PKG, "ITF_VER", 4096, NULL, 3, &itf_board_version_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface board version package task");
         interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;

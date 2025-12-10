@@ -17,6 +17,7 @@ void ui_init();
 void ui_tick();
 
 void animateTargetArc(lv_obj_t* targetArc, int32_t targetValue);
+void animateTargetArcWithDuration(lv_obj_t* targetArc, int32_t targetValue, uint32_t duration);
 
 void loadScreen(enum ScreensEnum screenId,bool animate);
 

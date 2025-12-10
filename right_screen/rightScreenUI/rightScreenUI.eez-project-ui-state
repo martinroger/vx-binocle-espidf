@@ -23,7 +23,6 @@
           },
           {
             "type": "border",
-            "selected": 2,
             "size": 240,
             "location": "right",
             "children": [
@@ -124,7 +123,6 @@
                   "type": "tabset",
                   "id": "#a4c7b740-9392-4106-95ee-d68e3491a0d7",
                   "weight": 0.43463263194204904,
-                  "selected": 2,
                   "enableClose": false,
                   "children": [
                     {
@@ -167,7 +165,8 @@
                       "enableClose": false,
                       "icon": "svg:hierarchy"
                     }
-                  ]
+                  ],
+                  "active": true
                 },
                 {
                   "type": "tabset",
@@ -188,62 +187,47 @@
               ]
             },
             {
-              "type": "tabset",
-              "id": "EDITORS",
-              "weight": 60.70305406359041,
-              "enableDeleteWhenEmpty": false,
-              "enableClose": false,
-              "children": [
-                {
-                  "type": "tab",
-                  "id": "#5d7f1706-d2b2-44da-8dcf-3f65eeaeecc8",
-                  "name": "Settings",
-                  "component": "editor",
-                  "config": {
-                    "objectPath": "[rightScreenUI.eez-project]:/settings",
-                    "subObjectPath": "[rightScreenUI.eez-project]:/settings",
-                    "permanent": false
-                  },
-                  "icon": "material:settings"
-                },
-                {
-                  "type": "tab",
-                  "id": "#5a4af829-a3e4-4c85-be90-7608ec941b39",
-                  "name": "mainScr",
-                  "component": "editor",
-                  "config": {
-                    "objectPath": "[rightScreenUI.eez-project]:/userPages/0",
-                    "permanent": false
-                  },
-                  "icon": "svg:page"
-                }
-              ],
-              "active": true
-            },
-            {
               "type": "row",
-              "id": "#c6be5805-766b-4dba-9fef-529130b76f33",
-              "weight": 16.409989414670488,
+              "id": "#aa32ee4a-6021-4ef4-bba7-67bdff71128c",
+              "weight": 45.542475947839506,
               "children": [
                 {
                   "type": "tabset",
-                  "id": "#3b733c0d-0a2d-4522-8397-1f5a62bfde00",
-                  "weight": 2,
+                  "id": "EDITORS",
+                  "weight": 71.24248496993988,
+                  "selected": 1,
+                  "enableDeleteWhenEmpty": false,
+                  "enableClose": false,
                   "children": [
                     {
                       "type": "tab",
-                      "id": "PROPERTIES",
-                      "name": "Properties",
-                      "component": "propertiesPanel",
-                      "enableClose": false,
-                      "icon": "svg:properties"
+                      "id": "#5d7f1706-d2b2-44da-8dcf-3f65eeaeecc8",
+                      "name": "Settings",
+                      "component": "editor",
+                      "config": {
+                        "objectPath": "[rightScreenUI.eez-project]:/settings",
+                        "subObjectPath": "[rightScreenUI.eez-project]:/settings",
+                        "permanent": false
+                      },
+                      "icon": "material:settings"
+                    },
+                    {
+                      "type": "tab",
+                      "id": "#5a4af829-a3e4-4c85-be90-7608ec941b39",
+                      "name": "mainScr",
+                      "component": "editor",
+                      "config": {
+                        "objectPath": "[rightScreenUI.eez-project]:/userPages/0",
+                        "permanent": false
+                      },
+                      "icon": "svg:page"
                     }
                   ]
                 },
                 {
                   "type": "tabset",
-                  "id": "#427985f7-5ff7-4aac-afc5-29f3fc1ed4ce",
-                  "weight": 1,
+                  "id": "#9b7702c3-6a40-426e-8550-1f9f004c262e",
+                  "weight": 28.75751503006012,
                   "children": [
                     {
                       "type": "tab",
@@ -254,6 +238,21 @@
                       "icon": "svg:components"
                     }
                   ]
+                }
+              ]
+            },
+            {
+              "type": "tabset",
+              "id": "#3b733c0d-0a2d-4522-8397-1f5a62bfde00",
+              "weight": 31.570567530421382,
+              "children": [
+                {
+                  "type": "tab",
+                  "id": "PROPERTIES",
+                  "name": "Properties",
+                  "component": "propertiesPanel",
+                  "enableClose": false,
+                  "icon": "svg:properties"
                 }
               ]
             }
@@ -1021,20 +1020,29 @@
     "[rightScreenUI.eez-project]:/userPages/0[flow-state]": {
       "selection": {
         "0": {
-          "0": {},
-          "2": {},
-          "5": {},
-          "9": {},
-          "11": {
-            "$selected": true
-          },
-          "17": {}
+          "0": {
+            "0": {
+              "0": {},
+              "3": {},
+              "6": {},
+              "10": {},
+              "12": {},
+              "18": {},
+              "27": {
+                "$selected": true
+              },
+              "28": {}
+            },
+            "1": {
+              "2": {}
+            }
+          }
         }
       },
       "transform": {
         "translate": {
           "x": -328.1363636363636,
-          "y": -294.55454545454546
+          "y": -261.55454545454546
         },
         "scale": 1
       },
@@ -1058,7 +1066,7 @@
   "showComponentDescriptions": true,
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
-  "lvglPart": "KNOB",
+  "lvglPart": "MAIN",
   "lvglState": "DEFAULT",
   "lvglExpandedPropertiesGroup": [
     "LAYOUT",
@@ -1070,7 +1078,8 @@
     "LINE",
     "ARC",
     "TEXT",
-    "IMAGE"
+    "OUTLINE",
+    "SHADOW"
   ],
   "showInactiveFlowsInDebugger": true,
   "globalFlowZoom": true,

@@ -1,8 +1,5 @@
 build/
-# sdkconfig
-# sdkconfig.old
 managed_components/
 .vscode/
+partition_table/
 .devcontainer/
-partitionsFromDevice/
-.lock

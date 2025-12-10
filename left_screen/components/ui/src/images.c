@@ -1,6 +1,6 @@
 #include "images.h"
 
-const ext_img_desc_t images[11] = {
+const ext_img_desc_t images[14] = {
     { "turnIndicators", &img_turn_indicators },
     { "airbagSRS", &img_airbag_srs },
     { "brakes", &img_brakes },
@@ -12,4 +12,7 @@ const ext_img_desc_t images[11] = {
     { "mil", &img_mil },
     { "overTemperature", &img_over_temperature },
     { "lowFuel", &img_low_fuel },
+    { "simpleNeedle", &img_simple_needle },
+    { "parkingBrake", &img_parking_brake },
+    { "lowBrakeFluid", &img_low_brake_fluid },
 };
