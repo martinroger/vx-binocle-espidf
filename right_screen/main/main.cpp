@@ -177,7 +177,10 @@ int updateLVGLObjects()
     }
 
     if ((esp_timer_get_time() - last_interlock_ts) > 2000000) // If last interlock was over 2s ago
+    {
         screen_interlock_OK = false;
+        p_screen_interlock_OK = !screen_interlock_OK; // force a refresh
+    }
 
     if (p_fuelLevel_pc != fuelLevel_pc) // Fuel level percentage
     {
@@ -347,6 +350,8 @@ int updateLVGLObjects()
     }
     return updatedElements;
 }
+
+#pragma region Frame Dispatcher
 
 /// @brief Dispatcher linked to the TWAI daemon. Parses received CAN frames
 /// @param rxMsg Received TWAI frame
@@ -718,7 +723,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
         {
-            screen_interlock_OK = (binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
+            screen_interlock_OK = ((uint8_t)binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
             last_interlock_ts = esp_timer_get_time();
         }
         else
@@ -742,7 +747,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
         {
-            screen_interlock_OK = (binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
+            screen_interlock_OK = ((uint8_t)binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
             last_interlock_ts = esp_timer_get_time();
         }
         else
@@ -888,6 +893,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     return ESP_OK;
 }
+#pragma endregion
 
 #pragma endregion
 
@@ -911,6 +917,7 @@ void display_board_st_PKG(void *pvParameters)
         .identifier = BINOCAN_LDB_ST_FRAME_ID,
         .data_length_code = BINOCAN_LDB_ST_LENGTH};
 #endif
+    tx_msg.ss = false; // Redundant
     while (true)
     {
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
@@ -1095,7 +1102,7 @@ extern "C" void app_main()
         else
             ESP_LOGW(__func__, "Rollback impossible, image could not be invalidated.");
     }
-
+#pragma region Starting animation
     // UI loading and mofidifiers
     ESP_LOGI(__func__, "Loading UI");
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
@@ -1169,7 +1176,7 @@ extern "C" void app_main()
 #endif
     lvgl_port_unlock();
     vTaskDelay(pdMS_TO_TICKS(600));
-
+#pragma endregion
     ESP_LOGI(__func__, "Setup done");
     if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
     {
