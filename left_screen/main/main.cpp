@@ -125,6 +125,19 @@ static const char *rpm_scale_labels[10] = {"0", "1000", "2000", "3000", "4000", 
 
 #pragma region Helper functions
 
+extern "C" void action_reboot_factory(lv_event_t *e)
+{
+    const esp_partition_t *factoryPart = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, "factory");
+    if (factoryPart != NULL)
+    {
+        esp_err_t bootsel_err = esp_ota_set_boot_partition(factoryPart);
+        if (bootsel_err == ESP_OK)
+            esp_restart();
+        else
+            ESP_LOGE(__func__, "Could not restart ESP");
+    }
+}
+
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
 extern "C" void action_mph_switch_toggled(lv_event_t *e)
 {
@@ -765,7 +778,6 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
         {
             screen_interlock_OK = ((uint8_t)binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
-            last_interlock_ts = esp_timer_get_time();
         }
         else
         {
@@ -810,6 +822,9 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 FC_sent = false;
                 FF_received = false;
                 OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
                 ESP_LOGW(__func__, "OTA was in progress, aborted.");
             }
 
@@ -825,6 +840,9 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 FC_sent = false;
                 FF_received = false;
                 OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
                 break;
             }
 
@@ -846,8 +864,12 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             {
                 ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
                 esp_ota_abort(ota_handle);
-                OTA_started = false;
+                FC_sent = false;
                 FF_received = false;
+                OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
                 break;
             }
             receivedBytes = 2;
@@ -889,20 +911,29 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 {
                     ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
                     esp_ota_abort(ota_handle);
-                    OTA_started = false;
+                    FC_sent = false;
                     FF_received = false;
+                    OTA_started = false;
+                    receivedBytes = 0;
+                    transferComplete = false;
+                    image_size = 0;
                     break;
                 }
                 receivedBytes += 7;
                 // ESP_LOGI(__func__,"Received : %lu / %lu - %.2f %",receivedBytes,image_size,100.0*((float)receivedBytes)/((float)image_size));
                 odometer_km = image_size - receivedBytes;
+                if (image_size == receivedBytes)
+                    transferComplete = true;
             }
             else // Only part of the buffer needs to be taken in
             {
                 ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), image_size - receivedBytes);
                 receivedBytes = image_size;
-                ESP_LOGI(__func__, "Transfer complete");
                 transferComplete = true;
+            }
+            if (transferComplete)
+            {
+                ESP_LOGI(__func__, "Transfer complete");
                 OTA_started = false;
                 ota_err = esp_ota_end(ota_handle);
                 if (ota_err != ESP_OK)
@@ -992,9 +1023,9 @@ void display_board_version_PKG(void *pvParameters)
         .data_length_code = BINOCAN_RDB_BOARD_VERSION_LENGTH};
     uint32_t cycle_time_ms = BINOCAN_RDB_BOARD_VERSION_CYCLE_TIME_MS;
 
-    binocan_rdb_board_version.rdb_version_major = binocan_rdb_board_version_rdb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0])-48);
-    binocan_rdb_board_version.rdb_version_minor = binocan_rdb_board_version_rdb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2])-48);
-    binocan_rdb_board_version.rdb_version_patch = binocan_rdb_board_version_rdb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4])-48);
+    binocan_rdb_board_version.rdb_version_major = binocan_rdb_board_version_rdb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]) - 48);
+    binocan_rdb_board_version.rdb_version_minor = binocan_rdb_board_version_rdb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]) - 48);
+    binocan_rdb_board_version.rdb_version_patch = binocan_rdb_board_version_rdb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]) - 48);
     binocan_rdb_board_version.rdb_version_dirty = binocan_rdb_board_version_rdb_version_dirty_encode((uint8_t)display_board_st.app_metadata->is_dirty);
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
     binocan_ldb_board_version_t binocan_ldb_board_version;
@@ -1004,9 +1035,9 @@ void display_board_version_PKG(void *pvParameters)
         .data_length_code = BINOCAN_LDB_BOARD_VERSION_LENGTH};
     uint32_t cycle_time_ms = BINOCAN_LDB_BOARD_VERSION_CYCLE_TIME_MS;
 
-    binocan_ldb_board_version.ldb_version_major = binocan_ldb_board_version_ldb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0])-48);
-    binocan_ldb_board_version.ldb_version_minor = binocan_ldb_board_version_ldb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2])-48);
-    binocan_ldb_board_version.ldb_version_patch = binocan_ldb_board_version_ldb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4])-48);
+    binocan_ldb_board_version.ldb_version_major = binocan_ldb_board_version_ldb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]) - 48);
+    binocan_ldb_board_version.ldb_version_minor = binocan_ldb_board_version_ldb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]) - 48);
+    binocan_ldb_board_version.ldb_version_patch = binocan_ldb_board_version_ldb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]) - 48);
     binocan_ldb_board_version.ldb_version_dirty = binocan_ldb_board_version_ldb_version_dirty_encode((uint8_t)display_board_st.app_metadata->is_dirty);
 
 #endif
@@ -1069,7 +1100,7 @@ extern "C" void app_main()
     // Declare board state
     display_board_st.internal_ST = XDB_SM_ST_INIT;
 
-    #pragma region App metadata parse
+#pragma region App metadata parse
     // Allocate memory for app_metadata and fill it by reference
     display_board_st.app_metadata = (parsed_app_meta_t *)malloc(sizeof(parsed_app_meta_t));
     if (display_board_st.app_metadata)
@@ -1084,7 +1115,6 @@ extern "C" void app_main()
     {
         ESP_LOGE(TAG, "Failed to allocate memory for app_metadata");
     }
-    
 
 #pragma endregion
 
@@ -1270,9 +1300,14 @@ extern "C" void app_main()
     ESP_LOGI(__func__, "Loading UI");
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
     ui_init(); // Load the UI library and draw it
+    // Set up the debug screen
+    lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", app_metadata->version, app_metadata->date, app_metadata->time);
+    lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
+    lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.rpm_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
+
 #elifdef CONFIG_RIGHT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     if (display_board_st.mph_selected == 0)

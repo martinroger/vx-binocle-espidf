@@ -36,6 +36,11 @@ typedef struct _objects_t {
     lv_obj_t *itf_state;
     lv_obj_t *interlock_state;
     lv_obj_t *settings_tab;
+    lv_obj_t *debug_tab;
+    lv_obj_t *version_info;
+    lv_obj_t *project_info;
+    lv_obj_t *current_partition;
+    lv_obj_t *reboot_factory;
 } objects_t;
 
 extern objects_t objects;
