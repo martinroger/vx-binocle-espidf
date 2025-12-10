@@ -62,12 +62,14 @@ T swap_endian(T u)
 #define XDB_SM_ST_OK BINOCAN_RDB_ST_RDB_SM_ST_OK_CHOICE
 #define XDB_SM_ST_DEGRADED BINOCAN_RDB_ST_RDB_SM_ST_DEGRADED_CHOICE
 #define XDB_SM_ST_FAULT BINOCAN_RDB_ST_RDB_SM_ST_FAULT_CHOICE
+#define XDB_SM_ST_OTA BINOCAN_RDB_ST_RDB_SM_ST_OTA_CHOICE
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
 #define XDB_SM_ST_OFF BINOCAN_LDB_ST_LDB_SM_ST_OFF_CHOICE
 #define XDB_SM_ST_INIT BINOCAN_LDB_ST_LDB_SM_ST_INIT_CHOICE
 #define XDB_SM_ST_OK BINOCAN_LDB_ST_LDB_SM_ST_OK_CHOICE
 #define XDB_SM_ST_DEGRADED BINOCAN_LDB_ST_LDB_SM_ST_DEGRADED_CHOICE
 #define XDB_SM_ST_FAULT BINOCAN_LDB_ST_LDB_SM_ST_FAULT_CHOICE
+#define XDB_SM_ST_OTA BINOCAN_LDB_ST_LDB_SM_ST_OTA_CHOICE
 #endif
 
 struct board_ST
@@ -465,13 +467,13 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             brakesOn = true;
         }
 
-        if (binocan_itf_active_hi_lo_itf_coolant_low_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt))
+        if (binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt))
         {
-            lowCoolantOn = (binocan_itf_active_hi_lo_itf_coolant_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AL_TT_ON_CHOICE);
+            lowCoolantOn = (binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AH_TT_ON_CHOICE);
         }
         else
         {
-            ESP_LOGW(__func__, "Low coolant level telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_coolant_low_al_tt);
+            ESP_LOGW(__func__, "Low coolant level telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt);
             lowCoolantOn = true;
         }
 
