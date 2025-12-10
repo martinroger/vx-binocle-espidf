@@ -992,9 +992,9 @@ void display_board_version_PKG(void *pvParameters)
         .data_length_code = BINOCAN_RDB_BOARD_VERSION_LENGTH};
     uint32_t cycle_time_ms = BINOCAN_RDB_BOARD_VERSION_CYCLE_TIME_MS;
 
-    binocan_rdb_board_version.rdb_version_major = binocan_rdb_board_version_rdb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]));
-    binocan_rdb_board_version.rdb_version_minor = binocan_rdb_board_version_rdb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]));
-    binocan_rdb_board_version.rdb_version_patch = binocan_rdb_board_version_rdb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]));
+    binocan_rdb_board_version.rdb_version_major = binocan_rdb_board_version_rdb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0])-48);
+    binocan_rdb_board_version.rdb_version_minor = binocan_rdb_board_version_rdb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2])-48);
+    binocan_rdb_board_version.rdb_version_patch = binocan_rdb_board_version_rdb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4])-48);
     binocan_rdb_board_version.rdb_version_dirty = binocan_rdb_board_version_rdb_version_dirty_encode((uint8_t)display_board_st.app_metadata->is_dirty);
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
     binocan_ldb_board_version_t binocan_ldb_board_version;
@@ -1004,9 +1004,9 @@ void display_board_version_PKG(void *pvParameters)
         .data_length_code = BINOCAN_LDB_BOARD_VERSION_LENGTH};
     uint32_t cycle_time_ms = BINOCAN_LDB_BOARD_VERSION_CYCLE_TIME_MS;
 
-    binocan_ldb_board_version.ldb_version_major = binocan_ldb_board_version_ldb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]));
-    binocan_ldb_board_version.ldb_version_minor = binocan_ldb_board_version_ldb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]));
-    binocan_ldb_board_version.ldb_version_patch = binocan_ldb_board_version_ldb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]));
+    binocan_ldb_board_version.ldb_version_major = binocan_ldb_board_version_ldb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0])-48);
+    binocan_ldb_board_version.ldb_version_minor = binocan_ldb_board_version_ldb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2])-48);
+    binocan_ldb_board_version.ldb_version_patch = binocan_ldb_board_version_ldb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4])-48);
     binocan_ldb_board_version.ldb_version_dirty = binocan_ldb_board_version_ldb_version_dirty_encode((uint8_t)display_board_st.app_metadata->is_dirty);
 
 #endif
