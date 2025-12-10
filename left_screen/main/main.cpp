@@ -76,7 +76,7 @@ struct board_ST
 {
     bool screen_interlock_OK = false;
     uint8_t internal_ST = XDB_SM_ST_OFF;
-    bool mph_selected = false;
+    uint8_t mph_selected = false;
 } display_board_st;
 
 // Used only to selectively update in LVGL
@@ -115,11 +115,55 @@ float odometer_km, p_odometer_km = 0.0;
 float trip_km, p_trip_km = 0.0;
 
 // Global UI objects
-// lv_obj_t *needleLine = nullptr;
+static const char *speed_kph_scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
+static const char *speed_mph_scale_labels[10] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", NULL};
+static const char *rpm_scale_labels[10] = {"0", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000", NULL};
 
 #pragma endregion
 
 #pragma region Helper functions
+
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+extern "C" void action_mph_switch_toggled(lv_event_t *e)
+{
+
+    display_board_st.mph_selected = lv_obj_has_state(objects.mph_on, LV_STATE_CHECKED);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u8(h, "mph_on", display_board_st.mph_selected) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save mph selector status");
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    lvgl_port_lock(-1);
+    if (display_board_st.mph_selected == 0)
+    {
+        lv_scale_set_range(objects.speed_scale, 0, 2400);
+        lv_scale_set_total_tick_count(objects.speed_scale, 49);
+        lv_scale_set_major_tick_every(objects.speed_scale, 4);
+        lv_scale_set_text_src(objects.speed_scale, speed_kph_scale_labels);
+        lv_arc_set_range(objects.speed_arc, 0, 2400);
+        lv_label_set_text(objects.speed_unit, "KPH");
+    }
+    else if (display_board_st.mph_selected == 1)
+    {
+        lv_scale_set_range(objects.speed_scale, 0, 1600);
+        lv_scale_set_total_tick_count(objects.speed_scale, 33);
+        lv_scale_set_major_tick_every(objects.speed_scale, 4);
+        lv_scale_set_text_src(objects.speed_scale, speed_mph_scale_labels);
+        lv_arc_set_range(objects.speed_arc, 0, 1600);
+        lv_label_set_text(objects.speed_unit, "MPH");
+    }
+    lvgl_port_unlock();
+    // Force refresh
+    p_odometer_km = 0;
+    p_trip_km = 0;
+    p_speed_kph = 0;
+}
+#endif
 
 /// @brief Simple functions that compares internal metrics and updates LVGL objects if the metric has changed.
 /// @return Number of objects updated
@@ -132,14 +176,14 @@ int updateLVGLObjects()
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10))
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
-        animateTargetArc(objects.speed_arc, speed_kph * 10);
+        animateTargetArc(objects.speed_arc, (speed_kph / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1)) * 10);
         // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         if ((long)round(speed_kph) != (long)round(p_speed_kph))
-            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph));
+            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1)));
         p_speed_kph = speed_kph;
         updatedElements++;
     }
@@ -176,11 +220,6 @@ int updateLVGLObjects()
         ESP_LOGD(__func__, "Turn all on - placeholder");
     }
 
-    if ((esp_timer_get_time() - last_interlock_ts) > 2000000) // If last interlock was over 2s ago
-    {
-        screen_interlock_OK = false;
-        p_screen_interlock_OK = !screen_interlock_OK; // force a refresh
-    }
 
     if (p_fuelLevel_pc != fuelLevel_pc) // Fuel level percentage
     {
@@ -214,12 +253,13 @@ int updateLVGLObjects()
         p_overTemperatureOn = overTemperatureOn;
         updatedElements++;
     }
-    if (p_screen_interlock_OK != screen_interlock_OK) // Left to right screen interlock
-    {
-        lv_obj_set_style_opa(objects.interlock_state, screen_interlock_OK ? LV_OPA_TRANSP : LV_OPA_COVER, LV_STATE_DEFAULT);
-        p_screen_interlock_OK = screen_interlock_OK;
-        updatedElements++;
-    }
+    lv_obj_set_style_opa(objects.interlock_state, screen_interlock_OK ? LV_OPA_TRANSP : LV_OPA_COVER, LV_STATE_DEFAULT);
+    // if (p_screen_interlock_OK != screen_interlock_OK) // Left to right screen interlock
+    // {
+    //     lv_obj_set_style_opa(objects.interlock_state, screen_interlock_OK ? LV_OPA_TRANSP : LV_OPA_COVER, LV_STATE_DEFAULT);
+    //     p_screen_interlock_OK = screen_interlock_OK;
+    //     updatedElements++;
+    // }
     if (p_internal_ST != display_board_st.internal_ST) // Internal state degraded or fault
     {
         switch (display_board_st.internal_ST)
@@ -266,13 +306,13 @@ int updateLVGLObjects()
     }
     if (p_odometer_km != odometer_km) // Odometer. Might need comparison at the uint level
     {
-        lv_label_set_text_fmt(objects.odometer, "%06.0f", odometer_km);
+        lv_label_set_text_fmt(objects.odometer, "%06.0f", odometer_km / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1));
         p_odometer_km = odometer_km;
         updatedElements++;
     }
     if (p_trip_km != trip_km) // Trip, might need comparison at the uint level
     {
-        lv_label_set_text_fmt(objects.trip, "%05.1f", trip_km);
+        lv_label_set_text_fmt(objects.trip, "%05.1f", trip_km / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1));
         p_trip_km = trip_km;
         updatedElements++;
     }
@@ -748,7 +788,6 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
         {
             screen_interlock_OK = ((uint8_t)binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
-            last_interlock_ts = esp_timer_get_time();
         }
         else
         {
@@ -769,6 +808,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 esp_ota_abort(ota_handle);
                 FC_sent = false;
                 FF_received = false;
+                OTA_started = false;
                 ESP_LOGW(__func__, "OTA was in progress, aborted.");
             }
 
@@ -783,6 +823,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 esp_ota_abort(ota_handle);
                 FC_sent = false;
                 FF_received = false;
+                OTA_started = false;
                 break;
             }
 
@@ -929,6 +970,8 @@ void display_board_st_PKG(void *pvParameters)
         binocan_ldb_st.ldb_sm_st = binocan_ldb_st_ldb_sm_st_encode(display_board_st.internal_ST);
         binocan_ldb_st_pack(tx_msg.data, &binocan_ldb_st, BINOCAN_LDB_ST_LENGTH);
 #endif
+        // DEBUG
+        tx_msg.data[7] = screen_interlock_OK;
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(__func__, "Could not queue internal state message in queue");
@@ -993,6 +1036,7 @@ extern "C" void app_main()
             ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
             nvs_set_i8(h, "lastPart", -1);
         }
+        nvs_err = nvs_get_u8(h, "mph_on", &(display_board_st.mph_selected));
         nvs_commit(h);
         nvs_close(h);
     }
@@ -1109,16 +1153,30 @@ extern "C" void app_main()
     ui_init(); // Load the UI library and draw it
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.rpm_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
-    static const char *scale_labels[10] = {"0", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000", NULL};
-    lv_scale_set_text_src(objects.rpm_scale, scale_labels);
+    lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
 #elifdef CONFIG_RIGHT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
-    static const char *scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
-    lv_scale_set_text_src(objects.speed_scale, scale_labels);
+    if (display_board_st.mph_selected == 0)
+    {
+        lv_scale_set_range(objects.speed_scale, 0, 2400);
+        lv_scale_set_total_tick_count(objects.speed_scale, 49);
+        lv_scale_set_major_tick_every(objects.speed_scale, 4);
+        lv_scale_set_text_src(objects.speed_scale, speed_kph_scale_labels);
+        lv_arc_set_range(objects.speed_arc, 0, 2400);
+        lv_label_set_text(objects.speed_unit, "KPH");
+        lv_obj_set_state(objects.mph_on, LV_STATE_CHECKED, false);
+    }
+    else if (display_board_st.mph_selected == 1)
+    {
+        lv_scale_set_range(objects.speed_scale, 0, 1600);
+        lv_scale_set_total_tick_count(objects.speed_scale, 33);
+        lv_scale_set_major_tick_every(objects.speed_scale, 4);
+        lv_scale_set_text_src(objects.speed_scale, speed_mph_scale_labels);
+        lv_arc_set_range(objects.speed_arc, 0, 1600);
+        lv_label_set_text(objects.speed_unit, "MPH");
+        lv_obj_set_state(objects.mph_on, LV_STATE_CHECKED, true);
+    }
 #endif
-
-    // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
-    // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
 
     vTaskSuspend(CAN_RX_tsk_hdl);
     // Prepare values for the starting/check sequence

@@ -982,17 +982,27 @@
     "[leftScreenUI.eez-project]:/userPages/0[flow-state]": {
       "selection": {
         "0": {
-          "0": {},
-          "1": {},
-          "4": {
-            "$selected": true
-          },
-          "22": {}
+          "0": {
+            "0": {
+              "0": {},
+              "1": {},
+              "2": {},
+              "5": {},
+              "28": {
+                "$selected": true
+              }
+            },
+            "1": {
+              "0": {},
+              "2": {},
+              "3": {}
+            }
+          }
         }
       },
       "transform": {
         "translate": {
-          "x": -243.8825757575758,
+          "x": -348.0665210700757,
           "y": -220.4242424242425
         },
         "scale": 1
@@ -1072,7 +1082,7 @@
   "showComponentDescriptions": true,
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
-  "lvglPart": "KNOB",
+  "lvglPart": "MAIN",
   "lvglState": "DEFAULT",
   "lvglExpandedPropertiesGroup": [
     "LAYOUT",
