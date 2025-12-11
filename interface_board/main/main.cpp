@@ -508,9 +508,9 @@ void itf_board_version_PKG(void *pvParameters)
         .identifier = BINOCAN_ITF_BOARD_VERSION_FRAME_ID,
         .data_length_code = BINOCAN_ITF_BOARD_VERSION_LENGTH};
 
-    binocan_itf_board_version.itf_version_major = binocan_itf_board_version_itf_version_major_encode((uint8_t)(interface_board_st.app_metadata->base_version[0]));
-    binocan_itf_board_version.itf_version_minor = binocan_itf_board_version_itf_version_minor_encode((uint8_t)(interface_board_st.app_metadata->base_version[2]));
-    binocan_itf_board_version.itf_version_patch = binocan_itf_board_version_itf_version_patch_encode((uint8_t)(interface_board_st.app_metadata->base_version[4]));
+    binocan_itf_board_version.itf_version_major = binocan_itf_board_version_itf_version_major_encode((uint8_t)(interface_board_st.app_metadata->base_version[0])-48);
+    binocan_itf_board_version.itf_version_minor = binocan_itf_board_version_itf_version_minor_encode((uint8_t)(interface_board_st.app_metadata->base_version[2])-48);
+    binocan_itf_board_version.itf_version_patch = binocan_itf_board_version_itf_version_patch_encode((uint8_t)(interface_board_st.app_metadata->base_version[4])-48);
     binocan_itf_board_version.itf_version_dirty = binocan_itf_board_version_itf_version_dirty_encode((uint8_t)interface_board_st.app_metadata->is_dirty);
     // Build a 64-bit value from up to 8 bytes of commitID and pass to the encode helper.
     // This avoids memcpy into a numeric field and is lightweight.

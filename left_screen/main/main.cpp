@@ -12,6 +12,7 @@
 #include "twai_daemon.h"
 #include "binocan.h"
 #include "coefficients.h"
+#include "version_parser.h"
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -77,6 +78,7 @@ struct board_ST
     bool screen_interlock_OK = false;
     uint8_t internal_ST = XDB_SM_ST_OFF;
     uint8_t mph_selected = false;
+    parsed_app_meta_t *app_metadata;
 } display_board_st;
 
 // Used only to selectively update in LVGL
@@ -122,6 +124,19 @@ static const char *rpm_scale_labels[10] = {"0", "1000", "2000", "3000", "4000", 
 #pragma endregion
 
 #pragma region Helper functions
+
+extern "C" void action_reboot_factory(lv_event_t *e)
+{
+    const esp_partition_t *factoryPart = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_FACTORY, "factory");
+    if (factoryPart != NULL)
+    {
+        esp_err_t bootsel_err = esp_ota_set_boot_partition(factoryPart);
+        if (bootsel_err == ESP_OK)
+            esp_restart();
+        else
+            ESP_LOGE(__func__, "Could not restart ESP");
+    }
+}
 
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
 extern "C" void action_mph_switch_toggled(lv_event_t *e)
@@ -219,7 +234,6 @@ int updateLVGLObjects()
         airbagOn = true;
         ESP_LOGD(__func__, "Turn all on - placeholder");
     }
-
 
     if (p_fuelLevel_pc != fuelLevel_pc) // Fuel level percentage
     {
@@ -764,7 +778,6 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
         {
             screen_interlock_OK = ((uint8_t)binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
-            last_interlock_ts = esp_timer_get_time();
         }
         else
         {
@@ -809,6 +822,9 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 FC_sent = false;
                 FF_received = false;
                 OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
                 ESP_LOGW(__func__, "OTA was in progress, aborted.");
             }
 
@@ -824,6 +840,9 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 FC_sent = false;
                 FF_received = false;
                 OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
                 break;
             }
 
@@ -845,8 +864,12 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             {
                 ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
                 esp_ota_abort(ota_handle);
-                OTA_started = false;
+                FC_sent = false;
                 FF_received = false;
+                OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
                 break;
             }
             receivedBytes = 2;
@@ -888,20 +911,29 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 {
                     ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
                     esp_ota_abort(ota_handle);
-                    OTA_started = false;
+                    FC_sent = false;
                     FF_received = false;
+                    OTA_started = false;
+                    receivedBytes = 0;
+                    transferComplete = false;
+                    image_size = 0;
                     break;
                 }
                 receivedBytes += 7;
                 // ESP_LOGI(__func__,"Received : %lu / %lu - %.2f %",receivedBytes,image_size,100.0*((float)receivedBytes)/((float)image_size));
                 odometer_km = image_size - receivedBytes;
+                if (image_size == receivedBytes)
+                    transferComplete = true;
             }
             else // Only part of the buffer needs to be taken in
             {
                 ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), image_size - receivedBytes);
                 receivedBytes = image_size;
-                ESP_LOGI(__func__, "Transfer complete");
                 transferComplete = true;
+            }
+            if (transferComplete)
+            {
+                ESP_LOGI(__func__, "Transfer complete");
                 OTA_started = false;
                 ota_err = esp_ota_end(ota_handle);
                 if (ota_err != ESP_OK)
@@ -940,6 +972,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
 #pragma region FreeRTOS tasks
 TaskHandle_t display_board_st_PKG_hdl;
+TaskHandle_t display_board_version_PKG_hdl;
 
 /// @brief Packaging handler that send the board state over CAN
 /// @param pvParameters
@@ -978,6 +1011,85 @@ void display_board_st_PKG(void *pvParameters)
         }
     }
 }
+
+void display_board_version_PKG(void *pvParameters)
+{
+    uint8_t message_mux = 0;
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+    binocan_rdb_board_version_t binocan_rdb_board_version;
+    binocan_rdb_board_version_init(&binocan_rdb_board_version);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_RDB_BOARD_VERSION_FRAME_ID,
+        .data_length_code = BINOCAN_RDB_BOARD_VERSION_LENGTH};
+    uint32_t cycle_time_ms = BINOCAN_RDB_BOARD_VERSION_CYCLE_TIME_MS;
+
+    binocan_rdb_board_version.rdb_version_major = binocan_rdb_board_version_rdb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]) - 48);
+    binocan_rdb_board_version.rdb_version_minor = binocan_rdb_board_version_rdb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]) - 48);
+    binocan_rdb_board_version.rdb_version_patch = binocan_rdb_board_version_rdb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]) - 48);
+    binocan_rdb_board_version.rdb_version_dirty = binocan_rdb_board_version_rdb_version_dirty_encode((uint8_t)display_board_st.app_metadata->is_dirty);
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+    binocan_ldb_board_version_t binocan_ldb_board_version;
+    binocan_ldb_board_version_init(&binocan_ldb_board_version);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_LDB_BOARD_VERSION_FRAME_ID,
+        .data_length_code = BINOCAN_LDB_BOARD_VERSION_LENGTH};
+    uint32_t cycle_time_ms = BINOCAN_LDB_BOARD_VERSION_CYCLE_TIME_MS;
+
+    binocan_ldb_board_version.ldb_version_major = binocan_ldb_board_version_ldb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]) - 48);
+    binocan_ldb_board_version.ldb_version_minor = binocan_ldb_board_version_ldb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]) - 48);
+    binocan_ldb_board_version.ldb_version_patch = binocan_ldb_board_version_ldb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]) - 48);
+    binocan_ldb_board_version.ldb_version_dirty = binocan_ldb_board_version_ldb_version_dirty_encode((uint8_t)display_board_st.app_metadata->is_dirty);
+
+#endif
+    // Build a 64-bit value from up to 8 bytes of commitID and pass to the encode helper.
+    // This avoids memcpy into a numeric field and is lightweight.
+    if (display_board_st.app_metadata && display_board_st.app_metadata->commitID)
+    {
+        // ESP_LOGI(TAG,"Commit is valid");
+        uint64_t commit_val = 0;
+        size_t src_len = display_board_st.app_metadata->commit_len;
+        if (src_len > 8)
+            src_len = 8;
+        for (size_t i = 0; i < src_len; ++i)
+        {
+            commit_val = (commit_val << 8) | (uint8_t)display_board_st.app_metadata->commitID[src_len - i - 1];
+        }
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+        binocan_rdb_board_version.rdb_version_commit = binocan_rdb_board_version_rdb_version_commit_encode(commit_val);
+    }
+    else
+    {
+        // ESP_LOGI(TAG,"Commit will be 0");
+        binocan_rdb_board_version.rdb_version_commit = binocan_rdb_board_version_rdb_version_commit_encode(0ULL);
+    }
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+        binocan_ldb_board_version.ldb_version_commit = binocan_ldb_board_version_ldb_version_commit_encode(commit_val);
+    }
+    else
+    {
+        // ESP_LOGI(TAG,"Commit will be 0");
+        binocan_ldb_board_version.ldb_version_commit = binocan_ldb_board_version_ldb_version_commit_encode(0ULL);
+    }
+#endif
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(cycle_time_ms));
+        // Switch the mux indicator
+        message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+        binocan_rdb_board_version.rdb_version_mux = binocan_rdb_board_version_rdb_version_mux_encode(message_mux);
+        binocan_rdb_board_version_pack(tx_msg.data, &binocan_rdb_board_version, BINOCAN_RDB_BOARD_VERSION_LENGTH);
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+        binocan_ldb_board_version.ldb_version_mux = binocan_ldb_board_version_ldb_version_mux_encode(message_mux);
+        binocan_ldb_board_version_pack(tx_msg.data, &binocan_ldb_board_version, BINOCAN_LDB_BOARD_VERSION_LENGTH);
+#endif
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(TAG, "Could not queue internal state message in queue");
+        }
+    }
+}
 #pragma endregion
 
 #pragma region Main app
@@ -987,6 +1099,24 @@ extern "C" void app_main()
 {
     // Declare board state
     display_board_st.internal_ST = XDB_SM_ST_INIT;
+
+#pragma region App metadata parse
+    // Allocate memory for app_metadata and fill it by reference
+    display_board_st.app_metadata = (parsed_app_meta_t *)malloc(sizeof(parsed_app_meta_t));
+    if (display_board_st.app_metadata)
+    {
+        esp_err_t meta_err = parse_app_metadata(display_board_st.app_metadata);
+        if (meta_err != ESP_OK)
+        {
+            ESP_LOGW(TAG, "Failed to parse app metadata");
+        }
+    }
+    else
+    {
+        ESP_LOGE(TAG, "Failed to allocate memory for app_metadata");
+    }
+
+#pragma endregion
 
 #pragma region OTA and Rollback check
 
@@ -1041,6 +1171,16 @@ extern "C" void app_main()
         nvs_close(h);
     }
 
+    // To populate the debug screen
+    const esp_app_desc_t *app_metadata;
+    app_metadata = esp_app_get_description();
+    if (!app_metadata)
+    {
+        ESP_LOGE(TAG, "No app metadata available");
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+        esp_ota_mark_app_invalid_rollback();
+    }
+
 #pragma endregion
 
 #pragma region Setup
@@ -1058,9 +1198,18 @@ extern "C" void app_main()
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
     }
     // Set up state transmission over CAN
-    if (xTaskCreate(display_board_st_PKG, "XDB_ST_PKG", 4096, NULL, 3, &display_board_st_PKG_hdl) != pdPASS)
+    if (xTaskCreate(display_board_st_PKG, "XDB_ST", 4096, NULL, 3, &display_board_st_PKG_hdl) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create display state package task");
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+        if (rollBackPossible)
+            esp_ota_mark_app_invalid_rollback();
+        else
+            ESP_LOGW(__func__, "Rollback impossible, image could not be invalidated.");
+    }
+    if (xTaskCreate(display_board_version_PKG, "XDB_VER", 4096, NULL, 3, &display_board_version_PKG_hdl) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create display version package task");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         if (rollBackPossible)
             esp_ota_mark_app_invalid_rollback();
@@ -1151,9 +1300,14 @@ extern "C" void app_main()
     ESP_LOGI(__func__, "Loading UI");
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
     ui_init(); // Load the UI library and draw it
+    // Set up the debug screen
+    lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", app_metadata->version, app_metadata->date, app_metadata->time);
+    lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
+    lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.rpm_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
+
 #elifdef CONFIG_RIGHT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     if (display_board_st.mph_selected == 0)
