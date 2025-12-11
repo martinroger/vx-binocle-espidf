@@ -124,12 +124,14 @@ esp_err_t init_XDB_alive_check(void)
 	return ret;
 }
 
-bool check_LD_alive() {
+bool check_LD_alive()
+{
 	bool ret = gpio_get_level((gpio_num_t)CONFIG_LD_ALIVE_IO);
 	return ret;
 }
 
-bool check_RD_alive() {
+bool check_RD_alive()
+{
 	bool ret = gpio_get_level((gpio_num_t)CONFIG_RD_ALIVE_IO);
 	return ret;
 }
@@ -204,16 +206,19 @@ esp_err_t disable_5V_AUX(void)
 #pragma endregion
 
 // drainRemainingBody: consume remaining bytes (non-fatal)
-static void drain_remaining_body(httpd_req_t *req) {
-    const size_t DRAIN_BUFSZ = 1024;
-    static char drainbuf[DRAIN_BUFSZ];
-    int64_t remaining = req->content_len;
-    // If content_len is not set (-1) you might still want to try a non-blocking drain
-    while (remaining > 0) {
-        ssize_t r = httpd_req_recv(req, drainbuf, std::min((size_t)remaining, (size_t)DRAIN_BUFSZ));
-        if (r <= 0) break;
-        remaining -= r;
-    }
+static void drain_remaining_body(httpd_req_t *req)
+{
+	const size_t DRAIN_BUFSZ = 1024;
+	static char drainbuf[DRAIN_BUFSZ];
+	int64_t remaining = req->content_len;
+	// If content_len is not set (-1) you might still want to try a non-blocking drain
+	while (remaining > 0)
+	{
+		ssize_t r = httpd_req_recv(req, drainbuf, std::min((size_t)remaining, (size_t)DRAIN_BUFSZ));
+		if (r <= 0)
+			break;
+		remaining -= r;
+	}
 }
 
 /// @brief Declares the MDNS instances and sets it up on the Hotspot wifi
@@ -941,7 +946,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			drain_remaining_body(req);
 			return ESP_FAIL;
 		}
-
 	}
 	else if (strstr(req->uri, "targetECU=LDB"))
 	{
@@ -1242,6 +1246,108 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	// return ESP_OK;
 }
 
+static esp_err_t cors_options_handler(httpd_req_t *req) {
+    // 1. Set the main CORS header to allow requests from any origin.
+    //    For security, you could replace "*" with "http://interface-board.local"
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    
+    // 2. Specify which methods are allowed for the actual request (POST)
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, OPTIONS");
+
+    // 3. Specify which headers the browser is allowed to send (e.g., Content-Type)
+    //    We explicitly allow Content-Type and any custom headers like X-File-Size if used.
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type, X-File-Size");
+    
+    // 4. Important: Send a 204 No Content response for the preflight check
+    httpd_resp_send(req, NULL, 0); 
+    
+    return ESP_OK;
+}
+
+static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
+{
+	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
+	size_t query_length = httpd_req_get_url_query_len(req);
+	if (query_length == 0)
+	{
+		ESP_LOGE(__func__, "Query had no length");
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+		return ESP_FAIL;
+	}
+	char query_buffer[query_length + 1];
+	size_t file_size;
+	char targetECU[5 + 1];
+	char file_size_str[10];
+	// Retrieve the query string
+	if (httpd_req_get_url_query_str(req, query_buffer, sizeof(query_buffer)) != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not retrieve URL Query string");
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+		return ESP_FAIL;
+	}
+	ESP_LOGI(__func__, "Query string: %s", query_buffer);
+
+	// Check for filesize, first as a string then as a number
+	if (httpd_query_key_value(query_buffer, "size", file_size_str, sizeof(file_size_str)) != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not retrieve file size string");
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+		return ESP_FAIL;
+	}
+	file_size = atol(file_size_str);
+	ESP_LOGI(__func__, "File size from URL : %u", file_size);
+
+	// Check for target ECU then
+	if (httpd_query_key_value(query_buffer, "faketargetECU", targetECU, sizeof(targetECU)) != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not retrieve file size string");
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+		return ESP_FAIL;
+	}
+	ESP_LOGI(__func__, "TargetECU: %s", targetECU);
+	if (strstr(targetECU, "LDB"))
+		ESP_LOGI(__func__, "Prepping for LDB");
+	if (strstr(targetECU, "RDB"))
+		ESP_LOGI(__func__, "Preppring for RDB");
+
+	ESP_LOGI(__func__, "Summary before transfer : content is %u bytes, file size is %u bytes", req->content_len, file_size);
+
+	// Allocate some buffer to receive in segments of 4K
+	const size_t buf_size = 4096;
+	char *buf = static_cast<char *>(malloc(buf_size));
+	if (!buf)
+	{
+		httpd_resp_send_500(req);
+		return ESP_ERR_NO_MEM;
+	}
+
+	int receivedBytes = 0;
+	while (receivedBytes < req->content_len)
+	{
+		int bytesToReceive = std::min(req->content_len - receivedBytes, buf_size); // In order not to exceed content_len
+		int retrieved = httpd_req_recv(req, buf, bytesToReceive);				   // Attempt to receive
+		if (retrieved <= 0)														   // Edge case of timeout or no more content. Might benefit from not retrying for ever
+		{
+			if (retrieved == HTTPD_SOCK_ERR_TIMEOUT)
+				continue; // Go for another loop in case of timeout
+			// Implicitely else and exit otherwise
+			ESP_LOGE(__func__, "Chunk retrieval failed, error %d", retrieved);
+			free(buf);
+			httpd_resp_send_500(req);
+			return ESP_FAIL;
+		}
+		receivedBytes += retrieved;
+		ESP_LOGI(__func__, "Received new chunk of length %d, expected %d, total received %u out of %u, file size %u", retrieved, bytesToReceive, receivedBytes, req->content_len, file_size);
+		vTaskDelay(pdMS_TO_TICKS(50)); // Pretend to do work...
+	}
+
+	ESP_LOGI(__func__, "Exited retrieval loop.");
+
+	free(buf);
+	httpd_resp_sendstr(req, "{\"status\": \"OK\", \"message\": \"Flash successful\"}"); // Replace by something more artsy fartsy.
+	return ESP_OK;
+}
+
 /// @brief Handler to set the boot partition and reboot on it
 /// @param req /set_boot?target= POST from dropdown menu
 /// @return
@@ -1387,6 +1493,10 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &upload_uri);
 	httpd_uri_t flash_uri = {.uri = "/flash", .method = HTTP_POST, .handler = flash_post_handler};
 	httpd_register_uri_handler(server, &flash_uri);
+	httpd_uri_t fake_flash_uri = {.uri = "/fakeFlash", .method = HTTP_POST, .handler = fakeFlash_post_handler};
+	httpd_register_uri_handler(server, &fake_flash_uri);
+	httpd_uri_t fake_flash_options_uri = {.uri = "/fakeFlash", .method = HTTP_OPTIONS, .handler = cors_options_handler};
+	httpd_register_uri_handler(server, &fake_flash_options_uri);
 	httpd_uri_t setboot_uri = {.uri = "/set_boot", .method = HTTP_POST, .handler = set_boot_post_handler};
 	httpd_register_uri_handler(server, &setboot_uri);
 	httpd_uri_t reboot_uri = {.uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler};
@@ -1428,24 +1538,22 @@ static void start_ap_mode(void)
 
 extern "C" void app_main(void)
 {
-	ESP_LOGI(__func__,"Initialising 5V control");
+	ESP_LOGI(__func__, "Initialising 5V control");
 	esp_err_t V5_ctrl_err = init_5V_ctrl();
 	if (V5_ctrl_err != ESP_OK)
-		ESP_LOGE(__func__,"Could not start 5V control ");
+		ESP_LOGE(__func__, "Could not start 5V control ");
 	V5_ctrl_err = enable_5V();
 	if (V5_ctrl_err != ESP_OK)
-		ESP_LOGE(__func__,"Could not start 5V main");
+		ESP_LOGE(__func__, "Could not start 5V main");
 	V5_ctrl_err = enable_5V_AUX();
 	if (V5_ctrl_err != ESP_OK)
-		ESP_LOGE(__func__,"Could not start 5V auxiliary");
+		ESP_LOGE(__func__, "Could not start 5V auxiliary");
 
-
-	ESP_LOGI(__func__,"Configuring XDB Check alive...");
+	ESP_LOGI(__func__, "Configuring XDB Check alive...");
 	esp_err_t check_alive_err = init_XDB_alive_check();
-	if (check_alive_err!=ESP_OK)
-		ESP_LOGE(__func__,"Could not start XDB check alive IOs");
-	
-	
+	if (check_alive_err != ESP_OK)
+		ESP_LOGE(__func__, "Could not start XDB check alive IOs");
+
 	ESP_LOGI(__func__, "Starting TWAI");
 	esp_err_t twai_err = initCAN(NULL);
 	if (twai_err != ESP_OK)

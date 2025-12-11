@@ -54,7 +54,7 @@
             <option value="ota_0">ota_0</option>
             <option value="ota_1">ota_1</option>
         </select><br><br>
-        File: <input type="file" name="file" id="file"><br><br>
+        File: <input type="file" name="file" id="file" accept=".bin"><br><br>
         <button type="button" onclick="doUpload()">Upload and flash</button>
     </form>
     <progress id="uploadProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
@@ -66,11 +66,21 @@
             <option value="RDB">Right Display</option>
             <option value="LDB">Left Display</option>
         </select><br><br>
-        Binary file : <input type="file" name="file" id="CANfile"><br><br>
+        Binary file : <input type="file" name="CANfile" id="CANfile" accept=".bin"><br><br>
         <button type="button" onclick="doCANUpload()">Flash over CAN</button>
     </form>
     <progress id="flashProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
     <pre id="flashresult"></pre>
+
+    <h2>Fake Flash</h2>
+    Target ECU: <select name="faketargetECU" id="faketargetECU">
+        <option value="RDB">Right Display</option>
+        <option value="LDB">Left Display</option>
+    </select><br><br>
+    Binary file : <input type="file" name="fakeCANfile" id="fakeCANfile" accept=".bin"><br><br>
+    <button type="button" onclick="doFakeUpload()">Fake Flash over CAN</button>
+    <progress id="fakeFlashProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
+    <pre id="fakeFlashresult"></pre>
 
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
@@ -82,6 +92,10 @@
     <button
         onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
         Boot and Reboot</button>
+
+
+
+
     <script>
         function refreshCalVariables() {
             fetch('/calibration').then(r => r.json()).then(j => {
@@ -187,6 +201,101 @@
             };
             xhr.send(fd);
         }
+
+        function doFakeUpload() {
+            var f = document.getElementById('fakeCANfile').files[0];
+            if (!f) {
+                alert('Choose file');
+                return;
+            }
+            var target = document.getElementById('faketargetECU').value;
+            const baseURL = '/fakeFlash?targetECU=' + target + '&';
+            uploadFileChunked(f, baseURL);
+
+        }
+
+        async function uploadFileChunked(file, baseURL) {
+            const CHUNK_SIZE = 255;
+            const uploadURL = baseURL; // Your ESP32 endpoint
+            const fileSize = file.size;
+            const logOutput = document.getElementById('fakeFlashresult');
+            const progressBar = document.getElementById('fakeFlashProgress');
+
+            let uploadedBytes = 0;
+
+            // Reset UI elements
+            progressBar.value = 0;
+            logOutput.textContent = 'Starting file upload...';
+
+            // 1. Construct the URL with file size
+            const finalURL = `${uploadURL}size=${fileSize}`;
+
+            logOutput.textContent += `\nTarget URL: ${finalURL}`;
+            logOutput.textContent += `\nFile Size: ${fileSize} bytes. Chunk Size: ${CHUNK_SIZE} bytes.`;
+
+            // 2. Create a custom ReadableStream to control chunking and progress
+            const fileStream = new ReadableStream({
+                async start(controller) {
+                    let offset = 0;
+
+                    // Loop until the entire file is read
+                    while (offset < fileSize) {
+                        // Determine the end of the current chunk
+                        const end = Math.min(offset + CHUNK_SIZE, fileSize);
+
+                        // Read the chunk as an ArrayBuffer using the slice() method
+                        const slice = file.slice(offset, end);
+                        const chunk = await slice.arrayBuffer();
+
+                        // Enqueue the chunk (which sends it to the fetch body)
+                        controller.enqueue(new Uint8Array(chunk));
+
+                        // Update progress tracking
+                        offset += chunk.byteLength;
+                        uploadedBytes = offset;
+
+                        // Update UI: Progress Bar
+                        progressBar.value = Math.round((uploadedBytes / fileSize) * 100);
+
+                        // Update UI: Log Result (Send status updates every 10 chunks)
+                        if ((Math.floor(offset / CHUNK_SIZE) % 10) === 0) {
+                            logOutput.textContent += `\nClient progress: ${progressBar.value}% (${uploadedBytes} bytes sent)`;
+                        }
+                    }
+
+                    // Close the stream once all chunks are sent
+                    controller.close();
+                    logOutput.textContent += "\nAll chunks enqueued by client.";
+                }
+            });
+
+            try {
+                // 3. Make the fetch request with the custom stream
+                const response = await fetch(finalURL, {
+                    method: 'POST',
+                    body: fileStream, // The stream is the request body
+                    headers: {
+                        'Content-Type': 'application/octet-stream',
+                    },
+                    // Since we're sending the size via URI, Content-Length is not strictly needed
+                    // but the browser might add it based on the stream's eventual size.
+                    duplex: 'half',
+                });
+
+                if (response.ok) {
+                    const resultText = await response.text();
+                    logOutput.textContent += `\n\n✅ Upload Success! Server Response: ${resultText}`;
+                    progressBar.value = 100; // Final progress update
+                } else {
+                    const errorText = await response.text();
+                    logOutput.textContent += `\n\n❌ Upload Failed! HTTP Status: ${response.status}. Error: ${errorText}`;
+                }
+
+            } catch (error) {
+                logOutput.textContent += `\n\n❌ Network Error: Could not connect to the ESP32. ${error.message}`;
+            }
+        }
+
 
         window.addEventListener('load', function () {
             refreshCalVariables();
