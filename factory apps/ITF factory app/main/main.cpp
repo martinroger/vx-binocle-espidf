@@ -29,6 +29,7 @@
 #include "esp_mac.h"
 #include "esp_image_format.h"
 #include "esp_spiffs.h"
+#include <algorithm>
 
 #include "binocan.h"
 #include "twai_daemon.h"
@@ -201,6 +202,19 @@ esp_err_t disable_5V_AUX(void)
 	return ret;
 }
 #pragma endregion
+
+// drainRemainingBody: consume remaining bytes (non-fatal)
+static void drain_remaining_body(httpd_req_t *req) {
+    const size_t DRAIN_BUFSZ = 1024;
+    static char drainbuf[DRAIN_BUFSZ];
+    int64_t remaining = req->content_len;
+    // If content_len is not set (-1) you might still want to try a non-blocking drain
+    while (remaining > 0) {
+        ssize_t r = httpd_req_recv(req, drainbuf, std::min((size_t)remaining, (size_t)DRAIN_BUFSZ));
+        if (r <= 0) break;
+        remaining -= r;
+    }
+}
 
 /// @brief Declares the MDNS instances and sets it up on the Hotspot wifi
 /// @param
@@ -675,6 +689,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	{
 		ESP_LOGE(__func__, "Invalid content length!");
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Invalid content length");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	// Allocate some buffer to receive in segments of 4K
@@ -684,6 +699,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	{
 		ESP_LOGE(__func__, "Could not allocate reception buffer");
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to allocate buffer");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	// Prepare pointer towards the partition that will be updated
@@ -696,6 +712,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 		free(buf);
 		ESP_LOGE(__func__, "Could not receive first 4K of file to look for app header");
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	readTotal += receivedBytes;
@@ -724,6 +741,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "Could not find target partition.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Target partition not found");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 
@@ -766,6 +784,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "Could not find starter bytes, invalid image.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Uploaded binary contains no app descriptor (rejecting)");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 
@@ -782,6 +801,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "Could not start OTA, aborting.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unsuccesful : esp_ota_begin failed");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	// Write the first partial image segment
@@ -818,6 +838,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Could not erase partition %s", update_partition->label);
 		}
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA validation failed");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	else
@@ -828,6 +849,8 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 			ESP_LOGW(__func__, "Could not set new update partition %s as next boot.", update_partition->label);
 		}
 	}
+
+	drain_remaining_body(req);
 
 	/* Respond with JSON including app metadata in id "result"*/
 	char out[256];
@@ -844,6 +867,8 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 static esp_err_t flash_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+
+	httpd_resp_set_hdr(req, "Connection", "close");
 
 	// Preparing transfer block size and minimum separation time variables
 	uint8_t CANBlockSize = 0;
@@ -864,6 +889,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	{
 		ESP_LOGE(__func__, "Invalid content length!");
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Invalid content length");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	// Allocate some buffer to receive in segments of 1K
@@ -873,6 +899,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	{
 		ESP_LOGE(__func__, "Could not allocate reception buffer");
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to allocate buffer");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	size_t readTotal = 0;
@@ -883,6 +910,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		free(buf);
 		ESP_LOGE(__func__, "Could not receive first 1K of file to look for app header");
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	readTotal += receivedBytes;
@@ -901,6 +929,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Could not start 5V for RDB");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V");
+			drain_remaining_body(req);
 			return ESP_FAIL;
 		}
 		// vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
@@ -909,6 +938,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Could not check RD is powered up");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check RD state");
+			drain_remaining_body(req);
 			return ESP_FAIL;
 		}
 
@@ -924,6 +954,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Could not start 5V for LDB");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V AUX");
+			drain_remaining_body(req);
 			return ESP_FAIL;
 		}
 		// vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
@@ -932,6 +963,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Could not check LD is powered up");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check LD state");
+			drain_remaining_body(req);
 			return ESP_FAIL;
 		}
 	}
@@ -940,6 +972,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "No valid target found, aborting");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Target ECU unknown");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	ESP_LOGI(__func__, "Target ECU : %s", target_label);
@@ -984,6 +1017,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "Could not find starter bytes, invalid image.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Uploaded binary contains no app descriptor (rejecting)");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	/* Copy descriptor locally before freeing the upload buffer */
@@ -1025,6 +1059,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		free(buf);
 		ESP_LOGE(__func__, "Impossible to send first frame : %s", esp_err_to_name(tx_err));
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Impossible to send FF");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 
@@ -1038,6 +1073,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+			drain_remaining_body(req);
 			return ESP_FAIL;
 		}
 		else if (rx_err != ESP_OK)
@@ -1045,6 +1081,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
+			drain_remaining_body(req);
 			return ESP_FAIL;
 		}
 		else
@@ -1064,6 +1101,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 		free(buf);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+		drain_remaining_body(req);
 		return ESP_FAIL;
 	}
 	else
@@ -1078,6 +1116,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
 			free(buf);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
+			drain_remaining_body(req);
 			return ESP_FAIL;
 		}
 	}
@@ -1129,6 +1168,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+						drain_remaining_body(req);
 						return ESP_FAIL;
 					}
 					else if (rx_err != ESP_OK)
@@ -1136,6 +1176,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
+						drain_remaining_body(req);
 						return ESP_FAIL;
 					}
 					else
@@ -1155,6 +1196,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
 					free(buf);
 					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
+					drain_remaining_body(req);
 					return ESP_FAIL;
 				}
 				else
@@ -1169,6 +1211,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
 						free(buf);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
+						drain_remaining_body(req);
 						return ESP_FAIL;
 					}
 				}
@@ -1186,6 +1229,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	// Resume normal TWAI Daemon tasks
 	vTaskResume(CAN_RX_tsk_hdl);
 	vTaskResume(CAN_TX_tsk_hdl);
+
+	drain_remaining_body(req);
 	/* Respond with JSON including app metadata in id "result"*/
 	char out[256];
 	snprintf(out, sizeof(out), "{\"status\":\"ok\",\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\"}",

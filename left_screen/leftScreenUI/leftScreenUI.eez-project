@@ -118,6 +118,38 @@
       "localVariables": [],
       "userProperties": [],
       "name": "reboot_factory"
+    },
+    {
+      "objID": "18fc83b5-b248-4555-d83f-44e791078812",
+      "components": [],
+      "connectionLines": [],
+      "localVariables": [],
+      "userProperties": [],
+      "name": "set_rpm_alarm_override"
+    },
+    {
+      "objID": "e1df3157-a49f-4628-fa2d-e7beca430320",
+      "components": [],
+      "connectionLines": [],
+      "localVariables": [],
+      "userProperties": [],
+      "name": "inc_rpm_spinbox"
+    },
+    {
+      "objID": "026a4542-7150-4619-dc7f-e37fc44cbfef",
+      "components": [],
+      "connectionLines": [],
+      "localVariables": [],
+      "userProperties": [],
+      "name": "dec_rpm_spinbox"
+    },
+    {
+      "objID": "ad8753e2-2acf-4ede-f7aa-e581ab3c99fd",
+      "components": [],
+      "connectionLines": [],
+      "localVariables": [],
+      "userProperties": [],
+      "name": "save_rpm_spinbox"
     }
   ],
   "userPages": [
@@ -369,6 +401,9 @@
                             "DEFAULT": {
                               "align": "CENTER",
                               "text_font": "whiteRabbit_128px"
+                            },
+                            "FOCUSED": {
+                              "text_color": "ff3a3a"
                             }
                           }
                         }
@@ -1749,7 +1784,7 @@
                     {
                       "objID": "573acfa5-84c4-49b5-f445-1c8daf457897",
                       "type": "LVGLSwitchWidget",
-                      "left": 0,
+                      "left": -127,
                       "top": -60,
                       "width": 50,
                       "height": 25,
@@ -1762,7 +1797,16 @@
                         "childStyles": []
                       },
                       "timeline": [],
-                      "eventHandlers": [],
+                      "eventHandlers": [
+                        {
+                          "objID": "2eba76db-e279-45c2-fb00-fc5c7465d311",
+                          "eventName": "RELEASED",
+                          "handlerType": "action",
+                          "action": "set_rpm_alarm_override",
+                          "userData": 0
+                        }
+                      ],
+                      "identifier": "override alarm sw",
                       "leftUnit": "px",
                       "topUnit": "px",
                       "widthUnit": "px",
@@ -1777,6 +1821,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
+                      "disabledState": false,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -1791,6 +1836,56 @@
                       },
                       "group": "",
                       "groupIndex": 0
+                    },
+                    {
+                      "objID": "7593f0a3-33ec-4d1d-85f3-ccf16516a9c4",
+                      "type": "LVGLLabelWidget",
+                      "left": 27,
+                      "top": -60,
+                      "width": 252,
+                      "height": 19,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "6a04fe48-5d57-44d2-8d95-f1e12f0d9ef4",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "content",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "256b0aae-cad4-4e41-ca20-4cf539ac476d",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "align": "CENTER",
+                              "text_font": "whiteRabbit_24px"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0,
+                      "text": "Override RPM alarm",
+                      "textType": "literal",
+                      "longMode": "WRAP",
+                      "recolor": false
                     },
                     {
                       "objID": "1d8796c8-7c49-4ea3-f9c0-ff088a7c6948",
@@ -1809,6 +1904,7 @@
                       },
                       "timeline": [],
                       "eventHandlers": [],
+                      "identifier": "rpm_alarm_spinbox",
                       "leftUnit": "px",
                       "topUnit": "px",
                       "widthUnit": "content",
@@ -1823,6 +1919,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
+                      "disabledState": true,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -1833,6 +1930,20 @@
                               "align": "CENTER",
                               "text_font": "whiteRabbit_60px",
                               "text_align": "CENTER"
+                            },
+                            "DISABLED": {
+                              "text_color": "#a1a1a1"
+                            }
+                          },
+                          "SELECTED": {
+                            "DISABLED": {
+                              "text_color": "#a1a1a1"
+                            }
+                          },
+                          "CURSOR": {
+                            "DISABLED": {
+                              "text_color": "#a1a1a1",
+                              "bg_color": "#626262"
                             }
                           }
                         }
@@ -1865,7 +1976,16 @@
                         "childStyles": []
                       },
                       "timeline": [],
-                      "eventHandlers": [],
+                      "eventHandlers": [
+                        {
+                          "objID": "3e153627-cafe-4c45-e584-82dc065208c1",
+                          "eventName": "PRESSED",
+                          "handlerType": "action",
+                          "action": "inc_rpm_spinbox",
+                          "userData": 0
+                        }
+                      ],
+                      "identifier": "inc_rpm_alarm_btn",
                       "leftUnit": "px",
                       "topUnit": "px",
                       "widthUnit": "px",
@@ -1931,6 +2051,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
+                      "disabledState": true,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -1962,7 +2083,16 @@
                         "childStyles": []
                       },
                       "timeline": [],
-                      "eventHandlers": [],
+                      "eventHandlers": [
+                        {
+                          "objID": "d2dac8bd-d18b-4268-9aac-c6a9ef47b57a",
+                          "eventName": "PRESSED",
+                          "handlerType": "action",
+                          "action": "dec_rpm_spinbox",
+                          "userData": 0
+                        }
+                      ],
+                      "identifier": "dec_rpm_alarm_btn",
                       "leftUnit": "px",
                       "topUnit": "px",
                       "widthUnit": "px",
@@ -2028,10 +2158,120 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
+                      "disabledState": true,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
                         "objID": "31b014b2-859c-4730-9b76-68ae5471bf78",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "align": "CENTER"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0
+                    },
+                    {
+                      "objID": "85e721cd-0f77-4f53-93b4-6ed1c855bf56",
+                      "type": "LVGLButtonWidget",
+                      "left": 0,
+                      "top": 67,
+                      "width": 88,
+                      "height": 50,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "90ddbf4b-2a9a-4cad-98c1-447b52babdec",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "hiddenInEditor": false,
+                      "timeline": [],
+                      "eventHandlers": [
+                        {
+                          "objID": "961513ce-8611-4c09-cd4d-86224fe4952a",
+                          "eventName": "PRESSED",
+                          "handlerType": "action",
+                          "action": "save_rpm_spinbox",
+                          "userData": 0
+                        }
+                      ],
+                      "identifier": "save_rpm_alarm_btn",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "content",
+                      "heightUnit": "px",
+                      "children": [
+                        {
+                          "objID": "2857a972-bdaa-4c50-bb1a-7eb69236b6a9",
+                          "type": "LVGLLabelWidget",
+                          "left": 0,
+                          "top": 0,
+                          "width": 56,
+                          "height": 19,
+                          "customInputs": [],
+                          "customOutputs": [],
+                          "style": {
+                            "objID": "bfabbe85-f9a2-4d76-fd33-da58f5e97708",
+                            "useStyle": "default",
+                            "conditionalStyles": [],
+                            "childStyles": []
+                          },
+                          "hiddenInEditor": false,
+                          "timeline": [],
+                          "eventHandlers": [],
+                          "leftUnit": "px",
+                          "topUnit": "px",
+                          "widthUnit": "content",
+                          "heightUnit": "content",
+                          "children": [],
+                          "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                          "hiddenFlagType": "literal",
+                          "clickableFlagType": "literal",
+                          "flagScrollbarMode": "",
+                          "flagScrollDirection": "",
+                          "scrollSnapX": "",
+                          "scrollSnapY": "",
+                          "checkedStateType": "literal",
+                          "disabledStateType": "literal",
+                          "states": "",
+                          "localStyles": {
+                            "objID": "d3cee52f-53d0-4bbd-9bc2-169567cffea6",
+                            "definition": {
+                              "MAIN": {
+                                "DEFAULT": {
+                                  "align": "CENTER",
+                                  "text_font": "whiteRabbit_24px"
+                                }
+                              }
+                            }
+                          },
+                          "group": "",
+                          "groupIndex": 0,
+                          "text": "Save",
+                          "textType": "literal",
+                          "longMode": "WRAP",
+                          "recolor": false
+                        }
+                      ],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_ON_FOCUS|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlag": true,
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledState": true,
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "4bc26b4f-ed04-47bb-96bd-b1d5a5021899",
                         "definition": {
                           "MAIN": {
                             "DEFAULT": {

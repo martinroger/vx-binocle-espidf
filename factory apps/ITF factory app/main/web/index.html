@@ -169,22 +169,21 @@
                 try {
                     var j = JSON.parse(xhr.responseText);
                     document.getElementById('flashresult').innerText = "Upload finished " + JSON.stringify(j, null, 2);
-                    document.getElementById('CANFile').value = null;
                     // if (j.project_name) {
                     //     refreshPartitions();
                     // }
                 }
                 catch (e) {
                     document.getElementById('flashresult').innerText = xhr.responseText;
-                    document.getElementById('CANFile').value = null;
+
                 }
                 document.getElementById('flashProgress').value = 0;
-                document.getElementById('CANFile').value = null;
+
             };
             xhr.onerror = function () {
                 alert('Upload failed');
                 document.getElementById('flashProgress').value = 0;
-                document.getElementById('CANFile').value = null;
+
             };
             xhr.send(fd);
         }

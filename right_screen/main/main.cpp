@@ -78,6 +78,8 @@ struct board_ST
     bool screen_interlock_OK = false;
     uint8_t internal_ST = XDB_SM_ST_OFF;
     uint8_t mph_selected = false;
+    uint8_t rpm_alarm_override = false;
+    uint32_t rpm_alarm_threshold = 6000;
     parsed_app_meta_t *app_metadata;
 } display_board_st;
 
@@ -104,6 +106,7 @@ bool lowOilOn, p_lowOilOn = true;
 bool milOn, p_milOn = true;
 bool airbagOn, p_airbagOn = true;
 bool ignitionST, p_ignitionST = false;
+bool alarmOn, p_alarmOn = true;
 
 // Vehicle numerical parameters
 float speed_kph, p_speed_kph = 0;
@@ -178,6 +181,75 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
     p_trip_km = 0;
     p_speed_kph = 0;
 }
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+
+extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
+{
+    display_board_st.rpm_alarm_override = lv_obj_has_state(objects.override_alarm_sw, LV_STATE_CHECKED);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u8(h, "rpm_al_overr", display_board_st.rpm_alarm_override) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save rpm alarm override switch status");
+    }
+    lvgl_port_lock(-1);
+    switch (display_board_st.rpm_alarm_override)
+    {
+    case 1:
+        lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, false);
+        lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, false);
+        lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, false);
+        lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, false);
+        if (nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve RPM alarm threshold from NVS");
+        lv_spinbox_set_value(objects.rpm_alarm_spinbox, (int32_t)display_board_st.rpm_alarm_threshold);
+        break;
+    case 0:
+        lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, true);
+        lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, true);
+        lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, true);
+        lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, true);
+        lv_spinbox_set_value(objects.rpm_alarm_spinbox, 0);
+        break;
+    default:
+        ESP_LOGE(__func__, "Unauthorized RPM alarm override state");
+        break;
+    }
+    nvs_commit(h);
+    nvs_close(h);
+    lvgl_port_unlock();
+}
+
+extern "C" void action_inc_rpm_spinbox(lv_event_t *e)
+{
+    lvgl_port_lock(-1);
+    lv_spinbox_increment(objects.rpm_alarm_spinbox);
+    lvgl_port_unlock();
+}
+
+extern "C" void action_dec_rpm_spinbox(lv_event_t *e)
+{
+    lvgl_port_lock(-1);
+    lv_spinbox_decrement(objects.rpm_alarm_spinbox);
+    lvgl_port_unlock();
+}
+
+extern "C" void action_save_rpm_spinbox(lv_event_t *e)
+{
+    display_board_st.rpm_alarm_threshold = lv_spinbox_get_value(objects.rpm_alarm_spinbox);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u32(h, "rpm_al_thr", display_board_st.rpm_alarm_threshold) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save rpm alarm override threshold");
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
 #endif
 
 /// @brief Simple functions that compares internal metrics and updates LVGL objects if the metric has changed.
@@ -213,6 +285,8 @@ int updateLVGLObjects()
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         lv_label_set_text_fmt(objects.rpm, "%04ld", (long)((rpm / 10) * 10));
+        lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override == 1) ? (rpm > display_board_st.rpm_alarm_threshold) : alarmOn);
+
         p_rpm = rpm;
         updatedElements++;
     }
@@ -605,10 +679,19 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             ESP_LOGW(__func__, "Ignition Status signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_ignition_ah_st);
             ignitionST = false; // Default value
         }
+        if (binocan_itf_active_hi_lo_itf_alarm_ah_is_in_range(binocan_itf_active_hi_lo_msg.itf_alarm_ah))
+        {
+            alarmOn= (binocan_itf_active_hi_lo_itf_alarm_ah_decode(binocan_itf_active_hi_lo_msg.itf_alarm_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALARM_AH_ON_CHOICE);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "Alarm signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_alarm_ah);
+            alarmOn = true; // Default value
+        }
 
-        ESP_LOGD(__func__, "Telltales: ABS %d, Airbag %d, CEL %d, High Beams %d, Low Brake Fluid %d, Low Coolant %d, Low Fuel %d, Low Oil Pressure %d, Battery/Alternator %d, Over Temperature %d, Parking Brake %d, Indicators %d, Ignition %d",
+        ESP_LOGD(__func__, "Telltales: ABS %d, Airbag %d, CEL %d, High Beams %d, Low Brake Fluid %d, Low Coolant %d, Low Fuel %d, Low Oil Pressure %d, Battery/Alternator %d, Over Temperature %d, Parking Brake %d, Indicators %d, Ignition %d, Alarm %d",
                  absOn, airbagOn, milOn, highBeamOn, brakesOn, lowCoolantOn, lowFuelOn, lowOilOn, batteryOn,
-                 overTemperatureOn, parkingBrakeOn, indicatorsOn, ignitionST);
+                 overTemperatureOn, parkingBrakeOn, indicatorsOn, ignitionST, alarmOn);
     }
     break;
 
@@ -1167,6 +1250,8 @@ extern "C" void app_main()
             nvs_set_i8(h, "lastPart", -1);
         }
         nvs_err = nvs_get_u8(h, "mph_on", &(display_board_st.mph_selected));
+        nvs_err = nvs_get_u8(h, "rpm_al_overr", &(display_board_st.rpm_alarm_override));
+        nvs_err = nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold));
         nvs_commit(h);
         nvs_close(h);
     }
@@ -1307,6 +1392,29 @@ extern "C" void app_main()
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.rpm_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
+
+    switch (display_board_st.rpm_alarm_override)
+    {
+    case 1:
+        lv_obj_set_state(objects.override_alarm_sw, LV_STATE_CHECKED, true);
+        lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, false);
+        lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, false);
+        lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, false);
+        lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, false);
+        lv_spinbox_set_value(objects.rpm_alarm_spinbox, (int32_t)display_board_st.rpm_alarm_threshold);
+        break;
+    case 0:
+        lv_obj_set_state(objects.override_alarm_sw, LV_STATE_CHECKED, false);
+        lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, true);
+        lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, true);
+        lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, true);
+        lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, true);
+        lv_spinbox_set_value(objects.rpm_alarm_spinbox, 0);
+        break;
+    default:
+        ESP_LOGE(__func__, "Unauthorized RPM alarm override state");
+        break;
+    }
 
 #elifdef CONFIG_RIGHT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks

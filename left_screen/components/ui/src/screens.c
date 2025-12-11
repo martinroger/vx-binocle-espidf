@@ -87,6 +87,7 @@ void create_screen_main_scr() {
                             lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICK_FOCUSABLE|LV_OBJ_FLAG_GESTURE_BUBBLE|LV_OBJ_FLAG_PRESS_LOCK|LV_OBJ_FLAG_SCROLLABLE|LV_OBJ_FLAG_SCROLL_CHAIN_HOR|LV_OBJ_FLAG_SCROLL_CHAIN_VER|LV_OBJ_FLAG_SCROLL_ELASTIC|LV_OBJ_FLAG_SCROLL_MOMENTUM|LV_OBJ_FLAG_SCROLL_WITH_ARROW|LV_OBJ_FLAG_SNAPPABLE);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_128px, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffff3a3a), LV_PART_MAIN | LV_STATE_FOCUSED);
                             lv_label_set_text(obj, "0000");
                         }
                         {
@@ -393,13 +394,26 @@ void create_screen_main_scr() {
                     {
                         lv_obj_t *parent_obj = obj;
                         {
+                            // override alarm sw
                             lv_obj_t *obj = lv_switch_create(parent_obj);
-                            lv_obj_set_pos(obj, 0, -60);
+                            objects.override_alarm_sw = obj;
+                            lv_obj_set_pos(obj, -127, -60);
                             lv_obj_set_size(obj, 50, 25);
+                            lv_obj_add_event_cb(obj, action_set_rpm_alarm_override, LV_EVENT_RELEASED, (void *)0);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                         }
                         {
+                            lv_obj_t *obj = lv_label_create(parent_obj);
+                            lv_obj_set_pos(obj, 27, -60);
+                            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_label_set_text(obj, "Override RPM alarm");
+                        }
+                        {
+                            // rpm_alarm_spinbox
                             lv_obj_t *obj = lv_spinbox_create(parent_obj);
+                            objects.rpm_alarm_spinbox = obj;
                             lv_obj_set_pos(obj, 0, 0);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_spinbox_set_digit_format(obj, 5, 0);
@@ -407,14 +421,23 @@ void create_screen_main_scr() {
                             lv_spinbox_set_rollover(obj, false);
                             lv_spinbox_set_step(obj, 1);
                             lv_spinbox_set_value(obj, 0);
+                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_60px, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffa1a1a1), LV_PART_MAIN | LV_STATE_DISABLED);
+                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffa1a1a1), LV_PART_SELECTED | LV_STATE_DISABLED);
+                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffa1a1a1), LV_PART_CURSOR | LV_STATE_DISABLED);
+                            lv_obj_set_style_bg_color(obj, lv_color_hex(0xff626262), LV_PART_CURSOR | LV_STATE_DISABLED);
                         }
                         {
+                            // inc_rpm_alarm_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
+                            objects.inc_rpm_alarm_btn = obj;
                             lv_obj_set_pos(obj, 140, 0);
                             lv_obj_set_size(obj, 50, 50);
+                            lv_obj_add_event_cb(obj, action_inc_rpm_spinbox, LV_EVENT_PRESSED, (void *)0);
+                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             {
                                 lv_obj_t *parent_obj = obj;
@@ -429,9 +452,13 @@ void create_screen_main_scr() {
                             }
                         }
                         {
+                            // dec_rpm_alarm_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
+                            objects.dec_rpm_alarm_btn = obj;
                             lv_obj_set_pos(obj, -140, 0);
                             lv_obj_set_size(obj, 50, 50);
+                            lv_obj_add_event_cb(obj, action_dec_rpm_spinbox, LV_EVENT_PRESSED, (void *)0);
+                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             {
                                 lv_obj_t *parent_obj = obj;
@@ -442,6 +469,27 @@ void create_screen_main_scr() {
                                     lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                                     lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
                                     lv_label_set_text(obj, "-");
+                                }
+                            }
+                        }
+                        {
+                            // save_rpm_alarm_btn
+                            lv_obj_t *obj = lv_button_create(parent_obj);
+                            objects.save_rpm_alarm_btn = obj;
+                            lv_obj_set_pos(obj, 0, 67);
+                            lv_obj_set_size(obj, LV_SIZE_CONTENT, 50);
+                            lv_obj_add_event_cb(obj, action_save_rpm_spinbox, LV_EVENT_PRESSED, (void *)0);
+                            lv_obj_add_state(obj, LV_STATE_DISABLED);
+                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            {
+                                lv_obj_t *parent_obj = obj;
+                                {
+                                    lv_obj_t *obj = lv_label_create(parent_obj);
+                                    lv_obj_set_pos(obj, 0, 0);
+                                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                                    lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
+                                    lv_label_set_text(obj, "Save");
                                 }
                             }
                         }
