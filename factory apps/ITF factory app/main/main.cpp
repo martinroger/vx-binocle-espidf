@@ -1298,9 +1298,9 @@ static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
 	ESP_LOGI(__func__, "File size from URL : %u", file_size);
 
 	// Check for target ECU then
-	if (httpd_query_key_value(query_buffer, "faketargetECU", targetECU, sizeof(targetECU)) != ESP_OK)
+	if (httpd_query_key_value(query_buffer, "targetECU", targetECU, sizeof(targetECU)) != ESP_OK)
 	{
-		ESP_LOGE(__func__, "Could not retrieve file size string");
+		ESP_LOGE(__func__, "Could not retrieve target ECU");
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
 		return ESP_FAIL;
 	}

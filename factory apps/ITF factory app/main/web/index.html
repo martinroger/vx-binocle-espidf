@@ -210,76 +210,40 @@
             }
             var target = document.getElementById('faketargetECU').value;
             const baseURL = '/fakeFlash?targetECU=' + target + '&';
-            uploadFileChunked(f, baseURL);
+            uploadFile(f, baseURL);
 
         }
 
-        async function uploadFileChunked(file, baseURL) {
-            const CHUNK_SIZE = 255;
+        async function uploadFile(file, baseURL) {
+
             const uploadURL = baseURL; // Your ESP32 endpoint
             const fileSize = file.size;
             const logOutput = document.getElementById('fakeFlashresult');
             const progressBar = document.getElementById('fakeFlashProgress');
 
-            let uploadedBytes = 0;
+
 
             // Reset UI elements
-            progressBar.value = 0;
+
             logOutput.textContent = 'Starting file upload...';
 
             // 1. Construct the URL with file size
             const finalURL = `${uploadURL}size=${fileSize}`;
 
             logOutput.textContent += `\nTarget URL: ${finalURL}`;
-            logOutput.textContent += `\nFile Size: ${fileSize} bytes. Chunk Size: ${CHUNK_SIZE} bytes.`;
-
-            // 2. Create a custom ReadableStream to control chunking and progress
-            const fileStream = new ReadableStream({
-                async start(controller) {
-                    let offset = 0;
-
-                    // Loop until the entire file is read
-                    while (offset < fileSize) {
-                        // Determine the end of the current chunk
-                        const end = Math.min(offset + CHUNK_SIZE, fileSize);
-
-                        // Read the chunk as an ArrayBuffer using the slice() method
-                        const slice = file.slice(offset, end);
-                        const chunk = await slice.arrayBuffer();
-
-                        // Enqueue the chunk (which sends it to the fetch body)
-                        controller.enqueue(new Uint8Array(chunk));
-
-                        // Update progress tracking
-                        offset += chunk.byteLength;
-                        uploadedBytes = offset;
-
-                        // Update UI: Progress Bar
-                        progressBar.value = Math.round((uploadedBytes / fileSize) * 100);
-
-                        // Update UI: Log Result (Send status updates every 10 chunks)
-                        if ((Math.floor(offset / CHUNK_SIZE) % 10) === 0) {
-                            logOutput.textContent += `\nClient progress: ${progressBar.value}% (${uploadedBytes} bytes sent)`;
-                        }
-                    }
-
-                    // Close the stream once all chunks are sent
-                    controller.close();
-                    logOutput.textContent += "\nAll chunks enqueued by client.";
-                }
-            });
+            logOutput.textContent += `\nFile Size: ${fileSize} bytes.`;
 
             try {
                 // 3. Make the fetch request with the custom stream
                 const response = await fetch(finalURL, {
                     method: 'POST',
-                    body: fileStream, // The stream is the request body
+                    body: file, // The stream is the request body
                     headers: {
                         'Content-Type': 'application/octet-stream',
                     },
                     // Since we're sending the size via URI, Content-Length is not strictly needed
                     // but the browser might add it based on the stream's eventual size.
-                    duplex: 'half',
+                    // duplex: 'half',
                 });
 
                 if (response.ok) {
