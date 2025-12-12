@@ -61,26 +61,26 @@
     <pre id="result"></pre>
 
     <h2>Flash over CAN</h2>
-    <form id="uploadCANForm" method="POST" enctype="multipart/form-data">
+    <div>
         Target ECU: <select name="targetECU" id="targetECU">
             <option value="RDB">Right Display</option>
             <option value="LDB">Left Display</option>
         </select><br><br>
         Binary file : <input type="file" name="CANfile" id="CANfile" accept=".bin"><br><br>
         <button type="button" onclick="doCANUpload()">Flash over CAN</button>
-    </form>
-    <progress id="flashProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
-    <pre id="flashresult"></pre>
+        <pre id="flashresult"></pre>
+    </div>
 
     <h2>Fake Flash</h2>
-    Target ECU: <select name="faketargetECU" id="faketargetECU">
-        <option value="RDB">Right Display</option>
-        <option value="LDB">Left Display</option>
-    </select><br><br>
-    Binary file : <input type="file" name="fakeCANfile" id="fakeCANfile" accept=".bin"><br><br>
-    <button type="button" onclick="doFakeUpload()">Fake Flash over CAN</button>
-    <progress id="fakeFlashProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
-    <pre id="fakeFlashresult"></pre>
+    <div>
+        Target ECU: <select name="faketargetECU" id="faketargetECU">
+            <option value="RDB">Right Display</option>
+            <option value="LDB">Left Display</option>
+        </select><br><br>
+        Binary file : <input type="file" name="fakeCANfile" id="fakeCANfile" accept=".bin"><br><br>
+        <button type="button" onclick="doFakeUpload()">Fake Flash over CAN</button>
+        <pre id="fakeFlashresult"></pre>
+    </div>
 
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
@@ -170,36 +170,9 @@
                 alert('Choose file');
                 return;
             }
-            var t = document.getElementById('targetECU').value;
-            var fd = new FormData(); fd.append('file', f);
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/flash?targetECU=' + t, true);
-            xhr.upload.onprogress = function (e) {
-                if (e.lengthComputable) {
-                    document.getElementById('flashProgress').value = Math.round(e.loaded / e.total * 100);
-                }
-            };
-            xhr.onload = function () {
-                try {
-                    var j = JSON.parse(xhr.responseText);
-                    document.getElementById('flashresult').innerText = "Upload finished " + JSON.stringify(j, null, 2);
-                    // if (j.project_name) {
-                    //     refreshPartitions();
-                    // }
-                }
-                catch (e) {
-                    document.getElementById('flashresult').innerText = xhr.responseText;
-
-                }
-                document.getElementById('flashProgress').value = 0;
-
-            };
-            xhr.onerror = function () {
-                alert('Upload failed');
-                document.getElementById('flashProgress').value = 0;
-
-            };
-            xhr.send(fd);
+            var target = document.getElementById('targetECU').value;
+            const baseURL = '/fakeFlash?targetECU=' + target + '&';
+            uploadFile(f, baseURL, 'flashresult');
         }
 
         function doFakeUpload() {
@@ -210,19 +183,14 @@
             }
             var target = document.getElementById('faketargetECU').value;
             const baseURL = '/fakeFlash?targetECU=' + target + '&';
-            uploadFile(f, baseURL);
-
+            uploadFile(f, baseURL, 'fakeFlashresult');
         }
 
-        async function uploadFile(file, baseURL) {
+        async function uploadFile(file, baseURL, resultID) {
 
             const uploadURL = baseURL; // Your ESP32 endpoint
             const fileSize = file.size;
-            const logOutput = document.getElementById('fakeFlashresult');
-            const progressBar = document.getElementById('fakeFlashProgress');
-
-
-
+            const logOutput = document.getElementById(resultID);
             // Reset UI elements
 
             logOutput.textContent = 'Starting file upload...';
@@ -237,19 +205,16 @@
                 // 3. Make the fetch request with the custom stream
                 const response = await fetch(finalURL, {
                     method: 'POST',
-                    body: file, // The stream is the request body
+                    body: file, 
                     headers: {
                         'Content-Type': 'application/octet-stream',
                     },
-                    // Since we're sending the size via URI, Content-Length is not strictly needed
-                    // but the browser might add it based on the stream's eventual size.
-                    // duplex: 'half',
                 });
 
                 if (response.ok) {
                     const resultText = await response.text();
                     logOutput.textContent += `\n\n✅ Upload Success! Server Response: ${resultText}`;
-                    progressBar.value = 100; // Final progress update
+                    
                 } else {
                     const errorText = await response.text();
                     logOutput.textContent += `\n\n❌ Upload Failed! HTTP Status: ${response.status}. Error: ${errorText}`;

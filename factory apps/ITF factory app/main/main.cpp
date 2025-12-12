@@ -1246,23 +1246,23 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	// return ESP_OK;
 }
 
-static esp_err_t cors_options_handler(httpd_req_t *req) {
-    // 1. Set the main CORS header to allow requests from any origin.
-    //    For security, you could replace "*" with "http://interface-board.local"
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+// static esp_err_t cors_options_handler(httpd_req_t *req) {
+//     // 1. Set the main CORS header to allow requests from any origin.
+//     //    For security, you could replace "*" with "http://interface-board.local"
+//     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     
-    // 2. Specify which methods are allowed for the actual request (POST)
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, OPTIONS");
+//     // 2. Specify which methods are allowed for the actual request (POST)
+//     httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, OPTIONS");
 
-    // 3. Specify which headers the browser is allowed to send (e.g., Content-Type)
-    //    We explicitly allow Content-Type and any custom headers like X-File-Size if used.
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type, X-File-Size");
+//     // 3. Specify which headers the browser is allowed to send (e.g., Content-Type)
+//     //    We explicitly allow Content-Type and any custom headers like X-File-Size if used.
+//     httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type, X-File-Size");
     
-    // 4. Important: Send a 204 No Content response for the preflight check
-    httpd_resp_send(req, NULL, 0); 
+//     // 4. Important: Send a 204 No Content response for the preflight check
+//     httpd_resp_send(req, NULL, 0); 
     
-    return ESP_OK;
-}
+//     return ESP_OK;
+// }
 
 static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
 {
@@ -1495,8 +1495,8 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &flash_uri);
 	httpd_uri_t fake_flash_uri = {.uri = "/fakeFlash", .method = HTTP_POST, .handler = fakeFlash_post_handler};
 	httpd_register_uri_handler(server, &fake_flash_uri);
-	httpd_uri_t fake_flash_options_uri = {.uri = "/fakeFlash", .method = HTTP_OPTIONS, .handler = cors_options_handler};
-	httpd_register_uri_handler(server, &fake_flash_options_uri);
+	// httpd_uri_t fake_flash_options_uri = {.uri = "/fakeFlash", .method = HTTP_OPTIONS, .handler = cors_options_handler};
+	// httpd_register_uri_handler(server, &fake_flash_options_uri);
 	httpd_uri_t setboot_uri = {.uri = "/set_boot", .method = HTTP_POST, .handler = set_boot_post_handler};
 	httpd_register_uri_handler(server, &setboot_uri);
 	httpd_uri_t reboot_uri = {.uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler};
