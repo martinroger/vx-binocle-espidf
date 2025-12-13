@@ -114,7 +114,6 @@
             });
         }
 
-
         function refreshPartitions() {
             fetch('/partitions').then(r => r.json()).then(j => {
                 if (j.factory) { document.getElementById('factory_project').innerText = j.factory.project_name || '-'; document.getElementById('factory_version').innerText = j.factory.version || '-'; }

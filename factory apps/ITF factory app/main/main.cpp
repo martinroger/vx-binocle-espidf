@@ -1094,6 +1094,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	uint8_t CF_SN = 0x01;		  // Starting CF sequence number
 	esp_err_t tx_err;
 	esp_err_t rx_err;
+	char out[256]; // Char buffer for special output to results field
 
 	// Data shipping loop
 	while (sentBytes < file_size) // As long as there is data to send
@@ -1232,6 +1233,24 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					FC_wait = false;
 					ESP_LOGI(__func__, "FC CTS received : %u blocks %u ms separation", CANBlockSize, STmin_MS);
 				}
+				else if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x40)) // Status frame case
+				{
+					if (rxMsg.data[1] != 0x00) // Not a status OK, which would be strange anyways
+					{
+						ESP_LOGE(__func__, "Received error status frame, code %0X", rxMsg.data[1]);
+						free(buf);
+						drain_remaining_body(req);
+						snprintf(out, sizeof(out), "Error. Status frame code : 0x%0X", rxMsg.data[1]);
+						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, out);
+						if (daemonSuspended)
+						{
+							vTaskResume(CAN_RX_tsk_hdl);
+							vTaskResume(CAN_TX_tsk_hdl);
+							daemonSuspended = false;
+						}
+						return ESP_FAIL;
+					}
+				}
 				else
 					otherFrames++;
 				break;
@@ -1312,6 +1331,28 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					CF_SN = 1;
 					break;
 				}
+				// Otherwise check here for any error-coded status frame (will check later if the transfer is finished)
+				while ((twai_receive(&rxMsg, pdMS_TO_TICKS(0)) == ESP_OK) && (sentBytes != file_size))
+				{
+					if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x40)) // Status frame case
+					{
+						if (rxMsg.data[1] != 0x00) // Not a status OK, which would be strange anyways
+						{
+							ESP_LOGE(__func__, "Received error status frame, code %0X", rxMsg.data[1]);
+							free(buf);
+							drain_remaining_body(req);
+							snprintf(out, sizeof(out), "Error. Status frame code : 0x%0X", rxMsg.data[1]);
+							httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, out);
+							if (daemonSuspended)
+							{
+								vTaskResume(CAN_RX_tsk_hdl);
+								vTaskResume(CAN_TX_tsk_hdl);
+								daemonSuspended = false;
+							}
+							return ESP_FAIL;
+						}
+					}
+				}
 			}
 			// At this point we can have either an incomplete message but exhausted chunk, or a complete message and potentially unexhausted chunk.
 			// Break for exhausted chunk will be automatic
@@ -1336,7 +1377,43 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		return ESP_FAIL;
 	}
 
-	ESP_LOGI(__func__, "Exited retrieval loop.");
+	ESP_LOGI(__func__, "Exited retrieval loop, waiting for a status response.");
+	uint8_t OTA_status = 0xFF;
+	int otherFrames = 0; // This should ideally be replaced by a timer
+	while (otherFrames < 500)
+	{
+		rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
+		switch (rx_err)
+		{
+		case ESP_ERR_TIMEOUT: // Return on RX timed out
+		{
+			ESP_LOGW(__func__, "No Status frame received during timeout");
+			free(buf);
+			break;
+		}
+		case ESP_OK: // Something valid was received, set conditions for loop exit if valid FC CTS
+		{
+			if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x40))
+			{
+				OTA_status = rxMsg.data[1];
+			}
+			else
+				otherFrames++;
+			break;
+		}
+		default: // Return on Any other RX error
+		{
+			ESP_LOGE(__func__, "Status Frame RX error %s", esp_err_to_name(rx_err));
+			break;
+		}
+		}
+		// Eject on last loop at 500 messages
+		if (otherFrames == 500)
+		{
+			ESP_LOGW(__func__, "No status frame received 500 frames");
+		}
+	}
+
 	if (daemonSuspended)
 	{
 		vTaskResume(CAN_RX_tsk_hdl);
@@ -1348,8 +1425,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 
 	// Wait for confirmation from target ECU (to be written)
 
-	char out[256];
-	snprintf(out, sizeof(out), "{\"status\":\"OK\",\"project_name\":\"%s\",\"version\":\"%s\",\"date_time\":\"%s-%s\"}",
+	snprintf(out, sizeof(out), "{\"status\":\"%u\",\"project_name\":\"%s\",\"version\":\"%s\",\"date_time\":\"%s-%s\"}", OTA_status,
 			 image_metadata.project_name, image_metadata.version, image_metadata.date, image_metadata.time);
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, out);

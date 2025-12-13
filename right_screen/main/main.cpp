@@ -499,7 +499,9 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
     // Variables reserved for the UDS side of business
     static uint8_t ST_min = 0x01;
-    static uint8_t BSize = 0x00;
+    static uint8_t BSize = 0xFE;
+    static uint8_t blockCounter = 0x00;
+    static uint8_t sequenceNumber = 0x01;
     static const esp_partition_t *update_partition = NULL;
     static bool FC_sent = false;
     static bool FF_received = false;
@@ -681,7 +683,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         }
         if (binocan_itf_active_hi_lo_itf_alarm_ah_is_in_range(binocan_itf_active_hi_lo_msg.itf_alarm_ah))
         {
-            alarmOn= (binocan_itf_active_hi_lo_itf_alarm_ah_decode(binocan_itf_active_hi_lo_msg.itf_alarm_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALARM_AH_ON_CHOICE);
+            alarmOn = (binocan_itf_active_hi_lo_itf_alarm_ah_decode(binocan_itf_active_hi_lo_msg.itf_alarm_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALARM_AH_ON_CHOICE);
         }
         else
         {
@@ -908,10 +910,23 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 receivedBytes = 0;
                 transferComplete = false;
                 image_size = 0;
+                blockCounter = 0x00;
+                sequenceNumber = 0x01;
                 ESP_LOGW(__func__, "OTA was in progress, aborted.");
             }
-
-            break;
+            // Send the Error Frame
+            UDS_RESP_MSG.extd = false;
+            UDS_RESP_MSG.data[0] = 0x40;
+            UDS_RESP_MSG.data[1] = 0xFF; // General error
+            for (size_t i = 2; i < 8; i++)
+            {
+                UDS_RESP_MSG.data[i] = 0xAA;
+            }
+            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                ESP_LOGE(__func__, "Could not queue internal state message in queue");
+            else
+                ESP_LOGI(__func__, "Error frame sent");
+            break; // Error break
         }
         // Check if this is a correct first frame
         if ((rxMsg->data[0] & 0xF0) == 0x10)
@@ -926,6 +941,18 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 receivedBytes = 0;
                 transferComplete = false;
                 image_size = 0;
+                // Send the Error Frame
+                UDS_RESP_MSG.extd = false;
+                UDS_RESP_MSG.data[0] = 0x40;
+                UDS_RESP_MSG.data[1] = 0xFF; // General error
+                for (size_t i = 2; i < 8; i++)
+                {
+                    UDS_RESP_MSG.data[i] = 0xAA;
+                }
+                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                else
+                    ESP_LOGI(__func__, "Error frame sent");
                 break;
             }
 
@@ -938,8 +965,26 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             if (ota_err != ESP_OK) // Break if somehow the OTA doesn't start, print error code
             {
                 ESP_LOGE(__func__, "Could not start OTA : %s", esp_err_to_name(ota_err));
-                OTA_started = false;
+                FC_sent = false;
                 FF_received = false;
+                OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
+                blockCounter = 0x00;
+                sequenceNumber = 0x01;
+                // Send the Error Frame
+                UDS_RESP_MSG.extd = false;
+                UDS_RESP_MSG.data[0] = 0x40;
+                UDS_RESP_MSG.data[1] = 0x04; // No start
+                for (size_t i = 2; i < 8; i++)
+                {
+                    UDS_RESP_MSG.data[i] = 0xAA;
+                }
+                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                else
+                    ESP_LOGI(__func__, "Error frame sent");
                 break;
             }
             ota_err = esp_ota_write(ota_handle, (rxMsg->data + 6), 2);
@@ -953,6 +998,20 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 receivedBytes = 0;
                 transferComplete = false;
                 image_size = 0;
+                blockCounter = 0x00;
+                sequenceNumber = 0x01;
+                // Send the Error Frame
+                UDS_RESP_MSG.extd = false;
+                UDS_RESP_MSG.data[0] = 0x40;
+                UDS_RESP_MSG.data[1] = 0x05; // No write
+                for (size_t i = 2; i < 8; i++)
+                {
+                    UDS_RESP_MSG.data[i] = 0xAA;
+                }
+                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                else
+                    ESP_LOGI(__func__, "Error frame sent");
                 break;
             }
             receivedBytes = 2;
@@ -969,7 +1028,17 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             }
             if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
             {
-                ESP_LOGW(__func__, "Could not queue internal state message in queue");
+                ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                esp_ota_abort(ota_handle);
+                FC_sent = false;
+                FF_received = false;
+                OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
+                blockCounter = 0x00;
+                sequenceNumber = 0x01;
+                break;
             }
             else
             {
@@ -983,9 +1052,60 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             if (!OTA_started || !FF_received || !FC_sent) // Weird break case
             {
                 ESP_LOGE(__func__, "Unexpected CF received");
-                // Should probably reset things here
+                esp_ota_abort(ota_handle);
+                FC_sent = false;
+                FF_received = false;
+                OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
+                blockCounter = 0x00;
+                sequenceNumber = 0x01;
+                // Send the Error Frame
+                UDS_RESP_MSG.extd = false;
+                UDS_RESP_MSG.data[0] = 0x40;
+                UDS_RESP_MSG.data[1] = 0xFF; // General error
+                for (size_t i = 2; i < 8; i++)
+                {
+                    UDS_RESP_MSG.data[i] = 0xAA;
+                }
+                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                else
+                    ESP_LOGI(__func__, "Error frame sent");
                 break;
             }
+
+            // Check sequence number
+            if ((rxMsg->data[0] & 0x0F) != sequenceNumber)
+            {
+                ESP_LOGE(__func__, "Bad sequence number : %u instead of %u", rxMsg->data[0] & 0x0F, sequenceNumber);
+                esp_ota_abort(ota_handle);
+                FC_sent = false;
+                FF_received = false;
+                OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
+                blockCounter = 0x00;
+                sequenceNumber = 0x01;
+                // Send the Error Frame
+                UDS_RESP_MSG.extd = false;
+                UDS_RESP_MSG.data[0] = 0x40;
+                UDS_RESP_MSG.data[1] = 0x03; // Seq Number error
+                for (size_t i = 2; i < 8; i++)
+                {
+                    UDS_RESP_MSG.data[i] = 0xAA;
+                }
+                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                else
+                    ESP_LOGI(__func__, "Error frame sent");
+                break;
+            }
+            sequenceNumber = ((sequenceNumber + 1) & 0x0F) == 0x00 ? 0x00 : sequenceNumber + 1;
+            blockCounter++;
+
             // Check if the whole message can be written to OTA or if something needs to be ignored
             if (image_size - receivedBytes >= 7)
             {
@@ -1000,10 +1120,24 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                     receivedBytes = 0;
                     transferComplete = false;
                     image_size = 0;
+                    blockCounter = 0x00;
+                    sequenceNumber = 0x01;
+                    // Send the Error Frame
+                    UDS_RESP_MSG.extd = false;
+                    UDS_RESP_MSG.data[0] = 0x40;
+                    UDS_RESP_MSG.data[1] = 0x05; // No write
+                    for (size_t i = 2; i < 8; i++)
+                    {
+                        UDS_RESP_MSG.data[i] = 0xAA;
+                    }
+                    if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                        ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                    else
+                        ESP_LOGI(__func__, "Error frame sent");
                     break;
                 }
                 receivedBytes += 7;
-                // ESP_LOGI(__func__,"Received : %lu / %lu - %.2f %",receivedBytes,image_size,100.0*((float)receivedBytes)/((float)image_size));
+
                 odometer_km = image_size - receivedBytes;
                 if (image_size == receivedBytes)
                     transferComplete = true;
@@ -1011,26 +1145,117 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             else // Only part of the buffer needs to be taken in
             {
                 ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), image_size - receivedBytes);
+                if (ota_err != ESP_OK) // Break if somehow the OTA doesn't write
+                {
+                    ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
+                    esp_ota_abort(ota_handle);
+                    FC_sent = false;
+                    FF_received = false;
+                    OTA_started = false;
+                    receivedBytes = 0;
+                    transferComplete = false;
+                    image_size = 0;
+                    blockCounter = 0x00;
+                    sequenceNumber = 0x01;
+                    // Send the Error Frame
+                    UDS_RESP_MSG.extd = false;
+                    UDS_RESP_MSG.data[0] = 0x40;
+                    UDS_RESP_MSG.data[1] = 0x05; // No write
+                    for (size_t i = 2; i < 8; i++)
+                    {
+                        UDS_RESP_MSG.data[i] = 0xAA;
+                    }
+                    if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                        ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                    else
+                        ESP_LOGI(__func__, "Error frame sent");
+                    break;
+                }
                 receivedBytes = image_size;
                 transferComplete = true;
             }
-            if (transferComplete)
+
+            if (transferComplete) // Need to reset everything
             {
                 ESP_LOGI(__func__, "Transfer complete");
+                FC_sent = false;
+                FF_received = false;
                 OTA_started = false;
+                receivedBytes = 0;
+                transferComplete = false;
+                image_size = 0;
+                blockCounter = 0x00;
+                sequenceNumber = 0x01;
                 ota_err = esp_ota_end(ota_handle);
                 if (ota_err != ESP_OK)
                 {
                     ESP_LOGE(__func__, "OTA not successful : %s", esp_err_to_name(ota_err));
+                    // Send the Error Frame
+                    UDS_RESP_MSG.extd = false;
+                    UDS_RESP_MSG.data[0] = 0x40;
+                    UDS_RESP_MSG.data[1] = 0x02; // No verif
+                    for (size_t i = 2; i < 8; i++)
+                    {
+                        UDS_RESP_MSG.data[i] = 0xAA;
+                    }
+                    if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                        ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                    else
+                        ESP_LOGI(__func__, "Error frame sent");
                 }
                 else
                 {
                     ESP_LOGI(__func__, "OTA image verification OK, setting boot to %s and restarting.", update_partition->label);
                     esp_ota_set_boot_partition(update_partition);
+                    // Send the OK Frame
+                    UDS_RESP_MSG.extd = false;
+                    UDS_RESP_MSG.data[0] = 0x40;
+                    UDS_RESP_MSG.data[1] = 0x00; // OK status
+                    for (size_t i = 2; i < 8; i++)
+                    {
+                        UDS_RESP_MSG.data[i] = 0xAA;
+                    }
+                    if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                        ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                    else
+                        ESP_LOGI(__func__, "Status frame sent");
+                    vTaskDelay(pdMS_TO_TICKS(100));
                     esp_restart();
                 }
             }
-            break; // Successful break
+
+            // Send a FC frame if blockCounter == BSize
+            if (BSize > 0 && blockCounter == BSize)
+            {
+                UDS_RESP_MSG.extd = false;
+                UDS_RESP_MSG.data[0] = 0x30;
+                UDS_RESP_MSG.data[1] = BSize;
+                UDS_RESP_MSG.data[2] = ST_min;
+                for (size_t i = 3; i < 8; i++)
+                {
+                    UDS_RESP_MSG.data[i] = 0xAA;
+                }
+                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                {
+                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                    esp_ota_abort(ota_handle);
+                    FC_sent = false;
+                    FF_received = false;
+                    OTA_started = false;
+                    receivedBytes = 0;
+                    transferComplete = false;
+                    image_size = 0;
+                    blockCounter = 0x00;
+                    sequenceNumber = 0x01;
+                    break;
+                }
+                else
+                {
+                    ESP_LOGI(__func__, "Flow Control Frame sent.");
+                }
+                FC_sent = true;
+            }
+            break; // Successful break from top level switch
         }
         else
         {
