@@ -71,7 +71,7 @@
         <pre id="flashresult"></pre>
     </div>
 
-    <h2>Fake Flash</h2>
+    <!-- <h2>Fake Flash</h2>
     <div>
         Target ECU: <select name="faketargetECU" id="faketargetECU">
             <option value="RDB">Right Display</option>
@@ -80,7 +80,7 @@
         Binary file : <input type="file" name="fakeCANfile" id="fakeCANfile" accept=".bin"><br><br>
         <button type="button" onclick="doFakeUpload()">Fake Flash over CAN</button>
         <pre id="fakeFlashresult"></pre>
-    </div>
+    </div> -->
 
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
@@ -171,20 +171,20 @@
                 return;
             }
             var target = document.getElementById('targetECU').value;
-            const baseURL = '/fakeFlash?targetECU=' + target + '&';
+            const baseURL = '/flash?targetECU=' + target + '&';
             uploadFile(f, baseURL, 'flashresult');
         }
 
-        function doFakeUpload() {
-            var f = document.getElementById('fakeCANfile').files[0];
-            if (!f) {
-                alert('Choose file');
-                return;
-            }
-            var target = document.getElementById('faketargetECU').value;
-            const baseURL = '/fakeFlash?targetECU=' + target + '&';
-            uploadFile(f, baseURL, 'fakeFlashresult');
-        }
+        // function doFakeUpload() {
+        //     var f = document.getElementById('fakeCANfile').files[0];
+        //     if (!f) {
+        //         alert('Choose file');
+        //         return;
+        //     }
+        //     var target = document.getElementById('faketargetECU').value;
+        //     const baseURL = '/fakeFlash?targetECU=' + target + '&';
+        //     uploadFile(f, baseURL, 'fakeFlashresult');
+        // }
 
         async function uploadFile(file, baseURL, resultID) {
 

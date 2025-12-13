@@ -212,6 +212,7 @@ static void drain_remaining_body(httpd_req_t *req)
 	static char drainbuf[DRAIN_BUFSZ];
 	int64_t remaining = req->content_len;
 	// If content_len is not set (-1) you might still want to try a non-blocking drain
+	ESP_LOGW(__func__,"Draining request content : %ld bytes",remaining);
 	while (remaining > 0)
 	{
 		ssize_t r = httpd_req_recv(req, drainbuf, std::min((size_t)remaining, (size_t)DRAIN_BUFSZ));
@@ -871,406 +872,22 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 /// @return
 static esp_err_t flash_post_handler(httpd_req_t *req)
 {
-	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
-
-	httpd_resp_set_hdr(req, "Connection", "close");
+	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
 
 	// Preparing transfer block size and minimum separation time variables
-	uint8_t CANBlockSize = 0;
-	uint8_t STmin_MS = 0;
+
 	twai_message_t txMsg, rxMsg;
 	txMsg.extd = false;
 	txMsg.ss = false;
-	uint32_t UDSRespID = 0;
-	uint8_t CF_SN = 0x01;
-	esp_err_t tx_err;
-	esp_err_t rx_err;
-
-	int remaining = req->content_len;
-	ESP_LOGI(__func__, "Content length: %d", remaining);
-
-	// Check length of remaining content
-	if (remaining <= 0)
-	{
-		ESP_LOGE(__func__, "Invalid content length!");
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Invalid content length");
-		drain_remaining_body(req);
-		return ESP_FAIL;
-	}
-	// Allocate some buffer to receive in segments of 1K
-	const size_t buf_size = 1024;
-	char *buf = static_cast<char *>(malloc(buf_size));
-	if (!buf)
-	{
-		ESP_LOGE(__func__, "Could not allocate reception buffer");
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to allocate buffer");
-		drain_remaining_body(req);
-		return ESP_FAIL;
-	}
-	size_t readTotal = 0;
-	// Receive first 4K segment
-	ssize_t receivedBytes = httpd_req_recv(req, buf, buf_size); // Signed size_t
-	if (receivedBytes <= 0)
-	{
-		free(buf);
-		ESP_LOGE(__func__, "Could not receive first 1K of file to look for app header");
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request");
-		drain_remaining_body(req);
-		return ESP_FAIL;
-	}
-	readTotal += receivedBytes;
-
-	// Find which ECU is targeted
-	char target_label[32] = {0};
-	/* Extract target from query string: /flash?targetECU=RDB or /flash?targetECU=LDB */
-	if (strstr(req->uri, "targetECU=RDB"))
-	{
-		strncpy(target_label, "RDB", sizeof(target_label) - 1);
-		txMsg.identifier = BINOCAN_RDB_UDS_REQ_FRAME_ID;
-		UDSRespID = BINOCAN_RDB_UDS_RESP_FRAME_ID;
-		ESP_LOGI(__func__, "Enabling 5V output for RDB...");
-		if (enable_5V() != ESP_OK)
-		{
-			ESP_LOGE(__func__, "Could not start 5V for RDB");
-			free(buf);
-			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V");
-			drain_remaining_body(req);
-			return ESP_FAIL;
-		}
-		// vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
-		if (!check_RD_alive())
-		{
-			ESP_LOGE(__func__, "Could not check RD is powered up");
-			free(buf);
-			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check RD state");
-			drain_remaining_body(req);
-			return ESP_FAIL;
-		}
-	}
-	else if (strstr(req->uri, "targetECU=LDB"))
-	{
-		strncpy(target_label, "LDB", sizeof(target_label) - 1);
-		txMsg.identifier = BINOCAN_LDB_UDS_REQ_FRAME_ID;
-		UDSRespID = BINOCAN_LDB_UDS_RESP_FRAME_ID;
-		ESP_LOGI(__func__, "Enabling 5V output for LDB...");
-		if (enable_5V_AUX() != ESP_OK)
-		{
-			ESP_LOGE(__func__, "Could not start 5V for LDB");
-			free(buf);
-			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V AUX");
-			drain_remaining_body(req);
-			return ESP_FAIL;
-		}
-		// vTaskDelay(pdMS_TO_TICKS(5000)); // Enough time to start up
-		if (!check_LD_alive())
-		{
-			ESP_LOGE(__func__, "Could not check LD is powered up");
-			free(buf);
-			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check LD state");
-			drain_remaining_body(req);
-			return ESP_FAIL;
-		}
-	}
-	else
-	{
-		ESP_LOGE(__func__, "No valid target found, aborting");
-		free(buf);
-		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Target ECU unknown");
-		drain_remaining_body(req);
-		return ESP_FAIL;
-	}
-	ESP_LOGI(__func__, "Target ECU : %s", target_label);
-
-	// Check the file is not garbage
-	/* Find start of file body in first chunk */
-	char *body_start = strstr(buf, "\r\n\r\n");
-	if (body_start)
-	{
-		body_start += 4;
-	}
-	else
-	{
-		body_start = buf;
-	}
-	// Calculate the size to write by assuming that the delta is the first 4K received bytes, minus the length in bytes between *body_start and *buf memory addresses
-	size_t initial_to_write = receivedBytes - (body_start - buf);
-	ESP_LOGI(__func__, "To write : %d", initial_to_write);
-	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which is part of the descriptor */
-	const esp_app_desc_t *img_desc = NULL;
-	// Check if the segment that remains is large enough to accomodate an app descriptor
-	if (initial_to_write >= sizeof(esp_app_desc_t))
-	{
-		// Set a 4-byte scanner pointer, starting it at the memory address of body start
-		ESP_LOGI(__func__, "Scanning for OxABCD5432");
-		uint32_t *scan = (uint32_t *)body_start;
-		uint32_t scan_end = (initial_to_write - sizeof(esp_app_desc_t)) / 4;
-		ESP_LOGI(__func__, "Scan length : %lu * 4 bytes");
-		for (uint32_t i = 0; i < scan_end; i++)
-		{
-			ESP_LOGI(__func__, "Scanning 0x%04lx", (uint32_t)scan + i);
-			if (scan[i] == 0xABCD5432)
-			{
-				ESP_LOGI(__func__, "Found starter bytes.");
-				img_desc = (const esp_app_desc_t *)&scan[i];
-				break;
-			}
-		}
-	}
-	if (!img_desc)
-	{
-		ESP_LOGE(__func__, "Could not find starter bytes, invalid image.");
-		free(buf);
-		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Uploaded binary contains no app descriptor (rejecting)");
-		drain_remaining_body(req);
-		return ESP_FAIL;
-	}
-	/* Copy descriptor locally before freeing the upload buffer */
-	esp_app_desc_t local_desc;
-	memcpy(&local_desc, img_desc, sizeof(esp_app_desc_t));
-
-	// Here we would check for the ECU to respond, start session etc.
-
-	// Compute size to write
-	uint32_t totalSize = req->content_len - (body_start - buf);
-	uint32_t sentTotal = 0;
-	uint32_t processedTotal = (body_start - buf);
-	uint32_t pos_cursor = (body_start - buf); // 0-indexed cursor that represents position in current buf
-	ESP_LOGI(__func__, "Total size to send over CAN : %lu bytes", totalSize);
-
-	// Suspend normal TWAI Daemon tasks
-	vTaskSuspend(CAN_RX_tsk_hdl);
-	vTaskSuspend(CAN_TX_tsk_hdl);
-	rx_err = twai_clear_receive_queue();
-	if (rx_err != ESP_OK)
-	{
-		ESP_LOGW(__func__, "Could not clear RX queue : %s", esp_err_to_name(rx_err));
-	}
-
-	// Start with the first frame
 	txMsg.data_length_code = 8;
-	txMsg.data[0] = 0x10; // First Frame PCI
-	txMsg.data[1] = 0x00; // Escape sequence for length
-	*(uint32_t *)(txMsg.data + 2) = (swap_endian<uint32_t>(totalSize));
-	txMsg.data[6] = buf[pos_cursor];
-	printf("%X\n", buf[pos_cursor]);
-	txMsg.data[7] = buf[pos_cursor + 1];
-	pos_cursor += 2;
-	sentTotal += 2;
-	processedTotal += 2;
-	tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(5000));
-	if (tx_err != ESP_OK)
-	{
-		free(buf);
-		ESP_LOGE(__func__, "Impossible to send first frame : %s", esp_err_to_name(tx_err));
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Impossible to send FF");
-		drain_remaining_body(req);
-		return ESP_FAIL;
-	}
+	uint32_t UDSRespID = 0;
 
-	// Wait for first FC frame
-	int otherFrames = 0; // Useful to get out if too many other frames come in
-	while (otherFrames < 500)
-	{
-		rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
-		if (rx_err == ESP_ERR_TIMEOUT)
-		{
-			ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
-			free(buf);
-			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
-			drain_remaining_body(req);
-			return ESP_FAIL;
-		}
-		else if (rx_err != ESP_OK)
-		{
-			ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
-			free(buf);
-			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
-			drain_remaining_body(req);
-			return ESP_FAIL;
-		}
-		else
-		{
-			if (rxMsg.identifier == UDSRespID)
-			{
-				ESP_LOGI(__func__, "Received UDS Response frame");
-				otherFrames = 0; // used as a flag of sorts
-				break;
-			}
-			else
-				otherFrames++;
-		}
-	}
-	if (otherFrames != 0) // No FC frame was received out of 500 frames
-	{
-		ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
-		free(buf);
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
-		drain_remaining_body(req);
-		return ESP_FAIL;
-	}
-	else
-	{
-		if (rxMsg.data[0] == 0x30) // It's a CTS FC frame
-		{
-			CANBlockSize = rxMsg.data[1];
-			STmin_MS = rxMsg.data[2];
-		}
-		else
-		{
-			ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
-			free(buf);
-			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
-			drain_remaining_body(req);
-			return ESP_FAIL;
-		}
-	}
-
-	// If we have made it here without returning anything, it means that we have received a CTS FC frame
-	int to_process = buf_size;
-	uint8_t blockCounter = 0;
-	int i = 1;										  // Used to position in the txMsg data buffer
-	while (processedTotal < (size_t)req->content_len) // As long as there is content to query
-	{
-		while (pos_cursor < to_process && i < 8) // As long as there are unprocessed bytes in the buffer
-		{
-			txMsg.data[0] = 0x20 + (CF_SN & 0x0F); // Sequence number
-			txMsg.data[i] = buf[pos_cursor];
-			pos_cursor++;
-			i++;
-			processedTotal++;
-			sentTotal++;
-		}
-		if (pos_cursor == to_process && (processedTotal < (size_t)req->content_len)) // Ran out of data in the buffer
-		{
-			ESP_LOGI(__func__, "Fetching next chunk : %lu processed out of %lu", processedTotal, req->content_len);
-			if (to_process > req->content_len - processedTotal) // Check if this might be the last truncated 4K segment
-			{
-				to_process = req->content_len - processedTotal;
-			}
-			receivedBytes = httpd_req_recv(req, buf, to_process); // pull a new buffer
-			if (receivedBytes <= 0)
-			{
-				ESP_LOGW(__func__, "No bytes received despite expecting some");
-				break;
-			}
-			readTotal += receivedBytes;
-			pos_cursor = 0; // Reset the cursor at the start of the buffer and go for another loop
-		}
-		if (i == 8 || (processedTotal == (size_t)req->content_len)) // Message is full or all is processed
-		{
-			i = 1;
-			CF_SN++;
-			if (CANBlockSize > 0 && blockCounter == CANBlockSize) // Case a block size was specified
-			{
-				ESP_LOGW(__func__, "Waiting for FC");
-				otherFrames = 0; // Useful to get out if too many other frames come in
-				while (otherFrames < 500)
-				{
-					rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
-					if (rx_err == ESP_ERR_TIMEOUT)
-					{
-						ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
-						free(buf);
-						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
-						drain_remaining_body(req);
-						return ESP_FAIL;
-					}
-					else if (rx_err != ESP_OK)
-					{
-						ESP_LOGE(__func__, "TWAI Error: %s", esp_err_to_name(rx_err));
-						free(buf);
-						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "TWAI error");
-						drain_remaining_body(req);
-						return ESP_FAIL;
-					}
-					else
-					{
-						if (rxMsg.identifier == UDSRespID)
-						{
-							ESP_LOGI(__func__, "Received UDS Response frame");
-							otherFrames = 0; // used as a flag of sorts
-							break;
-						}
-						else
-							otherFrames++;
-					}
-				}
-				if (otherFrames != 0) // No FC frame was received out of 500 frames
-				{
-					ESP_LOGE(__func__, "No Flow Control frame received, aborting.");
-					free(buf);
-					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC frame received");
-					drain_remaining_body(req);
-					return ESP_FAIL;
-				}
-				else
-				{
-					if (rxMsg.data[0] == 0x30) // It's a CTS FC frame
-					{
-						CANBlockSize = rxMsg.data[1];
-						STmin_MS = rxMsg.data[2];
-					}
-					else
-					{
-						ESP_LOGE(__func__, "Received frame is not FC CTS: %llX", *(uint64_t *)rxMsg.data);
-						free(buf);
-						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "No FC CTS");
-						drain_remaining_body(req);
-						return ESP_FAIL;
-					}
-				}
-				// Received a FC frame that gives the CTS
-				blockCounter = 0; // We can proceed
-			}
-			vTaskDelay(pdMS_TO_TICKS(STmin_MS));
-			tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(5));
-			blockCounter++;
-		}
-	}
-
-	ESP_LOGI(__func__, "Read total : %lu Sent total : %lu Processed total : %lu Content length : %lu", readTotal, sentTotal, processedTotal, req->content_len);
-
-	// Resume normal TWAI Daemon tasks
-	vTaskResume(CAN_RX_tsk_hdl);
-	vTaskResume(CAN_TX_tsk_hdl);
-
-	drain_remaining_body(req);
-	/* Respond with JSON including app metadata in id "result"*/
-	char out[256];
-	snprintf(out, sizeof(out), "{\"status\":\"ok\",\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\"}",
-			 local_desc.project_name, local_desc.version, local_desc.date);
-	httpd_resp_set_type(req, "application/json");
-	httpd_resp_sendstr(req, out);
-	return ESP_OK;
-	// httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
-	// return ESP_OK;
-}
-
-// static esp_err_t cors_options_handler(httpd_req_t *req) {
-//     // 1. Set the main CORS header to allow requests from any origin.
-//     //    For security, you could replace "*" with "http://interface-board.local"
-//     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
-    
-//     // 2. Specify which methods are allowed for the actual request (POST)
-//     httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "POST, OPTIONS");
-
-//     // 3. Specify which headers the browser is allowed to send (e.g., Content-Type)
-//     //    We explicitly allow Content-Type and any custom headers like X-File-Size if used.
-//     httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type, X-File-Size");
-    
-//     // 4. Important: Send a 204 No Content response for the preflight check
-//     httpd_resp_send(req, NULL, 0); 
-    
-//     return ESP_OK;
-// }
-
-static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
-{
-	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
+	// Check the query length is correct
 	size_t query_length = httpd_req_get_url_query_len(req);
 	if (query_length == 0)
 	{
 		ESP_LOGE(__func__, "Query had no length");
+		drain_remaining_body(req);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
 		return ESP_FAIL;
 	}
@@ -1282,6 +899,7 @@ static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
 	if (httpd_req_get_url_query_str(req, query_buffer, sizeof(query_buffer)) != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not retrieve URL Query string");
+		drain_remaining_body(req);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
 		return ESP_FAIL;
 	}
@@ -1291,6 +909,7 @@ static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
 	if (httpd_query_key_value(query_buffer, "size", file_size_str, sizeof(file_size_str)) != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not retrieve file size string");
+		drain_remaining_body(req);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
 		return ESP_FAIL;
 	}
@@ -1301,52 +920,460 @@ static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
 	if (httpd_query_key_value(query_buffer, "targetECU", targetECU, sizeof(targetECU)) != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not retrieve target ECU");
+		drain_remaining_body(req);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
 		return ESP_FAIL;
 	}
 	ESP_LOGI(__func__, "TargetECU: %s", targetECU);
-	if (strstr(targetECU, "LDB"))
+	// Check which ECU it is and take appropriate preparation steps
+	if (strstr(targetECU, "LDB")) // Target is LDB
+	{
 		ESP_LOGI(__func__, "Prepping for LDB");
-	if (strstr(targetECU, "RDB"))
-		ESP_LOGI(__func__, "Preppring for RDB");
+		txMsg.identifier = BINOCAN_LDB_UDS_REQ_FRAME_ID;
+		UDSRespID = BINOCAN_LDB_UDS_RESP_FRAME_ID;
+		ESP_LOGI(__func__, "Enabling 5V output for LDB...");
+		if (enable_5V_AUX() != ESP_OK) // Fire up screen in case
+		{
+			ESP_LOGE(__func__, "Could not start 5V for LDB");
+			drain_remaining_body(req);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V AUX");
+			return ESP_FAIL;
+		}
+		if (!check_LD_alive()) // Check screen is alive
+		{
+			ESP_LOGE(__func__, "Could not check LD is powered up");
+			drain_remaining_body(req);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check LD state");
+			return ESP_FAIL;
+		}
+	}
+	else if (strstr(targetECU, "RDB")) // Target is RDB
+	{
+		ESP_LOGI(__func__, "Prepping for RDB");
+		txMsg.identifier = BINOCAN_RDB_UDS_REQ_FRAME_ID;
+		UDSRespID = BINOCAN_RDB_UDS_RESP_FRAME_ID;
+		ESP_LOGI(__func__, "Enabling 5V output for RDB...");
+		if (enable_5V() != ESP_OK) // Fire up screen, in case
+		{
+			ESP_LOGE(__func__, "Could not start 5V for RDB");
+			drain_remaining_body(req);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to start 5V");
+			return ESP_FAIL;
+		}
+		if (!check_RD_alive()) // Check screen is alive
+		{
+			ESP_LOGE(__func__, "Could not check RD is powered up");
+			drain_remaining_body(req);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failure to check RD state");
+			return ESP_FAIL;
+		}
+	}
+	else // Target is unknown
+	{
+		ESP_LOGE(__func__, "No valid target found, aborting");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Target ECU unknown");
+		return ESP_FAIL;
+	}
 
 	ESP_LOGI(__func__, "Summary before transfer : content is %u bytes, file size is %u bytes", req->content_len, file_size);
+	// Exit point here if req->content_len<file_size
+	if (req->content_len != file_size)
+	{
+		ESP_LOGE(__func__, "File size does not correspond to content length");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File size does not match content length");
+		return ESP_FAIL;
+	}
 
 	// Allocate some buffer to receive in segments of 4K
 	const size_t buf_size = 4096;
 	char *buf = static_cast<char *>(malloc(buf_size));
 	if (!buf)
 	{
+		ESP_LOGE(__func__, "Could not allocate reception buffer");
+		drain_remaining_body(req);
 		httpd_resp_send_500(req);
 		return ESP_ERR_NO_MEM;
 	}
 
-	int receivedBytes = 0;
-	while (receivedBytes < req->content_len)
+	// Reject if file size is below 4K (suss)
+	if (file_size < 4096)
 	{
-		int bytesToReceive = std::min(req->content_len - receivedBytes, buf_size); // In order not to exceed content_len
-		int retrieved = httpd_req_recv(req, buf, bytesToReceive);				   // Attempt to receive
-		if (retrieved <= 0)														   // Edge case of timeout or no more content. Might benefit from not retrying for ever
+		ESP_LOGE(__func__, "File size is below 4K, too small");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File size is suspiciously too small");
+		free(buf);
+		return ESP_FAIL;
+	}
+
+	// Main process
+	int receivedBytes = 0;						 // Tracker for received Bytes out of content_len
+	uint32_t sentBytes = 0;						 // Tracks number of actually transmitted bytes over CAN
+	bool image_header_OK = false;				 // Indicates if the image header check has been performed
+	const esp_app_desc_t *img_descriptor = NULL; // Will be used to load the metadata of the app being loaded.
+	esp_app_desc_t image_metadata;				 // Long term storage of the image header
+	int bytesToReceive = 0;							 // In-loop target for httpd retrieval
+	int bytesRetrieved = 0;						 // Actual number of retrieved bytes waiting to be sent (max 4096)
+	uint8_t txMsgCursor = 1;					 // Current writeable position in the txMsg data buffer
+	uint32_t bufCursor = 0;						 // Current unprocessed byte in the buf
+	// Flags for the multi part transfer
+	bool daemonSuspended = false; // Indicates if the daemon tasks have been suspended
+	bool FF_sent = false;		  // Indicates if the FF has been sent
+	bool FC_wait = false;		  // Indicates to wait for an incoming FC
+	bool txMsgIncomplete = false; // Indicates if there is a partially packed txMsg waiting
+	uint8_t CANBlockSize = 0;	  // Maximum number of frames to send in the current block. 0 means no limit
+	uint8_t blockCounter = 0;	  // Sent CAN blocks (ignored if Block size is 0)
+	uint8_t STmin_MS = 0;		  // Inter frames separation time in ms
+	uint8_t CF_SN = 0x01;		  // Starting CF sequence number
+	esp_err_t tx_err;
+	esp_err_t rx_err;
+
+	// Data shipping loop
+	while (sentBytes < file_size) // As long as there is data to send
+	{
+		// Request a new chunk only if previous chunk is exhausted
+		if (sentBytes == receivedBytes)
 		{
-			if (retrieved == HTTPD_SOCK_ERR_TIMEOUT)
-				continue; // Go for another loop in case of timeout
-			// Implicitely else and exit otherwise
-			ESP_LOGE(__func__, "Chunk retrieval failed, error %d", retrieved);
-			free(buf);
-			httpd_resp_send_500(req);
-			return ESP_FAIL;
+			bytesToReceive = std::min(req->content_len - receivedBytes, buf_size); // In order not to exceed content_len
+			bytesRetrieved = httpd_req_recv(req, buf, bytesToReceive);			   // Attempt to receive
+			if (bytesRetrieved <= 0)											   // Edge case of timeout or no more content. Might benefit from not retrying for ever
+			{
+				if (bytesRetrieved == HTTPD_SOCK_ERR_TIMEOUT)
+					continue; // Go for another loop in case of timeout
+				// Implicitely else and exit otherwise
+				ESP_LOGE(__func__, "Chunk retrieval failed, error %d", bytesRetrieved);
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_500(req);
+				if (daemonSuspended)
+				{
+					vTaskResume(CAN_RX_tsk_hdl);
+					vTaskResume(CAN_TX_tsk_hdl);
+					daemonSuspended = false;
+				}
+				return ESP_FAIL;
+			}
+			receivedBytes += bytesRetrieved;
+			bufCursor = 0; // Reset the buffer cursor
+			ESP_LOGI(__func__, "Received new chunk of length %d, expected %d, total received %u out of %u, file size %u", bytesRetrieved, bytesToReceive, receivedBytes, req->content_len, file_size);
 		}
-		receivedBytes += retrieved;
-		ESP_LOGI(__func__, "Received new chunk of length %d, expected %d, total received %u out of %u, file size %u", retrieved, bytesToReceive, receivedBytes, req->content_len, file_size);
-		vTaskDelay(pdMS_TO_TICKS(50)); // Pretend to do work...
+
+		// Do first chunk checks
+		if (!image_header_OK)
+		{
+			ESP_LOGI(__func__, "Scanning for OxABCD5432");
+			uint32_t *scan = (uint32_t *)buf; // Start at edge of buf
+			uint32_t scan_end = buf_size / 4; // Stop at end of buf
+			for (uint32_t i = 0; i < scan_end; i++)
+			{
+				ESP_LOGI(__func__, "Scanning 0x%04lx", (uint32_t)scan + i);
+				if (scan[i] == 0xABCD5432)
+				{
+					ESP_LOGI(__func__, "Found starter bytes.");
+					img_descriptor = (const esp_app_desc_t *)&scan[i];
+					break;
+				}
+			}
+			if (!img_descriptor) // Image was not found
+			{
+				ESP_LOGE(__func__, "Could not find valid image header in first chunk, aborting.");
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No valid image header in file");
+				if (daemonSuspended)
+				{
+					vTaskResume(CAN_RX_tsk_hdl);
+					vTaskResume(CAN_TX_tsk_hdl);
+					daemonSuspended = false;
+				}
+				return ESP_FAIL;
+			}
+			// Image is found, copy it for later
+
+			memcpy(&image_metadata, img_descriptor, sizeof(esp_app_desc_t));
+			image_header_OK = true;
+		}
+		// Suspend the daemon tasks and flush incoming buffer if still running
+		if (!daemonSuspended)
+		{
+			vTaskSuspend(CAN_RX_tsk_hdl);
+			vTaskSuspend(CAN_TX_tsk_hdl);
+			daemonSuspended = true;
+			rx_err = twai_clear_receive_queue();
+			if (rx_err != ESP_OK)
+			{
+				ESP_LOGW(__func__, "Could not clear RX queue : %s", esp_err_to_name(rx_err));
+			}
+		}
+
+		// Start by sending the FF if it has not been sent yet
+		if (!FF_sent)
+		{
+			txMsg.data[0] = 0x10;												// Indicates content less than FF bytes long, otherwise second nibble is higher byte of size
+			txMsg.data[1] = 0x00;												// Escape sequence for long transfers, otherwise this should be lower byte of size
+			*(uint32_t *)(txMsg.data + 2) = (swap_endian<uint32_t>(file_size)); // Transfer the file size, BEndian
+			txMsg.data[6] = buf[bufCursor];
+			txMsg.data[7] = buf[bufCursor + 1];
+			bufCursor += 2; // Next byte to process
+			sentBytes += 2;
+			tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(1000));
+			if (tx_err != ESP_OK) // FF is not transmitted for some hard reason
+			{
+				ESP_LOGE(__func__, "Could not transmit FF");
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FF could not be transmitted.");
+				if (daemonSuspended)
+				{
+					vTaskResume(CAN_RX_tsk_hdl);
+					vTaskResume(CAN_TX_tsk_hdl);
+					daemonSuspended = false;
+				}
+				return ESP_FAIL;
+			}
+			FF_sent = true;
+			FC_wait = true;
+		}
+
+		// Then check for FC_wait, either timeouts/errors. Hard exit if nothing is received.
+		int otherFrames = 0; // This should ideally be replaced by a timer
+		while (otherFrames < 500 && FC_wait)
+		{
+			rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
+			switch (rx_err)
+			{
+			case ESP_ERR_TIMEOUT: // Return on RX timed out
+			{
+				ESP_LOGE(__func__, "No FC frame received within timeout");
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within 5s timeout.");
+				if (daemonSuspended)
+				{
+					vTaskResume(CAN_RX_tsk_hdl);
+					vTaskResume(CAN_TX_tsk_hdl);
+					daemonSuspended = false;
+				}
+				return ESP_FAIL;
+				break;
+			}
+			case ESP_OK: // Something valid was received, set conditions for loop exit if valid FC CTS
+			{
+				if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x30))
+				{
+					CANBlockSize = rxMsg.data[1];
+					STmin_MS = rxMsg.data[2];
+					FC_wait = false;
+					ESP_LOGI(__func__, "FC CTS received : %u blocks %u ms separation", CANBlockSize, STmin_MS);
+				}
+				else
+					otherFrames++;
+				break;
+			}
+			default: // Return on Any other RX error
+			{
+				ESP_LOGE(__func__, "FC Frame RX error %s", esp_err_to_name(rx_err));
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC frame RX error.");
+				if (daemonSuspended)
+				{
+					vTaskResume(CAN_RX_tsk_hdl);
+					vTaskResume(CAN_TX_tsk_hdl);
+					daemonSuspended = false;
+				}
+				return ESP_FAIL;
+				break;
+			}
+			}
+			// Eject on last loop at 500 messages
+			if (otherFrames == 500 && FC_wait)
+			{
+				ESP_LOGE(__func__, "No FC frame received 500 frames");
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received in 500 frames.");
+				if (daemonSuspended)
+				{
+					vTaskResume(CAN_RX_tsk_hdl);
+					vTaskResume(CAN_TX_tsk_hdl);
+					daemonSuspended = false;
+				}
+				return ESP_FAIL;
+			}
+		}
+
+		// At this point, FF is sent, FC is not being expected, there should be a fresh chunk to process through
+		while (sentBytes < receivedBytes) // Current buffer is not fully sent. Could also be buf_cursor< bytesRetrieved
+		{
+			// Pack message
+			while ((bufCursor < bytesRetrieved) && (txMsgCursor < 8))
+			{
+				CF_SN = (CF_SN & 0x0F) == 0 ? (CF_SN + 1) : CF_SN; // Jump the SeqNumbers finishing in 0 (count from 1 to F)
+				txMsg.data[0] = 0x20 + (CF_SN & 0x0F);			   // Seq number
+				txMsg.data[txMsgCursor] = buf[bufCursor];		   // Get current active byte
+				bufCursor++;									   // Increase buffer cursor position, will provoke break if at end of current 4K buffer
+				txMsgCursor++;									   // Increase txMsgCursor position, will provoke break if message is full
+				sentBytes++;
+			}
+			// If message is full, or this is the last message for the whole file
+			if (txMsgCursor == 8 || sentBytes == file_size)
+			{
+				vTaskDelay(pdMS_TO_TICKS(STmin_MS));			  // Implement separation time
+				tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(5)); // Actually ship the message
+				if (tx_err != ESP_OK)							  // Escape case for TX errors
+				{
+					ESP_LOGE(__func__, "Could not transmit CF frame : %s", esp_err_to_name(tx_err));
+					free(buf);
+					drain_remaining_body(req);
+					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "CF Frame TX error.");
+					if (daemonSuspended)
+					{
+						vTaskResume(CAN_RX_tsk_hdl);
+						vTaskResume(CAN_TX_tsk_hdl);
+						daemonSuspended = false;
+					}
+					return ESP_FAIL;
+				}
+				txMsgCursor = 1; // Reset the position of the txMsg cursor
+				blockCounter++;
+				CF_SN++;
+				// Break out of the loop if we have sent all the allowed blocks, and there is still data to send (for the FC_wait)
+				if (CANBlockSize > 0 && blockCounter == CANBlockSize && sentBytes < file_size)
+				{
+					FC_wait = true; // Will need to wait for an FC
+					blockCounter = 0;
+					CF_SN = 1;
+					break;
+				}
+			}
+			// At this point we can have either an incomplete message but exhausted chunk, or a complete message and potentially unexhausted chunk.
+			// Break for exhausted chunk will be automatic
+			// This could also be a break because of maximum block counters
+		}
+		// Automatic break if sentBytes == req->content_len
+	}
+
+	// For debug catching only
+	if (sentBytes != file_size)
+	{
+		ESP_LOGE(__func__, "Unexpected shipping loop exit");
+		free(buf);
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unexpected shipping loop error.");
+		if (daemonSuspended)
+		{
+			vTaskResume(CAN_RX_tsk_hdl);
+			vTaskResume(CAN_TX_tsk_hdl);
+			daemonSuspended = false;
+		}
+		return ESP_FAIL;
 	}
 
 	ESP_LOGI(__func__, "Exited retrieval loop.");
-
+	if (daemonSuspended)
+	{
+		vTaskResume(CAN_RX_tsk_hdl);
+		vTaskResume(CAN_TX_tsk_hdl);
+		daemonSuspended = false;
+	}
 	free(buf);
-	httpd_resp_sendstr(req, "{\"status\": \"OK\", \"message\": \"Flash successful\"}"); // Replace by something more artsy fartsy.
+	drain_remaining_body(req);
+
+	// Wait for confirmation from target ECU (to be written)
+
+	char out[256];
+	snprintf(out, sizeof(out), "{\"status\":\"ok\",\"project_name\":\"%s\",\"version\":\"%s\",\"date-time\":\"%s-%s\"}",
+			 image_metadata.project_name, image_metadata.version, image_metadata.date, image_metadata.time);
+	httpd_resp_set_type(req, "application/json");
+	httpd_resp_sendstr(req, out);
 	return ESP_OK;
 }
+
+// static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
+// {
+// 	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
+// 	size_t query_length = httpd_req_get_url_query_len(req);
+// 	if (query_length == 0)
+// 	{
+// 		ESP_LOGE(__func__, "Query had no length");
+// 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+// 		return ESP_FAIL;
+// 	}
+// 	char query_buffer[query_length + 1];
+// 	size_t file_size;
+// 	char targetECU[5 + 1];
+// 	char file_size_str[10];
+// 	// Retrieve the query string
+// 	if (httpd_req_get_url_query_str(req, query_buffer, sizeof(query_buffer)) != ESP_OK)
+// 	{
+// 		ESP_LOGE(__func__, "Could not retrieve URL Query string");
+// 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+// 		return ESP_FAIL;
+// 	}
+// 	ESP_LOGI(__func__, "Query string: %s", query_buffer);
+
+// 	// Check for filesize, first as a string then as a number
+// 	if (httpd_query_key_value(query_buffer, "size", file_size_str, sizeof(file_size_str)) != ESP_OK)
+// 	{
+// 		ESP_LOGE(__func__, "Could not retrieve file size string");
+// 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+// 		return ESP_FAIL;
+// 	}
+// 	file_size = atol(file_size_str);
+// 	ESP_LOGI(__func__, "File size from URL : %u", file_size);
+
+// 	// Check for target ECU then
+// 	if (httpd_query_key_value(query_buffer, "targetECU", targetECU, sizeof(targetECU)) != ESP_OK)
+// 	{
+// 		ESP_LOGE(__func__, "Could not retrieve target ECU");
+// 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+// 		return ESP_FAIL;
+// 	}
+// 	ESP_LOGI(__func__, "TargetECU: %s", targetECU);
+// 	if (strstr(targetECU, "LDB"))
+// 		ESP_LOGI(__func__, "Prepping for LDB");
+// 	if (strstr(targetECU, "RDB"))
+// 		ESP_LOGI(__func__, "Preppring for RDB");
+
+// 	ESP_LOGI(__func__, "Summary before transfer : content is %u bytes, file size is %u bytes", req->content_len, file_size);
+
+// 	// Allocate some buffer to receive in segments of 4K
+// 	const size_t buf_size = 4096;
+// 	char *buf = static_cast<char *>(malloc(buf_size));
+// 	if (!buf)
+// 	{
+// 		httpd_resp_send_500(req);
+// 		return ESP_ERR_NO_MEM;
+// 	}
+
+// 	int receivedBytes = 0;
+// 	while (receivedBytes < req->content_len)
+// 	{
+// 		int bytesToReceive = std::min(req->content_len - receivedBytes, buf_size); // In order not to exceed content_len
+// 		int retrieved = httpd_req_recv(req, buf, bytesToReceive);				   // Attempt to receive
+// 		if (retrieved <= 0)														   // Edge case of timeout or no more content. Might benefit from not retrying for ever
+// 		{
+// 			if (retrieved == HTTPD_SOCK_ERR_TIMEOUT)
+// 				continue; // Go for another loop in case of timeout
+// 			// Implicitely else and exit otherwise
+// 			ESP_LOGE(__func__, "Chunk retrieval failed, error %d", retrieved);
+// 			free(buf);
+// 			httpd_resp_send_500(req);
+// 			return ESP_FAIL;
+// 		}
+// 		receivedBytes += retrieved;
+// 		ESP_LOGI(__func__, "Received new chunk of length %d, expected %d, total received %u out of %u, file size %u", retrieved, bytesToReceive, receivedBytes, req->content_len, file_size);
+// 		vTaskDelay(pdMS_TO_TICKS(50)); // Pretend to do work...
+// 	}
+
+// 	ESP_LOGI(__func__, "Exited retrieval loop.");
+
+// 	free(buf);
+// 	httpd_resp_sendstr(req, "{\"status\": \"OK\", \"message\": \"Flash successful\"}"); // Replace by something more artsy fartsy.
+// 	return ESP_OK;
+// }
 
 /// @brief Handler to set the boot partition and reboot on it
 /// @param req /set_boot?target= POST from dropdown menu
@@ -1493,8 +1520,8 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &upload_uri);
 	httpd_uri_t flash_uri = {.uri = "/flash", .method = HTTP_POST, .handler = flash_post_handler};
 	httpd_register_uri_handler(server, &flash_uri);
-	httpd_uri_t fake_flash_uri = {.uri = "/fakeFlash", .method = HTTP_POST, .handler = fakeFlash_post_handler};
-	httpd_register_uri_handler(server, &fake_flash_uri);
+	// httpd_uri_t fake_flash_uri = {.uri = "/fakeFlash", .method = HTTP_POST, .handler = fakeFlash_post_handler};
+	// httpd_register_uri_handler(server, &fake_flash_uri);
 	// httpd_uri_t fake_flash_options_uri = {.uri = "/fakeFlash", .method = HTTP_OPTIONS, .handler = cors_options_handler};
 	// httpd_register_uri_handler(server, &fake_flash_options_uri);
 	httpd_uri_t setboot_uri = {.uri = "/set_boot", .method = HTTP_POST, .handler = set_boot_post_handler};
