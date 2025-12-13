@@ -11,4 +11,14 @@ menu "Display Application"
                 
         
     endchoice
+
+    config OTA_BLOCK_SIZE
+        int "0-255. block transmissions to prevent buffer overrun"
+        default 255
+        range 0 255
+
+    config OTA_SEPARATION_TIME_MS
+        int "0-255 ms separation time between CAN frames."
+        default 1
+        range 0 255
 endmenu

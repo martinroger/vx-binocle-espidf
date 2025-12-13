@@ -498,8 +498,8 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
     static binocan_itf_board_version_t binocan_itf_board_version_msg;
 
     // Variables reserved for the UDS side of business
-    static uint8_t ST_min = 0x01;
-    static uint8_t BSize = 0xFE;
+    static uint8_t ST_min = CONFIG_OTA_SEPARATION_TIME_MS;
+    static uint8_t BSize = CONFIG_OTA_BLOCK_SIZE;
     static uint8_t blockCounter = 0x00;
     static uint8_t sequenceNumber = 0x01;
     static const esp_partition_t *update_partition = NULL;
@@ -959,6 +959,8 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             // TODO : check for escape sequence, shorter size type
             image_size = swap_endian<uint32_t>(*(uint32_t *)(rxMsg->data + 2));
             receivedBytes = 0;
+            sequenceNumber = 0x01;
+            blockCounter = 0x00;
             transferComplete = false;
             ESP_LOGI(__func__, "Received FF, starting OTA for size : %lu bytes on partition %s", image_size, update_partition->label);
             ota_err = esp_ota_begin(update_partition, (size_t)image_size, &ota_handle);
@@ -1093,7 +1095,8 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 UDS_RESP_MSG.extd = false;
                 UDS_RESP_MSG.data[0] = 0x40;
                 UDS_RESP_MSG.data[1] = 0x03; // Seq Number error
-                for (size_t i = 2; i < 8; i++)
+                UDS_RESP_MSG.data[2] = sequenceNumber; // Expected sequence number
+                for (size_t i = 3; i < 8; i++)
                 {
                     UDS_RESP_MSG.data[i] = 0xAA;
                 }
@@ -1103,7 +1106,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                     ESP_LOGI(__func__, "Error frame sent");
                 break;
             }
-            sequenceNumber = ((sequenceNumber + 1) & 0x0F) == 0x00 ? 0x00 : sequenceNumber + 1;
+            sequenceNumber = ((sequenceNumber + 1) & 0x0F) == 0x00 ? 0x01 : (sequenceNumber + 1)&0x0F;
             blockCounter++;
 
             // Check if the whole message can be written to OTA or if something needs to be ignored
@@ -1139,6 +1142,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 receivedBytes += 7;
 
                 odometer_km = image_size - receivedBytes;
+                trip_km = 100.0* (float)(receivedBytes) / (float)(image_size);
                 if (image_size == receivedBytes)
                     transferComplete = true;
             }
@@ -1254,6 +1258,8 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                     ESP_LOGI(__func__, "Flow Control Frame sent.");
                 }
                 FC_sent = true;
+                sequenceNumber = 0x01;
+                blockCounter = 0x00;
             }
             break; // Successful break from top level switch
         }
@@ -1615,7 +1621,7 @@ extern "C" void app_main()
     lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
     lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
-    lv_obj_set_style_pad_radial(objects.rpm_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
+    lv_obj_set_style_pad_radial(objects.rpm_scale, 20, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
 
     switch (display_board_st.rpm_alarm_override)
