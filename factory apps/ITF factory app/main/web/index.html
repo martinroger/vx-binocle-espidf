@@ -49,28 +49,38 @@
     <h2>Upload Firmware</h2>
     <div>Previously running partition: <span id="prevRunningPart">-</span></div>
     <div>Recommended OTA partition: <span id="recOTAPart">-</span><br><br></div>
-    <form id="uploadForm" method="POST" enctype="multipart/form-data">
+
+    <div>
         Target partition: <select name="target" id="target">
             <option value="ota_0">ota_0</option>
             <option value="ota_1">ota_1</option>
         </select><br><br>
-        File: <input type="file" name="file" id="file"><br><br>
+        File: <input type="file" name="file" id="file" accept=".bin"><br><br>
         <button type="button" onclick="doUpload()">Upload and flash</button>
-    </form>
-    <progress id="uploadProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
-    <pre id="result"></pre>
+        <pre id="result"></pre>
+    </div>
 
     <h2>Flash over CAN</h2>
-    <form id="uploadCANForm" method="POST" enctype="multipart/form-data">
+    <div>
         Target ECU: <select name="targetECU" id="targetECU">
             <option value="RDB">Right Display</option>
             <option value="LDB">Left Display</option>
         </select><br><br>
-        Binary file : <input type="file" name="file" id="CANfile"><br><br>
+        Binary file : <input type="file" name="CANfile" id="CANfile" accept=".bin"><br><br>
         <button type="button" onclick="doCANUpload()">Flash over CAN</button>
-    </form>
-    <progress id="flashProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
-    <pre id="flashresult"></pre>
+        <pre id="flashresult"></pre>
+    </div>
+
+    <!-- <h2>Fake Flash</h2>
+    <div>
+        Target ECU: <select name="faketargetECU" id="faketargetECU">
+            <option value="RDB">Right Display</option>
+            <option value="LDB">Left Display</option>
+        </select><br><br>
+        Binary file : <input type="file" name="fakeCANfile" id="fakeCANfile" accept=".bin"><br><br>
+        <button type="button" onclick="doFakeUpload()">Fake Flash over CAN</button>
+        <pre id="fakeFlashresult"></pre>
+    </div> -->
 
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
@@ -82,6 +92,10 @@
     <button
         onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
         Boot and Reboot</button>
+
+
+
+
     <script>
         function refreshCalVariables() {
             fetch('/calibration').then(r => r.json()).then(j => {
@@ -99,7 +113,6 @@
                 }
             });
         }
-
 
         function refreshPartitions() {
             fetch('/partitions').then(r => r.json()).then(j => {
@@ -121,33 +134,9 @@
                 alert('Choose file');
                 return;
             }
-            var t = document.getElementById('target').value;
-            var fd = new FormData(); fd.append('file', f);
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/upload?target=' + t, true);
-            xhr.upload.onprogress = function (e) {
-                if (e.lengthComputable) {
-                    document.getElementById('uploadProgress').value = Math.round(e.loaded / e.total * 100);
-                }
-            };
-            xhr.onload = function () {
-                try {
-                    var j = JSON.parse(xhr.responseText);
-                    document.getElementById('result').innerText = JSON.stringify(j, null, 2);
-                    if (j.project_name) {
-                        refreshPartitions();
-                    }
-                }
-                catch (e) {
-                    document.getElementById('result').innerText = xhr.responseText;
-                }
-                document.getElementById('uploadProgress').value = 0;
-            };
-            xhr.onerror = function () {
-                alert('Upload failed');
-                document.getElementById('uploadProgress').value = 0;
-            };
-            xhr.send(fd);
+            var target = document.getElementById('target').value;
+            const baseURL = '/upload?target=' + target + '&';
+            uploadFile(f, baseURL, 'result').then(() => refreshPartitions());
         }
 
         function doCANUpload() {
@@ -156,36 +145,58 @@
                 alert('Choose file');
                 return;
             }
-            var t = document.getElementById('targetECU').value;
-            var fd = new FormData(); fd.append('file', f);
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/flash?targetECU=' + t, true);
-            xhr.upload.onprogress = function (e) {
-                if (e.lengthComputable) {
-                    document.getElementById('flashProgress').value = Math.round(e.loaded / e.total * 100);
-                }
-            };
-            xhr.onload = function () {
-                try {
-                    var j = JSON.parse(xhr.responseText);
-                    document.getElementById('flashresult').innerText = "Upload finished " + JSON.stringify(j, null, 2);
-                    // if (j.project_name) {
-                    //     refreshPartitions();
-                    // }
-                }
-                catch (e) {
-                    document.getElementById('flashresult').innerText = xhr.responseText;
+            var target = document.getElementById('targetECU').value;
+            const baseURL = '/flash?targetECU=' + target + '&';
+            uploadFile(f, baseURL, 'flashresult');
+        }
 
+        // function doFakeUpload() {
+        //     var f = document.getElementById('fakeCANfile').files[0];
+        //     if (!f) {
+        //         alert('Choose file');
+        //         return;
+        //     }
+        //     var target = document.getElementById('faketargetECU').value;
+        //     const baseURL = '/fakeFlash?targetECU=' + target + '&';
+        //     uploadFile(f, baseURL, 'fakeFlashresult');
+        // }
+
+        async function uploadFile(file, baseURL, resultID) {
+            const uploadURL = baseURL; // Your ESP32 endpoint
+            const fileSize = file.size;
+            const logOutput = document.getElementById(resultID);
+            // Reset UI elements
+            logOutput.textContent = 'Starting file upload...';
+            // 1. Construct the URL with file size
+            const finalURL = `${uploadURL}size=${fileSize}`;
+            logOutput.textContent += `\nTarget URL: ${finalURL}`;
+            logOutput.textContent += `\nFile Size: ${fileSize} bytes.`;
+            try {
+                // 3. Make the fetch request with the custom stream
+                const response = await fetch(finalURL, {
+                    method: 'POST',
+                    body: file,
+                    headers: {
+                        'Content-Type': 'application/octet-stream',
+                    },
+                });
+                if (response.ok) {
+                    const resultText = await response.text();
+                    let formattedText;
+                    try {
+                        const j = JSON.parse(resultText);
+                        formattedText = `\nStatus: ${j.status}\nProject: ${j.project_name}\nVersion: ${j.version}\nBuilt : ${j.date_time}`;
+                    } catch (e) {
+                        formattedText = resultText;
+                    }
+                    logOutput.textContent += `\n\n✅ Upload Success! Server Response: ${formattedText}`;
+                } else {
+                    const errorText = await response.text();
+                    logOutput.textContent += `\n\n❌ Upload Failed! HTTP Status: ${response.status}. Error: ${errorText}`;
                 }
-                document.getElementById('flashProgress').value = 0;
-
-            };
-            xhr.onerror = function () {
-                alert('Upload failed');
-                document.getElementById('flashProgress').value = 0;
-
-            };
-            xhr.send(fd);
+            } catch (error) {
+                logOutput.textContent += `\n\n❌ Network Error: Could not connect to the ESP32. ${error.message}`;
+            }
         }
 
         window.addEventListener('load', function () {
