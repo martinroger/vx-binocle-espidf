@@ -28,16 +28,17 @@
     <h2>Upload Firmware</h2>
     <div>Previously running partition: <span id="prevRunningPart">-</span></div>
     <div>Recommended OTA partition: <span id="recOTAPart">-</span><br><br></div>
-    <form id="uploadForm" method="POST" enctype="multipart/form-data">
+
+    <div>
         Target partition: <select name="target" id="target">
             <option value="ota_0">ota_0</option>
             <option value="ota_1">ota_1</option>
         </select><br><br>
-        File: <input type="file" name="file" id="file"><br><br>
+        File: <input type="file" name="file" id="file" accept=".bin"><br><br>
         <button type="button" onclick="doUpload()">Upload and flash</button>
-    </form>
-    <progress id="uploadProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
-    <pre id="result"></pre>
+        <pre id="result"></pre>
+    </div>
+
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
     <select id="bootsel">
@@ -48,54 +49,71 @@
     <button
         onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
         Boot and Reboot</button>
+
+
     <script>
         function refreshPartitions() {
             fetch('/partitions').then(r => r.json()).then(j => {
                 if (j.factory) { document.getElementById('factory_project').innerText = j.factory.project_name || '-'; document.getElementById('factory_version').innerText = j.factory.version || '-'; }
-                if (j.ota_0) { document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-'; document.getElementById('ota0_version').innerText = (j.ota_0.version+' '+j.ota_0.state) || '-'; }
-                if (j.ota_1) { document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-'; document.getElementById('ota1_version').innerText = (j.ota_1.version+' '+j.ota_1.state) || '-'; }
+                if (j.ota_0) { document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-'; document.getElementById('ota0_version').innerText = (j.ota_0.version + ' ' + j.ota_0.state) || '-'; }
+                if (j.ota_1) { document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-'; document.getElementById('ota1_version').innerText = (j.ota_1.version + ' ' + j.ota_1.state) || '-'; }
             });
-            fetch('/prevboot').then(r => r.json()).then(j => { 
-                document.getElementById('bootPart').innerText = j.bootPart; 
-                document.getElementById('prevRunningPart').innerText = j.prevRunningPart; 
+            fetch('/prevboot').then(r => r.json()).then(j => {
+                document.getElementById('bootPart').innerText = j.bootPart;
+                document.getElementById('prevRunningPart').innerText = j.prevRunningPart;
                 document.getElementById('recOTAPart').innerText = j.recOTAPart;
                 document.getElementById('bootsel').value = j.bootPart;
-                document.getElementById('target').value = j.recOTAPart 
+                document.getElementById('target').value = j.recOTAPart
             });
         }
+
         function doUpload() {
             var f = document.getElementById('file').files[0];
             if (!f) {
                 alert('Choose file');
                 return;
             }
-            var t = document.getElementById('target').value;
-            var fd = new FormData(); fd.append('file', f);
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', '/upload?target=' + t, true);
-            xhr.upload.onprogress = function (e) {
-                if (e.lengthComputable) {
-                    document.getElementById('uploadProgress').value = Math.round(e.loaded / e.total * 100);
-                }
-            };
-            xhr.onload = function () {
-                try {
-                    var j = JSON.parse(xhr.responseText);
-                    document.getElementById('result').innerText = JSON.stringify(j, null, 2);
-                    if (j.project_name) {
-                        refreshPartitions();
+            var target = document.getElementById('target').value;
+            const baseURL = '/upload?target=' + target + '&';
+            uploadFile(f, baseURL, 'result').then(() => refreshPartitions());
+        }
+
+        async function uploadFile(file, baseURL, resultID) {
+            const uploadURL = baseURL; // Your ESP32 endpoint
+            const fileSize = file.size;
+            const logOutput = document.getElementById(resultID);
+            // Reset UI elements
+            logOutput.textContent = 'Starting file upload...';
+            // 1. Construct the URL with file size
+            const finalURL = `${uploadURL}size=${fileSize}`;
+            logOutput.textContent += `\nTarget URL: ${finalURL}`;
+            logOutput.textContent += `\nFile Size: ${fileSize} bytes.`;
+            try {
+                // 3. Make the fetch request with the custom stream
+                const response = await fetch(finalURL, {
+                    method: 'POST',
+                    body: file,
+                    headers: {
+                        'Content-Type': 'application/octet-stream',
+                    },
+                });
+                if (response.ok) {
+                    const resultText = await response.text();
+                    let formattedText;
+                    try {
+                        const j = JSON.parse(resultText);
+                        formattedText = `\nStatus: ${j.status}\nProject: ${j.project_name}\nVersion: ${j.version}\nBuilt : ${j.date_time}`;
+                    } catch (e) {
+                        formattedText = resultText;
                     }
+                    logOutput.textContent += `\n\n✅ Upload Success! Server Response: ${formattedText}`;
+                } else {
+                    const errorText = await response.text();
+                    logOutput.textContent += `\n\n❌ Upload Failed! HTTP Status: ${response.status}. Error: ${errorText}`;
                 }
-                catch (e) {
-                    document.getElementById('result').innerText = xhr.responseText;
-                }
-                document.getElementById('uploadProgress').value = 0;
-            };
-            xhr.onerror = function () {
-                alert('Upload failed');
-                document.getElementById('uploadProgress').value = 0;
-            };
-            xhr.send(fd);
+            } catch (error) {
+                logOutput.textContent += `\n\n❌ Network Error: Could not connect to the ESP32. ${error.message}`;
+            }
         }
 
         window.addEventListener('load', function () {
@@ -107,8 +125,8 @@
             //     document.getElementById('trip').innerText = j.trip_m;
             //     document.getElementById('new_trip').value = parseInt(j.trip_m); 
             // });
-            fetch('/version').then(r => r.json()).then(j => { 
-                document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date) 
+            fetch('/version').then(r => r.json()).then(j => {
+                document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date)
             });
         });
     </script>

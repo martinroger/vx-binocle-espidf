@@ -49,16 +49,16 @@
     <h2>Upload Firmware</h2>
     <div>Previously running partition: <span id="prevRunningPart">-</span></div>
     <div>Recommended OTA partition: <span id="recOTAPart">-</span><br><br></div>
-    <form id="uploadForm" method="POST" enctype="multipart/form-data">
+
+    <div>
         Target partition: <select name="target" id="target">
             <option value="ota_0">ota_0</option>
             <option value="ota_1">ota_1</option>
         </select><br><br>
         File: <input type="file" name="file" id="file" accept=".bin"><br><br>
         <button type="button" onclick="doUpload()">Upload and flash</button>
-    </form>
-    <progress id="uploadProgress" value="0" max="100" style="width:300px;display:block;margin-top:8px"></progress>
-    <pre id="result"></pre>
+        <pre id="result"></pre>
+    </div>
 
     <h2>Flash over CAN</h2>
     <div>
@@ -136,8 +136,8 @@
                 return;
             }
             var target = document.getElementById('target').value;
-            const baseURL = '/upload?target='+target+'&';
-            uploadFile(f,baseURL,'result').then(()=>refreshPartitions());
+            const baseURL = '/upload?target=' + target + '&';
+            uploadFile(f, baseURL, 'result').then(() => refreshPartitions());
         }
 
         function doCANUpload() {
@@ -163,30 +163,24 @@
         // }
 
         async function uploadFile(file, baseURL, resultID) {
-
             const uploadURL = baseURL; // Your ESP32 endpoint
             const fileSize = file.size;
             const logOutput = document.getElementById(resultID);
             // Reset UI elements
-
             logOutput.textContent = 'Starting file upload...';
-
             // 1. Construct the URL with file size
             const finalURL = `${uploadURL}size=${fileSize}`;
-
             logOutput.textContent += `\nTarget URL: ${finalURL}`;
             logOutput.textContent += `\nFile Size: ${fileSize} bytes.`;
-
             try {
                 // 3. Make the fetch request with the custom stream
                 const response = await fetch(finalURL, {
                     method: 'POST',
-                    body: file, 
+                    body: file,
                     headers: {
                         'Content-Type': 'application/octet-stream',
                     },
                 });
-
                 if (response.ok) {
                     const resultText = await response.text();
                     let formattedText;
@@ -197,17 +191,14 @@
                         formattedText = resultText;
                     }
                     logOutput.textContent += `\n\n✅ Upload Success! Server Response: ${formattedText}`;
-                    
                 } else {
                     const errorText = await response.text();
                     logOutput.textContent += `\n\n❌ Upload Failed! HTTP Status: ${response.status}. Error: ${errorText}`;
                 }
-
             } catch (error) {
                 logOutput.textContent += `\n\n❌ Network Error: Could not connect to the ESP32. ${error.message}`;
             }
         }
-
 
         window.addEventListener('load', function () {
             refreshCalVariables();

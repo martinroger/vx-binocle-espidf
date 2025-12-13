@@ -59,8 +59,6 @@ T swap_endian(T u)
 	return dest.u;
 }
 
-#pragma endregion
-
 #pragma region Global variables
 // Should be extended to more ?
 struct board_ST
@@ -688,7 +686,7 @@ static esp_err_t reboot_post_handler(httpd_req_t *req)
 }
 
 /// @brief Handler for the Upload and Flash request (doUpload())
-/// @param req POST /upload?target=
+/// @param req POST /upload?target=&size=
 /// @return
 static esp_err_t upload_post_handler(httpd_req_t *req)
 {

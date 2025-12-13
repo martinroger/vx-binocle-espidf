@@ -29,11 +29,31 @@
 #include "esp_mac.h"
 #include "esp_image_format.h"
 #include "esp_spiffs.h"
+#include <algorithm>
 
 #ifdef TAG
 #undef TAG
 #endif
 #define TAG "LDB Factory"
+
+
+/// @brief Drains a request body (non fatal)
+/// @param req 
+static void drain_remaining_body(httpd_req_t *req)
+{
+	const size_t DRAIN_BUFSZ = 1024;
+	static char drainbuf[DRAIN_BUFSZ];
+	int64_t remaining = req->content_len;
+	// If content_len is not set (-1) you might still want to try a non-blocking drain
+	ESP_LOGW(__func__, "Draining request content : %ld bytes", remaining);
+	while (remaining > 0)
+	{
+		ssize_t r = httpd_req_recv(req, drainbuf, std::min((size_t)remaining, (size_t)DRAIN_BUFSZ));
+		if (r <= 0)
+			break;
+		remaining -= r;
+	}
+}
 
 /// @brief Declares the MDNS instances and sets it up on the Hotspot wifi
 /// @param
@@ -355,186 +375,248 @@ static esp_err_t reboot_post_handler(httpd_req_t *req)
 }
 
 /// @brief Handler for the Upload and Flash request (doUpload())
-/// @param req POST /upload?target=
+/// @param req POST /upload?target=&size=
 /// @return
 static esp_err_t upload_post_handler(httpd_req_t *req)
 {
-	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
 
-	int remaining = req->content_len;
-	ESP_LOGI(__func__, "Content length: %d", remaining);
-	// Check length of remaining content
-	if (remaining <= 0)
+	// Check the query length is correct
+	size_t query_length = httpd_req_get_url_query_len(req);
+	if (query_length == 0)
 	{
-		ESP_LOGE(__func__, "Invalid content length!");
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Invalid content length");
+		ESP_LOGE(__func__, "Query had no length");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
 		return ESP_FAIL;
 	}
+	char query_buffer[query_length + 1];
+	size_t file_size;
+	char target[5 + 1];
+	char file_size_str[10];
+	// Retrieve the query string
+	if (httpd_req_get_url_query_str(req, query_buffer, sizeof(query_buffer)) != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not retrieve URL Query string");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+		return ESP_FAIL;
+	}
+	ESP_LOGI(__func__, "Query string: %s", query_buffer);
+
+	// Check for filesize, first as a string then as a number
+	if (httpd_query_key_value(query_buffer, "size", file_size_str, sizeof(file_size_str)) != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not retrieve file size string");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+		return ESP_FAIL;
+	}
+	file_size = atol(file_size_str);
+	ESP_LOGI(__func__, "File size from URL : %u", file_size);
+
+	// Check for target partition then
+	if (httpd_query_key_value(query_buffer, "target", target, sizeof(target)) != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not retrieve target partition");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
+		return ESP_FAIL;
+	}
+	ESP_LOGI(__func__, "Target partition: %s", target);
+
+	// Prepare pointer towards the partition that will be updated
+	const esp_partition_t *update_partition = NULL;
+
+	// Check which ECU it is and take appropriate preparation steps
+	if (strstr(target, "ota_0")) // Target is OTA 0
+	{
+		ESP_LOGI(__func__, "Prepping for ota_0");
+		update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "ota_0");
+	}
+	else if (strstr(target, "ota_1")) // Target is OTA 1
+	{
+		ESP_LOGI(__func__, "Prepping for ota_1");
+		update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, "ota_1");
+	}
+	else // Target is unknown
+	{
+		ESP_LOGE(__func__, "No valid target found, aborting");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Target partition unknown");
+		return ESP_FAIL;
+	}
+
+	// Check on partition before proceeding further
+	if (!update_partition)
+	{
+		ESP_LOGE(__func__, "Could not find target partition");
+		drain_remaining_body(req);
+		httpd_resp_send_500(req);
+		return ESP_FAIL;
+	}
+
+	ESP_LOGI(__func__, "Summary before flashing : content is %u bytes, file size is %u bytes", req->content_len, file_size);
+	// Exit point here if req->content_len<file_size
+	if (req->content_len != file_size)
+	{
+		ESP_LOGE(__func__, "File size does not correspond to content length");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File size does not match content length");
+		return ESP_FAIL;
+	}
+
 	// Allocate some buffer to receive in segments of 4K
 	const size_t buf_size = 4096;
-	char *buf = malloc(buf_size);
+	char *buf = static_cast<char *>(malloc(buf_size));
 	if (!buf)
 	{
 		ESP_LOGE(__func__, "Could not allocate reception buffer");
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to allocate buffer");
-		return ESP_FAIL;
+		drain_remaining_body(req);
+		httpd_resp_send_500(req);
+		return ESP_ERR_NO_MEM;
 	}
-	// Prepare pointer towards the partition that will be updated
-	const esp_partition_t *update_partition = NULL;
-	size_t readTotal = 0;
-	// Receive first 4K segment
-	ssize_t receivedBytes = httpd_req_recv(req, buf, buf_size); // Signed size_t
-	if (receivedBytes <= 0)
+
+	// Reject if file size is below 4K (suss)
+	if (file_size < 4096)
 	{
+		ESP_LOGE(__func__, "File size is below 4K, too small");
+		drain_remaining_body(req);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File size is suspiciously too small");
 		free(buf);
-		ESP_LOGE(__func__, "Could not receive first 4K of file to look for app header");
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request");
-		return ESP_FAIL;
-	}
-	readTotal += receivedBytes;
-
-	// Find which partition is targeted
-	char target_label[32] = {0};
-	/* Extract target from query string: /upload?target=ota_0 or /upload?target=ota_1 */
-	if (strstr(req->uri, "target=ota_1"))
-	{
-		strncpy(target_label, "ota_1", sizeof(target_label) - 1);
-	}
-	else if (strstr(req->uri, "target=ota_0"))
-	{
-		strncpy(target_label, "ota_0", sizeof(target_label) - 1);
-	}
-	else
-	{
-		ESP_LOGW(__func__, "No valid target found, defaulting to ota0");
-		strncpy(target_label, "ota_0", sizeof(target_label) - 1);
-	}
-	ESP_LOGI(__func__, "Target partition : %s", target_label);
-	// Look for the update partition
-	update_partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, target_label);
-	if (!update_partition)
-	{
-		ESP_LOGE(__func__, "Could not find target partition.");
-		free(buf);
-		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Target partition not found");
 		return ESP_FAIL;
 	}
 
-	/* Find start of file body in first chunk */
-	char *body_start = strstr(buf, "\r\n\r\n");
+	// Main process
 
-	if (body_start)
+	int receivedBytes = 0;						 // Tracker for received Bytes out of content_len
+	uint32_t writtenBytes = 0;					 // Written bytes by OTA
+	bool image_header_OK = false;				 // Indicates if the image header check has been performed
+	const esp_app_desc_t *img_descriptor = NULL; // Will be used to load the metadata of the app being loaded.
+	esp_app_desc_t image_metadata;				 // Long term storage of the image header
+	int bytesToReceive = 0;						 // In-loop target for httpd retrieval
+	int bytesRetrieved = 0;						 // Actual number of retrieved bytes waiting to be sent (max 4096)
+	esp_ota_handle_t OTA_handle;
+	bool OTA_started = false;
+	esp_err_t OTA_err;
+
+	while (writtenBytes < file_size)
 	{
-		body_start += 4;
-		// char *counter = buf;
-		// while (counter < body_start + 8)
-		// {
-		// 	printf("%c", *counter);
-		// 	counter++;
-		// }
-		// printf("\n");
-		printf("%X\n",*body_start);
-	}
-	else
-	{
-		body_start = buf;
-	}
-	// Calculate the size to write by assuming that the delta is the first 4K received bytes, minus the length in bytes between *body_start and *buf memory addresses
-	size_t to_write = receivedBytes - (body_start - buf);
-	ESP_LOGI(__func__, "To write : %d out of %d", to_write, req->content_len - (body_start - buf));
-	/* Manual app descriptor extraction: scan for magic 0xABCD5432 which is part of the descriptor */
-	const esp_app_desc_t *img_desc = NULL;
-	// Check if the segment that remains is large enough to accomodate an app descriptor
-	if (to_write >= sizeof(esp_app_desc_t))
-	{
-		// Set a 4-byte scanner pointer, starting it at the memory address of body start
-		ESP_LOGI(__func__, "Scanning for OxABCD5432");
-		uint32_t *scan = (uint32_t *)body_start;
-		uint32_t scan_end = (to_write - sizeof(esp_app_desc_t)) / 4;
-		ESP_LOGI(__func__, "Scan length : %lu * 4 bytes");
-		for (uint32_t i = 0; i < scan_end; i++)
+		// Request a new chunk only if previous chunk is exhausted
+		if (writtenBytes == receivedBytes)
 		{
-			ESP_LOGI(__func__, "Scanning 0x%04lx", (uint32_t)scan + i);
-			if (scan[i] == 0xABCD5432)
+			bytesToReceive = std::min(req->content_len - receivedBytes, buf_size); // In order not to exceed content_len
+			bytesRetrieved = httpd_req_recv(req, buf, bytesToReceive);			   // Attempt to receive
+			if (bytesRetrieved <= 0)											   // Edge case of timeout or no more content. Might benefit from not retrying for ever
 			{
-				ESP_LOGI(__func__, "Found starter bytes.");
-				img_desc = (const esp_app_desc_t *)&scan[i];
-				break;
+				if (bytesRetrieved == HTTPD_SOCK_ERR_TIMEOUT)
+					continue; // Go for another loop in case of timeout
+				// Implicitely else and exit otherwise
+				ESP_LOGE(__func__, "Chunk retrieval failed, error %d", bytesRetrieved);
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Chunk retrieval failed.");
+				return ESP_FAIL;
 			}
+			receivedBytes += bytesRetrieved;
+			ESP_LOGI(__func__, "Received new chunk of length %d, expected %d, total received %u out of %u, file size %u", bytesRetrieved, bytesToReceive, receivedBytes, req->content_len, file_size);
 		}
-	}
-	if (!img_desc)
-	{
-		ESP_LOGE(__func__, "Could not find starter bytes, invalid image.");
-		free(buf);
-		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Uploaded binary contains no app descriptor (rejecting)");
-		return ESP_FAIL;
-	}
 
-	/* Copy descriptor locally before freeing the upload buffer */
-	esp_app_desc_t local_desc;
-	memcpy(&local_desc, img_desc, sizeof(esp_app_desc_t));
+		// Check first chunk for image header
+		if (!image_header_OK)
+		{
+			ESP_LOGI(__func__, "Scanning for OxABCD5432");
+			uint32_t *scan = (uint32_t *)buf; // Start at edge of buf
+			uint32_t scan_end = buf_size / 4; // Stop at end of buf
+			for (uint32_t i = 0; i < scan_end; i++)
+			{
+				ESP_LOGI(__func__, "Scanning 0x%04lx", (uint32_t)scan + i);
+				if (scan[i] == 0xABCD5432)
+				{
+					ESP_LOGI(__func__, "Found starter bytes.");
+					img_descriptor = (const esp_app_desc_t *)&scan[i];
+					break;
+				}
+			}
+			if (!img_descriptor) // Image was not found
+			{
+				ESP_LOGE(__func__, "Could not find valid image header in first chunk, aborting.");
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No valid image header in file");
+				return ESP_FAIL;
+			}
+			// Image is found, copy it for later
+			memcpy(&image_metadata, img_descriptor, sizeof(esp_app_desc_t));
+			image_header_OK = true;
+		}
 
-	/* Begin OTA now that image looks valid */
-	esp_ota_handle_t ota_handle;
-	ESP_LOGI(__func__, "Image seems valid, starting OTA to target partition.");
-	esp_err_t err = esp_ota_begin(update_partition, req->content_len - (body_start - buf), &ota_handle);
-	if (err != ESP_OK)
-	{
-		ESP_LOGE(__func__, "Could not start OTA, aborting.");
-		free(buf);
-		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unsuccesful : esp_ota_begin failed");
-		return ESP_FAIL;
+		// If the OTA is somehow not yet started
+		if (!OTA_started)
+		{
+			OTA_err = esp_ota_begin(update_partition, file_size, &OTA_handle);
+			if (OTA_err != ESP_OK)
+			{
+				ESP_LOGE(__func__, "Could not start OTA, aborting.");
+				free(buf);
+				drain_remaining_body(req);
+				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not start OTA!");
+				return ESP_FAIL;
+			}
+			ESP_LOGI(__func__, "OTA starting...");
+			OTA_started = true;
+		}
+		// Write segment
+		OTA_err = esp_ota_write(OTA_handle, (const void *)buf, bytesRetrieved);
+		if (OTA_err != ESP_OK)
+		{
+			ESP_LOGE(__func__, "Could not write OTA segment.");
+			free(buf);
+			drain_remaining_body(req);
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not write OTA segment.");
+			esp_ota_abort(OTA_handle);
+			OTA_started = false;
+			return ESP_FAIL;
+		}
+
+		writtenBytes += bytesRetrieved;
 	}
-	// Write the first partial image segment
-	ESP_LOGI(__func__, "Writing first segment to partition.");
-	esp_ota_write(ota_handle, (const void *)body_start, to_write);
-	// Write the next segments until there is no more data
-	while (readTotal < (size_t)req->content_len)
-	{
-		// Prepare a 4K segment
-		int to_read = buf_size;
-		// If this is the last segment and is less than 4K remaining, adjust the size to read
-		if ((size_t)to_read > (size_t)req->content_len - readTotal)
-			to_read = req->content_len - readTotal;
-		// Check how many have been received
-		receivedBytes = httpd_req_recv(req, buf, to_read);
-		// Could technically get out based on to_read size, but we can also check once the handler doesn't return anything anymore.
-		if (receivedBytes <= 0)
-			break;
-		esp_ota_write(ota_handle, buf, receivedBytes);
-		readTotal += receivedBytes;
-	}
-	ESP_LOGI(__func__, "Finished writing, total read bytes : %lu", (uint32_t)readTotal);
+	// Normal exit
+	ESP_LOGI(__func__, "Written : %lu bytes, file size target %lu", writtenBytes, file_size);
 	free(buf);
+	OTA_started = false;
+
 	// Attempt to validate the OTA image written
-	err = esp_ota_end(ota_handle);
-	if (err != ESP_OK)
+	OTA_err = esp_ota_end(OTA_handle);
+	if (OTA_err != ESP_OK)
 	{
-		esp_ota_abort(ota_handle);
+		esp_ota_abort(OTA_handle);
 		ESP_LOGE(__func__, "Written OTA image could not be validated.");
 		// Erase partition here
-		err = esp_partition_erase_range(update_partition, 0, update_partition->size);
-		if (err != ESP_OK)
+		OTA_err = esp_partition_erase_range(update_partition, 0, update_partition->size);
+		if (OTA_err != ESP_OK)
 		{
 			ESP_LOGE(__func__, "Could not erase partition %s", update_partition->label);
 		}
+		drain_remaining_body(req);
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "OTA validation failed");
 		return ESP_FAIL;
 	}
 	else
 	{
-		err = esp_ota_set_boot_partition(update_partition);
-		if (err != ESP_OK)
+		OTA_err = esp_ota_set_boot_partition(update_partition);
+		if (OTA_err != ESP_OK)
 		{
 			ESP_LOGW(__func__, "Could not set new update partition %s as next boot.", update_partition->label);
 		}
 	}
 
+	drain_remaining_body(req);
+
 	/* Respond with JSON including app metadata in id "result"*/
 	char out[256];
-	snprintf(out, sizeof(out), "{\"status\":\"ok\",\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\"}",
-			 local_desc.project_name, local_desc.version, local_desc.date);
+	snprintf(out, sizeof(out), "{\"status\":\"OK\",\"project_name\":\"%s\",\"version\":\"%s\",\"date_time\":\"%s-%s\"}",
+			 image_metadata.project_name, image_metadata.version, image_metadata.date, image_metadata.time);
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, out);
 	return ESP_OK;
@@ -718,7 +800,7 @@ static void start_ap_mode(void)
 	ESP_LOGI(TAG, "Started AP with SSID '%s'", ssid);
 }
 
-void app_main(void)
+extern "C" void app_main(void)
 {
 	ESP_LOGI(__func__, "Init default NVS");
 	esp_err_t err = nvs_flash_init();
