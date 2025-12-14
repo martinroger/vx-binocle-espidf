@@ -3,4 +3,5 @@ managed_components/
 .vscode/
 partition_table/
 .devcontainer/
+components/payload/*.bin
 partitionsFromDevice/*
