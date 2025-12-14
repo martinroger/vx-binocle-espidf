@@ -278,10 +278,11 @@ static esp_err_t version_get_handler(httpd_req_t *req)
 
 	// Compose a 256 chars buffer with a JSON payload
 	char buf[256];
-	snprintf(buf, sizeof(buf), "{\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\"}",
+	snprintf(buf, sizeof(buf), "{\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s-%s\"}",
 			 app_desc ? app_desc->project_name : "",
 			 app_desc ? app_desc->version : "",
-			 app_desc ? app_desc->date : "");
+			 app_desc ? app_desc->date : "",
+			 app_desc ? app_desc->time : "");
 	// Set response type and send the buffer away to the event listener
 	ESP_LOGI(__func__, "Response to request : %s", buf);
 	httpd_resp_set_type(req, "application/json");
@@ -331,8 +332,8 @@ static esp_err_t partitions_get_handler(httpd_req_t *req)
 			if (esp_ota_get_partition_description(p, &desc) == ESP_OK)
 			{
 				ESP_LOGI(__func__, "Partition %s : found app header", lab);
-				off += snprintf(buf + off, sizeof(buf) - off, " ,\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\" ",
-								desc.project_name, desc.version, desc.date);
+				off += snprintf(buf + off, sizeof(buf) - off, " ,\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s-%s\" ",
+								desc.project_name, desc.version, desc.date, desc.time);
 				ESP_LOGD(__func__, "Offset : %u @ %u\nBuffer : %s", off, __LINE__, buf);
 			}
 			// Add partition state if not factory APP
