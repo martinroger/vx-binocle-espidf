@@ -3,7 +3,9 @@
 
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Interface board factory app</title>
+    <link rel="stylesheet" href="/styles.css">
 </head>
 
 <body>
@@ -11,10 +13,10 @@
     <div id="info">Loading...</div>
     <div>Odometer: <span id="odometer">-</span> m &nbsp; Trip: <span id="trip">-</span> m</div>
     <div>
-        New Odometer (m): <input id="new_odo" type="number"> <button type="button"
+        New Odometer (m): <input id="new_odo" type="number"> <button class="btn-compact" type="button"
             onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
             odometer</button><br>
-        New Trip (m): <input id="new_trip" type="number"> <button type="button"
+        New Trip (m): <input id="new_trip" type="number"> <button class="btn-compact" type="button"
             onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
             trip</button><br>
     </div>
@@ -25,11 +27,11 @@
         Coolant alarm temperature: <span id="overtemp_threshold">-</span>°C<br>
     </div>
     <div>
-        New fuel correction factor : <input id="new_fuel_level_corr" type="number"> <button type="button"
+        New fuel correction factor : <input id="new_fuel_level_corr" type="number"> <button class="btn-compact" type="button"
             onclick="fetch('/set_cal?new_fuel_level_corr='+document.getElementById('new_fuel_level_corr').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
-        New fuel low level threshold : <input id="new_low_fuel_threshold" type="number"> <button type="button"
+        New fuel low level threshold : <input id="new_low_fuel_threshold" type="number"> <button class="btn-compact" type="button"
             onclick="fetch('/set_cal?new_low_fuel_threshold='+document.getElementById('new_low_fuel_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
-        New over temperature alarm threshold : <input id="new_overtemp_threshold" type="number"> <button type="button"
+        New over temperature alarm threshold : <input id="new_overtemp_threshold" type="number"> <button class="btn-compact" type="button"
             onclick="fetch('/set_cal?new_overtemp_threshold='+document.getElementById('new_overtemp_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
 
 
@@ -56,7 +58,7 @@
             <option value="ota_1">ota_1</option>
         </select><br><br>
         File: <input type="file" name="file" id="file" accept=".bin"><br><br>
-        <button type="button" onclick="doUpload()">Upload and flash</button>
+        <button class="btn-compact" type="button" onclick="doUpload()">Upload and flash</button>
         <pre id="result"></pre>
     </div>
 
@@ -67,20 +69,9 @@
             <option value="LDB">Left Display</option>
         </select><br><br>
         Binary file : <input type="file" name="CANfile" id="CANfile" accept=".bin"><br><br>
-        <button type="button" onclick="doCANUpload()">Flash over CAN</button>
+        <button class="btn-compact" type="button" onclick="doCANUpload()">Flash over CAN</button>
         <pre id="flashresult"></pre>
     </div>
-
-    <!-- <h2>Fake Flash</h2>
-    <div>
-        Target ECU: <select name="faketargetECU" id="faketargetECU">
-            <option value="RDB">Right Display</option>
-            <option value="LDB">Left Display</option>
-        </select><br><br>
-        Binary file : <input type="file" name="fakeCANfile" id="fakeCANfile" accept=".bin"><br><br>
-        <button type="button" onclick="doFakeUpload()">Fake Flash over CAN</button>
-        <pre id="fakeFlashresult"></pre>
-    </div> -->
 
     <h2>Set Boot Partition</h2>
     <div>Currently selected: <span id="bootPart">-</span></div>
@@ -89,7 +80,7 @@
         <option value="ota_0">ota_0</option>
         <option value="ota_1">ota_1</option>
     </select>
-    <button
+    <button class="btn-compact"
         onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
         Boot and Reboot</button>
 
@@ -150,17 +141,6 @@
             uploadFile(f, baseURL, 'flashresult');
         }
 
-        // function doFakeUpload() {
-        //     var f = document.getElementById('fakeCANfile').files[0];
-        //     if (!f) {
-        //         alert('Choose file');
-        //         return;
-        //     }
-        //     var target = document.getElementById('faketargetECU').value;
-        //     const baseURL = '/fakeFlash?targetECU=' + target + '&';
-        //     uploadFile(f, baseURL, 'fakeFlashresult');
-        // }
-
         async function uploadFile(file, baseURL, resultID) {
             const uploadURL = baseURL; // Your ESP32 endpoint
             const fileSize = file.size;
@@ -202,7 +182,6 @@
         window.addEventListener('load', function () {
             refreshCalVariables();
             refreshPartitions();
-            // fetch('/prevboot').then(r => r.json()).then(j => { document.getElementById('bootPart').innerText = j.bootPart; document.getElementById('prevRunningPart').innerText = j.prevRunningPart; document.getElementById('recOTAPart').innerText = j.recOTAPart });
             fetch('/odometer').then(r => r.json()).then(j => {
                 document.getElementById('odometer').innerText = j.odometer_m;
                 document.getElementById('new_odo').value = parseInt(j.odometer_m);
@@ -212,6 +191,29 @@
             fetch('/version').then(r => r.json()).then(j => {
                 document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date)
             });
+
+            // Device and target class helpers (used by styles.css)
+            (function applyDeviceAndTargetClasses() {
+                const ua = navigator.userAgent || '';
+                const isMobile = /Mobi|Android|iPhone|iPad/.test(ua) || window.innerWidth < 700;
+                document.body.classList.add(isMobile ? 'device-mobile' : 'device-desktop');
+
+                const addTargetClasses = () => {
+                    // ECU target class
+                    const ecu = document.getElementById('targetECU')?.value;
+                    document.body.classList.remove('target-RDB', 'target-LDB');
+                    if (ecu) document.body.classList.add('target-' + ecu);
+                    // OTA target class
+                    const ota = document.getElementById('target')?.value;
+                    document.body.classList.remove('target-ota_0', 'target-ota_1', 'target-factory');
+                    if (ota) document.body.classList.add('target-' + ota);
+                };
+
+                document.getElementById('targetECU')?.addEventListener('change', addTargetClasses);
+                document.getElementById('target')?.addEventListener('change', addTargetClasses);
+                // run once to set initial state (refreshPartitions updates select values)
+                setTimeout(addTargetClasses, 250);
+            })();
         });
     </script>
 </body>
