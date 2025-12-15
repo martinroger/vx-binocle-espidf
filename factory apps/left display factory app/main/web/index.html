@@ -52,9 +52,9 @@
     <script>
         function refreshPartitions() {
             fetch('/partitions').then(r => r.json()).then(j => {
-                if (j.factory) { document.getElementById('factory_project').innerText = j.factory.project_name || '-'; document.getElementById('factory_version').innerText = j.factory.version || '-'; }
-                if (j.ota_0) { document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-'; document.getElementById('ota0_version').innerText = (j.ota_0.version + ' ' + j.ota_0.state) || '-'; }
-                if (j.ota_1) { document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-'; document.getElementById('ota1_version').innerText = (j.ota_1.version + ' ' + j.ota_1.state) || '-'; }
+                if (j.factory) { document.getElementById('factory_project').innerText = j.factory.project_name || '-'; document.getElementById('factory_version').innerText = (j.factory.version + ' built ' + j.factory.date) || '-'; }
+                if (j.ota_0) { document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-'; document.getElementById('ota0_version').innerText = (j.ota_0.version + ' built ' + j.ota_0.date + ' STATE : ' + j.ota_0.state) || '-'; }
+                if (j.ota_1) { document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-'; document.getElementById('ota1_version').innerText = (j.ota_1.version + ' built ' + j.ota_1.date + ' STATE : ' + j.ota_1.state) || '-'; }
             });
             fetch('/prevboot').then(r => r.json()).then(j => {
                 document.getElementById('bootPart').innerText = j.bootPart;
