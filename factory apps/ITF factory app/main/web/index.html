@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <link rel="stylesheet" href="simple.min.css">
     <meta charset="utf-8">
     <title>Interface board factory app</title>
 </head>
@@ -47,15 +48,15 @@
         <button onclick="fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting...'))">Reboot</button>
     </div>
     <h2>Upload Firmware</h2>
-    <div>Previously running partition: <span id="prevRunningPart">-</span></div>
-    <div>Recommended OTA partition: <span id="recOTAPart">-</span><br><br></div>
+    <div>Previously running partition: <b id="prevRunningPart" style="text-align: right;">-</b></div>
+    <div >Recommended OTA partition: <b id="recOTAPart" style="text-align: right;">-</b><br></div>
 
     <div>
         Target partition: <select name="target" id="target">
-            <option value="ota_0">ota_0</option>
-            <option value="ota_1">ota_1</option>
-        </select><br><br>
-        File: <input type="file" name="file" id="file" accept=".bin"><br><br>
+            <option value="ota_0">OTA slot 0</option>
+            <option value="ota_1">OTA slot 1</option>
+        </select><br>
+        Binary image file: <input type="file" name="file" id="file" accept=".bin"><br>
         <button type="button" onclick="doUpload()">Upload and flash</button>
         <pre id="result"></pre>
     </div>
@@ -63,10 +64,10 @@
     <h2>Flash over CAN</h2>
     <div>
         Target ECU: <select name="targetECU" id="targetECU">
-            <option value="RDB">Right Display</option>
-            <option value="LDB">Left Display</option>
-        </select><br><br>
-        Binary file : <input type="file" name="CANfile" id="CANfile" accept=".bin"><br><br>
+            <option value="RDB">Right Display (RDB)</option>
+            <option value="LDB">Left Display (LDB)</option>
+        </select><br>
+        Binary image file : <input type="file" name="CANfile" id="CANfile" accept=".bin"><br>
         <button type="button" onclick="doCANUpload()">Flash over CAN</button>
         <pre id="flashresult"></pre>
     </div>
@@ -83,11 +84,11 @@
     </div> -->
 
     <h2>Set Boot Partition</h2>
-    <div>Currently selected: <span id="bootPart">-</span></div>
+    <div>Partition currently set for boot: <pre id="bootPart"></pre></div>
     <select id="bootsel">
-        <option value="factory">factory</option>
-        <option value="ota_0">ota_0</option>
-        <option value="ota_1">ota_1</option>
+        <option value="factory">Factory App</option>
+        <option value="ota_0">OTA slot 0</option>
+        <option value="ota_1">OTA slot 1</option>
     </select>
     <button
         onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
