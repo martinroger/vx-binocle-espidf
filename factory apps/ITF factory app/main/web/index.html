@@ -9,16 +9,25 @@
 
 <body>
     <h1>Interface board setup</h1>
-    <div id="info">Loading...</div>
-    <div>Odometer: <span id="odometer">-</span> m &nbsp; Trip: <span id="trip">-</span> m</div>
-    <div>
-        New Odometer (m): <input id="new_odo" type="number"> <button type="button"
+    <p class="notice">
+        The current factory app software version is :<br> 
+        <mark id="info">Loading...</mark>
+    </p>
+    <details>
+        <summary>Odometer and trip</summary>
+        <p>
+            Odometer : <mark id="odometer">-</mark> m <input id="new_odo" type="number"> <button type="button"
             onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
-            odometer</button><br>
-        New Trip (m): <input id="new_trip" type="number"> <button type="button"
+            odometer</button>
+        <br>
+        
+            Trip : <mark id="trip">-</mark> m <input id="new_trip" type="number"> <button type="button"
             onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
-            trip</button><br>
-    </div>
+            trip</button>
+        </p>
+    </details>
+
+
     <h2>Calibration values</h2>
     <div>
         Fuel level correction factor: <span id="fuel_level_corr">-</span>/1000<br>
@@ -36,8 +45,7 @@
 
     </div>
 
-    <h2>Partitions</h2>
-
+    <details><summary>Partitions</summary>
     <div>
         Factory: <span id="factory_project">-</span> (<span id="factory_version">-</span>)<br>
         OTA0: <span id="ota0_project">-</span> (<span id="ota0_version">-</span>)<br>
@@ -47,6 +55,8 @@
         <button onclick="refreshPartitions()">Refresh Partitions info</button>
         <button onclick="fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting...'))">Reboot</button>
     </div>
+    </details>
+
     <h2>Upload Firmware</h2>
     <div>Previously running partition: <b id="prevRunningPart" style="text-align: right;">-</b></div>
     <div >Recommended OTA partition: <b id="recOTAPart" style="text-align: right;">-</b><br></div>
