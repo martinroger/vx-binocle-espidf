@@ -10,25 +10,39 @@
 <body>
     <h1>Interface board setup</h1>
     <p class="notice">
-        The current factory app software version is :<br> 
+        The current factory app software version is :<br>
         <mark id="info">Loading...</mark>
     </p>
     <details>
         <summary>Odometer and trip</summary>
         <p>
             Odometer : <mark id="odometer">-</mark> m <input id="new_odo" type="number"> <button type="button"
-            onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
-            odometer</button>
-        <br>
-        
+                onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
+                odometer</button>
+            <br>
+
             Trip : <mark id="trip">-</mark> m <input id="new_trip" type="number"> <button type="button"
-            onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
-            trip</button>
+                onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
+                trip</button>
+        </p>
+    </details>
+    <details>
+        <summary>Calibration values</summary>
+        <p>
+            Fuel level correction factor : <mark><span id="fuel_level_corr">-</span>/1000</mark> <input
+                id="new_fuel_level_corr" type="number"> <button type="button"
+                onclick="fetch('/set_cal?new_fuel_level_corr='+document.getElementById('new_fuel_level_corr').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Low fuel alarm threshold : <mark><span id="low_fuel_threshold">-</span>%</mark> <input
+                id="new_low_fuel_threshold" type="number"> <button type="button"
+                onclick="fetch('/set_cal?new_low_fuel_threshold='+document.getElementById('new_low_fuel_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Overtemp warning : <mark><span id="overtemp_threshold">-</span>°C</mark> <input id="new_overtemp_threshold"
+                type="number"> <button type="button"
+                onclick="fetch('/set_cal?new_overtemp_threshold='+document.getElementById('new_overtemp_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
         </p>
     </details>
 
 
-    <h2>Calibration values</h2>
+    <!-- <h2>Calibration values</h2>
     <div>
         Fuel level correction factor: <span id="fuel_level_corr">-</span>/1000<br>
         Fuel low level alarm threshold: <span id="low_fuel_threshold">-</span>%<br>
@@ -43,44 +57,55 @@
             onclick="fetch('/set_cal?new_overtemp_threshold='+document.getElementById('new_overtemp_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
 
 
-    </div>
+    </div> -->
 
-    <details><summary>Partitions</summary>
-    <div>
-        Factory: <span id="factory_project">-</span> (<span id="factory_version">-</span>)<br>
-        OTA0: <span id="ota0_project">-</span> (<span id="ota0_version">-</span>)<br>
-        OTA1: <span id="ota1_project">-</span> (<span id="ota1_version">-</span>)<br>
-    </div>
-    <div>
-        <button onclick="refreshPartitions()">Refresh Partitions info</button>
+    <details>
+        <summary>Partitions</summary>
+        <p>
+            Factory slot : <br><mark><span id="factory_project">-</span> (<span id="factory_version">-</span>)</mark><br>
+            OTA 0 slot : <br><mark><span id="ota0_project">-</span> (<span id="ota0_version">-</span>)</mark><br>
+            OTA 1 slot : <br><mark><span id="ota1_project">-</span> (<span id="ota1_version">-</span>)</mark><br>
+        </p>
+        <button onclick="refreshPartitions()">Refresh Partitions</button>
         <button onclick="fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting...'))">Reboot</button>
-    </div>
     </details>
 
-    <h2>Upload Firmware</h2>
-    <div>Previously running partition: <b id="prevRunningPart" style="text-align: right;">-</b></div>
-    <div >Recommended OTA partition: <b id="recOTAPart" style="text-align: right;">-</b><br></div>
-
-    <div>
-        Target partition: <select name="target" id="target">
+    <details>
+        <summary>OTA update</summary>
+        <p class="notice">
+            Last running partition : <mark id="prevRunningPart">...</mark><br>
+            Recommended update partition : <mark id="recOTAPart">...</mark>
+        </p>
+        Update partition : <select name="target" id="target">
             <option value="ota_0">OTA slot 0</option>
             <option value="ota_1">OTA slot 1</option>
         </select><br>
-        Binary image file: <input type="file" name="file" id="file" accept=".bin"><br>
-        <button type="button" onclick="doUpload()">Upload and flash</button>
+        Update binary file : <input type="file" name="file" id="file" accept=".bin"> <button type="button"
+            onclick="doUpload()">Update !</button>
         <pre id="result"></pre>
-    </div>
+    </details>
 
-    <h2>Flash over CAN</h2>
-    <div>
-        Target ECU: <select name="targetECU" id="targetECU">
+    <details>
+        <summary>Display update over CAN</summary>
+        <p class="notice">Updating the displays over CAN requires selecting the correct <code>*.bin</code> file for
+            each, and takes about 2 minutes per side. Double check the correct side is selected before starting the update !
+        </p>
+        Display to update : <select name="targetECU" id="targetECU">
             <option value="RDB">Right Display (RDB)</option>
             <option value="LDB">Left Display (LDB)</option>
         </select><br>
+        Update binary file : <input type="file" name="CANfile" id="CANfile" accept=".bin"> <button type="button"
+            onclick="doCANUpload()">Flash !</button>
+        <pre id="flashresult"></pre>
+    </details>
+
+    <!-- <h2>Flash over CAN</h2>
+    <div>
+        
         Binary image file : <input type="file" name="CANfile" id="CANfile" accept=".bin"><br>
         <button type="button" onclick="doCANUpload()">Flash over CAN</button>
         <pre id="flashresult"></pre>
-    </div>
+    </div> -->
 
     <!-- <h2>Fake Flash</h2>
     <div>
@@ -92,17 +117,22 @@
         <button type="button" onclick="doFakeUpload()">Fake Flash over CAN</button>
         <pre id="fakeFlashresult"></pre>
     </div> -->
+    <div>
+        <p class="notice"> The <code>Factory</code> partition is the currently running one. <br>After flashing
+            successfully one of the OTA slots, this selection will be automatically updated.</p>
+        <p>Next reboot will be on :<br>
+            <pre id="bootPart"></pre>
+        </p>
+        <select id="bootsel">
+            <option value="factory">Factory App</option>
+            <option value="ota_0">OTA slot 0</option>
+            <option value="ota_1">OTA slot 1</option>
+        </select>
+        <button
+            onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
+            and reboot now</button>
+    </div>
 
-    <h2>Set Boot Partition</h2>
-    <div>Partition currently set for boot: <pre id="bootPart"></pre></div>
-    <select id="bootsel">
-        <option value="factory">Factory App</option>
-        <option value="ota_0">OTA slot 0</option>
-        <option value="ota_1">OTA slot 1</option>
-    </select>
-    <button
-        onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
-        Boot and Reboot</button>
 
 
 
