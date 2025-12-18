@@ -249,7 +249,7 @@ BA_ "GenMsgCycleTime" BO_ 304 1000;
 BA_ "GenMsgCycleTime" BO_ 290 200;
 BA_ "GenMsgCycleTime" BO_ 289 200;
 BA_ "GenMsgCycleTime" BO_ 288 200;
-BA_ "GenMsgCycleTime" BO_ 273 500;
+BA_ "GenMsgCycleTime" BO_ 273 250;
 BA_ "GenMsgCycleTime" BO_ 257 200;
 BA_ "GenMsgSendType" BO_ 257 4;
 BA_ "GenMsgCycleTime" BO_ 272 500;
