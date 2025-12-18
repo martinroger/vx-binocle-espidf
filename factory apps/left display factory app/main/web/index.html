@@ -2,53 +2,61 @@
 <html>
 
 <head>
+    <link rel="stylesheet" href="simple.min.css">
     <meta charset="utf-8">
     <title>Left display board factory app</title>
 </head>
 
 <body>
     <h1>Left display board setup</h1>
-    <div id="info">Loading...</div>
-    <!-- <div>Odometer: <span id="odometer">-</span> m &nbsp; Trip: <span id="trip">-</span> m</div>
-    <div>
-        New Odometer (m): <input id="new_odo" type="number"> <button type="button"onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set odometer</button><br>
-        New Trip (m): <input id="new_trip" type="number"> <button type="button" onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set trip</button><br>
-    </div> -->
-    <h2>Partitions</h2>
+    <p class="notice">
+        The current factory app software version is :<br>
+        <mark id="info">Loading...</mark>
+    </p>
 
-    <div>
-        Factory: <span id="factory_project">-</span> (<span id="factory_version">-</span>)<br>
-        OTA0: <span id="ota0_project">-</span> (<span id="ota0_version">-</span>)<br>
-        OTA1: <span id="ota1_project">-</span> (<span id="ota1_version">-</span>)<br>
-    </div>
-    <div>
-        <button onclick="refreshPartitions()">Refresh Partitions info</button>
+    <details>
+        <summary>Partitions</summary>
+        <p>
+            Factory slot : <br><mark><span id="factory_project">-</span> (<span
+                    id="factory_version">-</span>)</mark><br>
+            OTA 0 slot : <br><mark><span id="ota0_project">-</span> (<span id="ota0_version">-</span>)</mark><br>
+            OTA 1 slot : <br><mark><span id="ota1_project">-</span> (<span id="ota1_version">-</span>)</mark><br>
+        </p>
+        <button onclick="refreshPartitions()">Refresh Partitions</button>
         <button onclick="fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting...'))">Reboot</button>
-    </div>
-    <h2>Upload Firmware</h2>
-    <div>Previously running partition: <span id="prevRunningPart">-</span></div>
-    <div>Recommended OTA partition: <span id="recOTAPart">-</span><br><br></div>
+    </details>
+
+    <details>
+        <summary>OTA update</summary>
+        <p class="notice">
+            Last running partition : <mark id="prevRunningPart">...</mark><br>
+            Recommended update partition : <mark id="recOTAPart">...</mark>
+        </p>
+        Update partition : <select name="target" id="target">
+            <option value="ota_0">OTA slot 0</option>
+            <option value="ota_1">OTA slot 1</option>
+        </select><br>
+        Update binary file : <input type="file" name="file" id="file" accept=".bin"> <button type="button"
+            onclick="doUpload()">Update !</button>
+        <pre id="result"></pre>
+    </details>
 
     <div>
-        Target partition: <select name="target" id="target">
-            <option value="ota_0">ota_0</option>
-            <option value="ota_1">ota_1</option>
-        </select><br><br>
-        File: <input type="file" name="file" id="file" accept=".bin"><br><br>
-        <button type="button" onclick="doUpload()">Upload and flash</button>
-        <pre id="result"></pre>
+        <p class="notice"> The <code>Factory</code> partition is the currently running one. <br>After flashing
+            successfully one of the OTA slots, this selection will be automatically updated.</p>
+        <p>Next reboot will be on :<br>
+        <pre id="bootPart"></pre>
+        </p>
+        <select id="bootsel">
+            <option value="factory">Factory App</option>
+            <option value="ota_0">OTA slot 0</option>
+            <option value="ota_1">OTA slot 1</option>
+        </select>
+        <button
+            onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
+            and reboot now</button>
     </div>
 
-    <h2>Set Boot Partition</h2>
-    <div>Currently selected: <span id="bootPart">-</span></div>
-    <select id="bootsel">
-        <option value="factory">factory</option>
-        <option value="ota_0">ota_0</option>
-        <option value="ota_1">ota_1</option>
-    </select>
-    <button
-        onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
-        Boot and Reboot</button>
     <script>
         function refreshPartitions() {
             fetch('/partitions').then(r => r.json()).then(j => {
@@ -77,17 +85,14 @@
         }
 
         async function uploadFile(file, baseURL, resultID) {
-            const uploadURL = baseURL; // Your ESP32 endpoint
+            const uploadURL = baseURL;
             const fileSize = file.size;
             const logOutput = document.getElementById(resultID);
-            // Reset UI elements
             logOutput.textContent = 'Starting file upload...';
-            // 1. Construct the URL with file size
             const finalURL = `${uploadURL}size=${fileSize}`;
             logOutput.textContent += `\nTarget URL: ${finalURL}`;
             logOutput.textContent += `\nFile Size: ${fileSize} bytes.`;
             try {
-                // 3. Make the fetch request with the custom stream
                 const response = await fetch(finalURL, {
                     method: 'POST',
                     body: file,
@@ -116,13 +121,6 @@
 
         window.addEventListener('load', function () {
             refreshPartitions();
-            // fetch('/prevboot').then(r => r.json()).then(j => { document.getElementById('bootPart').innerText = j.bootPart; document.getElementById('prevRunningPart').innerText = j.prevRunningPart; document.getElementById('recOTAPart').innerText = j.recOTAPart });
-            // fetch('/odometer').then(r => r.json()).then(j => { 
-            //     document.getElementById('odometer').innerText = j.odometer_m;
-            //     document.getElementById('new_odo').value = parseInt(j.odometer_m);
-            //     document.getElementById('trip').innerText = j.trip_m;
-            //     document.getElementById('new_trip').value = parseInt(j.trip_m); 
-            // });
             fetch('/version').then(r => r.json()).then(j => {
                 document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date)
             });
