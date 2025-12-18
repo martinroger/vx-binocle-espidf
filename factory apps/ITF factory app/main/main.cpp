@@ -1,15 +1,3 @@
-/*
- * Interface board Factory App
- * - Start as open AP named ITF-<MAC>
- * - Start mDNS as hostname "interface-board"
- * - Start HTTP server with endpoints:
- *   GET / -> UI
- *   GET /version -> running app info
- *   GET /partitions -> ota partition info
- *   POST /upload -> upload firmware to selected ota partition
- *   POST /set_boot?target=ota_0|ota_1 -> set boot partition and restart
- */
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -1466,90 +1454,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
-// static esp_err_t fakeFlash_post_handler(httpd_req_t *req)
-// {
-// 	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
-// 	size_t query_length = httpd_req_get_url_query_len(req);
-// 	if (query_length == 0)
-// 	{
-// 		ESP_LOGE(__func__, "Query had no length");
-// 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
-// 		return ESP_FAIL;
-// 	}
-// 	char query_buffer[query_length + 1];
-// 	size_t file_size;
-// 	char targetECU[5 + 1];
-// 	char file_size_str[10];
-// 	// Retrieve the query string
-// 	if (httpd_req_get_url_query_str(req, query_buffer, sizeof(query_buffer)) != ESP_OK)
-// 	{
-// 		ESP_LOGE(__func__, "Could not retrieve URL Query string");
-// 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
-// 		return ESP_FAIL;
-// 	}
-// 	ESP_LOGI(__func__, "Query string: %s", query_buffer);
-
-// 	// Check for filesize, first as a string then as a number
-// 	if (httpd_query_key_value(query_buffer, "size", file_size_str, sizeof(file_size_str)) != ESP_OK)
-// 	{
-// 		ESP_LOGE(__func__, "Could not retrieve file size string");
-// 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
-// 		return ESP_FAIL;
-// 	}
-// 	file_size = atol(file_size_str);
-// 	ESP_LOGI(__func__, "File size from URL : %u", file_size);
-
-// 	// Check for target ECU then
-// 	if (httpd_query_key_value(query_buffer, "targetECU", targetECU, sizeof(targetECU)) != ESP_OK)
-// 	{
-// 		ESP_LOGE(__func__, "Could not retrieve target ECU");
-// 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, NULL);
-// 		return ESP_FAIL;
-// 	}
-// 	ESP_LOGI(__func__, "TargetECU: %s", targetECU);
-// 	if (strstr(targetECU, "LDB"))
-// 		ESP_LOGI(__func__, "Prepping for LDB");
-// 	if (strstr(targetECU, "RDB"))
-// 		ESP_LOGI(__func__, "Preppring for RDB");
-
-// 	ESP_LOGI(__func__, "Summary before transfer : content is %u bytes, file size is %u bytes", req->content_len, file_size);
-
-// 	// Allocate some buffer to receive in segments of 4K
-// 	const size_t buf_size = 4096;
-// 	char *buf = static_cast<char *>(malloc(buf_size));
-// 	if (!buf)
-// 	{
-// 		httpd_resp_send_500(req);
-// 		return ESP_ERR_NO_MEM;
-// 	}
-
-// 	int receivedBytes = 0;
-// 	while (receivedBytes < req->content_len)
-// 	{
-// 		int bytesToReceive = std::min(req->content_len - receivedBytes, buf_size); // In order not to exceed content_len
-// 		int retrieved = httpd_req_recv(req, buf, bytesToReceive);				   // Attempt to receive
-// 		if (retrieved <= 0)														   // Edge case of timeout or no more content. Might benefit from not retrying for ever
-// 		{
-// 			if (retrieved == HTTPD_SOCK_ERR_TIMEOUT)
-// 				continue; // Go for another loop in case of timeout
-// 			// Implicitely else and exit otherwise
-// 			ESP_LOGE(__func__, "Chunk retrieval failed, error %d", retrieved);
-// 			free(buf);
-// 			httpd_resp_send_500(req);
-// 			return ESP_FAIL;
-// 		}
-// 		receivedBytes += retrieved;
-// 		ESP_LOGI(__func__, "Received new chunk of length %d, expected %d, total received %u out of %u, file size %u", retrieved, bytesToReceive, receivedBytes, req->content_len, file_size);
-// 		vTaskDelay(pdMS_TO_TICKS(50)); // Pretend to do work...
-// 	}
-
-// 	ESP_LOGI(__func__, "Exited retrieval loop.");
-
-// 	free(buf);
-// 	httpd_resp_sendstr(req, "{\"status\": \"OK\", \"message\": \"Flash successful\"}"); // Replace by something more artsy fartsy.
-// 	return ESP_OK;
-// }
-
 /// @brief Handler to set the boot partition and reboot on it
 /// @param req /set_boot?target= POST from dropdown menu
 /// @return
@@ -1687,10 +1591,8 @@ static httpd_handle_t start_webserver(void)
 	}
 	httpd_uri_t index_uri = {.uri = "/", .method = HTTP_GET, .handler = index_get_handler};
 	httpd_register_uri_handler(server, &index_uri);
-
 	httpd_uri_t style_uri = {.uri = "/simple.min.css", .method = HTTP_GET, .handler = stylesheet_get_handler};
 	httpd_register_uri_handler(server, &style_uri);
-
 	httpd_uri_t version_uri = {.uri = "/version", .method = HTTP_GET, .handler = version_get_handler};
 	httpd_register_uri_handler(server, &version_uri);
 	httpd_uri_t parts_uri = {.uri = "/partitions", .method = HTTP_GET, .handler = partitions_get_handler};
@@ -1699,10 +1601,6 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &upload_uri);
 	httpd_uri_t flash_uri = {.uri = "/flash", .method = HTTP_POST, .handler = flash_post_handler};
 	httpd_register_uri_handler(server, &flash_uri);
-	// httpd_uri_t fake_flash_uri = {.uri = "/fakeFlash", .method = HTTP_POST, .handler = fakeFlash_post_handler};
-	// httpd_register_uri_handler(server, &fake_flash_uri);
-	// httpd_uri_t fake_flash_options_uri = {.uri = "/fakeFlash", .method = HTTP_OPTIONS, .handler = cors_options_handler};
-	// httpd_register_uri_handler(server, &fake_flash_options_uri);
 	httpd_uri_t setboot_uri = {.uri = "/set_boot", .method = HTTP_POST, .handler = set_boot_post_handler};
 	httpd_register_uri_handler(server, &setboot_uri);
 	httpd_uri_t reboot_uri = {.uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler};

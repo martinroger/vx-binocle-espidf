@@ -26,6 +26,7 @@
                 trip</button>
         </p>
     </details>
+
     <details>
         <summary>Calibration values</summary>
         <p>
@@ -41,28 +42,11 @@
         </p>
     </details>
 
-
-    <!-- <h2>Calibration values</h2>
-    <div>
-        Fuel level correction factor: <span id="fuel_level_corr">-</span>/1000<br>
-        Fuel low level alarm threshold: <span id="low_fuel_threshold">-</span>%<br>
-        Coolant alarm temperature: <span id="overtemp_threshold">-</span>°C<br>
-    </div>
-    <div>
-        New fuel correction factor : <input id="new_fuel_level_corr" type="number"> <button type="button"
-            onclick="fetch('/set_cal?new_fuel_level_corr='+document.getElementById('new_fuel_level_corr').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
-        New fuel low level threshold : <input id="new_low_fuel_threshold" type="number"> <button type="button"
-            onclick="fetch('/set_cal?new_low_fuel_threshold='+document.getElementById('new_low_fuel_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
-        New over temperature alarm threshold : <input id="new_overtemp_threshold" type="number"> <button type="button"
-            onclick="fetch('/set_cal?new_overtemp_threshold='+document.getElementById('new_overtemp_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Set</button><br>
-
-
-    </div> -->
-
     <details>
         <summary>Partitions</summary>
         <p>
-            Factory slot : <br><mark><span id="factory_project">-</span> (<span id="factory_version">-</span>)</mark><br>
+            Factory slot : <br><mark><span id="factory_project">-</span> (<span
+                    id="factory_version">-</span>)</mark><br>
             OTA 0 slot : <br><mark><span id="ota0_project">-</span> (<span id="ota0_version">-</span>)</mark><br>
             OTA 1 slot : <br><mark><span id="ota1_project">-</span> (<span id="ota1_version">-</span>)</mark><br>
         </p>
@@ -88,7 +72,8 @@
     <details>
         <summary>Display update over CAN</summary>
         <p class="notice">Updating the displays over CAN requires selecting the correct <code>*.bin</code> file for
-            each, and takes about 2 minutes per side. Double check the correct side is selected before starting the update !
+            each, and takes about 2 minutes per side. Double check the correct side is selected before starting the
+            update !
         </p>
         Display to update : <select name="targetECU" id="targetECU">
             <option value="RDB">Right Display (RDB)</option>
@@ -99,29 +84,11 @@
         <pre id="flashresult"></pre>
     </details>
 
-    <!-- <h2>Flash over CAN</h2>
-    <div>
-        
-        Binary image file : <input type="file" name="CANfile" id="CANfile" accept=".bin"><br>
-        <button type="button" onclick="doCANUpload()">Flash over CAN</button>
-        <pre id="flashresult"></pre>
-    </div> -->
-
-    <!-- <h2>Fake Flash</h2>
-    <div>
-        Target ECU: <select name="faketargetECU" id="faketargetECU">
-            <option value="RDB">Right Display</option>
-            <option value="LDB">Left Display</option>
-        </select><br><br>
-        Binary file : <input type="file" name="fakeCANfile" id="fakeCANfile" accept=".bin"><br><br>
-        <button type="button" onclick="doFakeUpload()">Fake Flash over CAN</button>
-        <pre id="fakeFlashresult"></pre>
-    </div> -->
     <div>
         <p class="notice"> The <code>Factory</code> partition is the currently running one. <br>After flashing
             successfully one of the OTA slots, this selection will be automatically updated.</p>
         <p>Next reboot will be on :<br>
-            <pre id="bootPart"></pre>
+        <pre id="bootPart"></pre>
         </p>
         <select id="bootsel">
             <option value="factory">Factory App</option>
@@ -191,17 +158,6 @@
             uploadFile(f, baseURL, 'flashresult');
         }
 
-        // function doFakeUpload() {
-        //     var f = document.getElementById('fakeCANfile').files[0];
-        //     if (!f) {
-        //         alert('Choose file');
-        //         return;
-        //     }
-        //     var target = document.getElementById('faketargetECU').value;
-        //     const baseURL = '/fakeFlash?targetECU=' + target + '&';
-        //     uploadFile(f, baseURL, 'fakeFlashresult');
-        // }
-
         async function uploadFile(file, baseURL, resultID) {
             const uploadURL = baseURL; // Your ESP32 endpoint
             const fileSize = file.size;
@@ -243,7 +199,6 @@
         window.addEventListener('load', function () {
             refreshCalVariables();
             refreshPartitions();
-            // fetch('/prevboot').then(r => r.json()).then(j => { document.getElementById('bootPart').innerText = j.bootPart; document.getElementById('prevRunningPart').innerText = j.prevRunningPart; document.getElementById('recOTAPart').innerText = j.recOTAPart });
             fetch('/odometer').then(r => r.json()).then(j => {
                 document.getElementById('odometer').innerText = j.odometer_m;
                 document.getElementById('new_odo').value = parseInt(j.odometer_m);

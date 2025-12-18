@@ -1,15 +1,3 @@
-/*
- * Interface board Factory App
- * - Start as open AP named RDB-<MAC>
- * - Start mDNS as hostname "interface-board"
- * - Start HTTP server with endpoints:
- *   GET / -> UI
- *   GET /version -> running app info
- *   GET /partitions -> ota partition info
- *   POST /upload -> upload firmware to selected ota partition
- *   POST /set_boot?target=ota_0|ota_1 -> set boot partition and restart
- */
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -347,51 +335,6 @@ static esp_err_t prevboot_get_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
-// /// @brief Handler for the request to get odometer and trip values
-// /// @param req GET /odometer
-// /// @return
-// static esp_err_t odometer_get_handler(httpd_req_t *req)
-// {
-// 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
-
-// 	uint32_t odometer_m = 0;
-// 	uint32_t trip_m = 0;
-// 	nvs_handle_t h;
-// 	esp_err_t err = ESP_FAIL;
-
-// 	/* Try reading from partition "nvs_odo" with namespace "storage", fall back to default */
-// 	err = nvs_open_from_partition("nvs_odo", "storage", NVS_READONLY, &h);
-// 	if (err != ESP_OK)
-// 	{
-// 		ESP_LOGW(__func__, "Could not open the nvs_odo partition with namespace storage, attempting to open the default nvs partition.");
-// 		err = nvs_open("storage", NVS_READONLY, &h);
-// 		if (err != ESP_OK)
-// 		{
-// 			ESP_LOGW(__func__, "Could not open the default nvs partition.");
-// 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS open failed");
-// 			return ESP_FAIL;
-// 		}
-// 	}
-// 	ESP_LOGI(__func__, "Partition successfully opened.");
-// 	if (nvs_get_u32(h, "odometer_m", &odometer_m) == ESP_ERR_NVS_NOT_FOUND)
-// 	{
-// 		ESP_LOGW(__func__, "Could not find the odometer_m key in nvs.");
-// 		odometer_m = UINT32_MAX;
-// 	}
-// 	if (nvs_get_u32(h, "trip_m", &trip_m) == ESP_ERR_NVS_NOT_FOUND)
-// 	{
-// 		ESP_LOGW(__func__, "Could not find the trip_m key in nvs.");
-// 		trip_m = UINT32_MAX;
-// 	}
-// 	nvs_close(h);
-// 	// Preparing the JSON object for response
-// 	char out[128];
-// 	snprintf(out, sizeof(out), "{\"odometer_m\":%lu,\"trip_m\":%lu}", odometer_m, trip_m);
-// 	httpd_resp_set_type(req, "application/json");
-// 	httpd_resp_sendstr(req, out);
-// 	return ESP_OK;
-// }
-
 /// @brief Handler for the Reboot button
 /// @param req POST /reboot
 /// @return
@@ -695,85 +638,6 @@ static esp_err_t set_boot_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
-// /// @brief Allows editing trip and odometer (in meters) in the NVS
-// /// @param req POST /set_trip_odo?new_trip= or /set_trip_odo?new_odo=
-// /// @return
-// static esp_err_t set_trip_odo_post_handler(httpd_req_t *req)
-// {
-// 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
-// 	nvs_handle_t h;
-// 	esp_err_t nvserr = nvs_open_from_partition("nvs_odo", "storage", NVS_READWRITE, &h);
-// 	if (nvserr != ESP_OK)
-// 	{
-// 		ESP_LOGE(__func__, "Could not open nvs_odo -> storage, error %s", esp_err_to_name(nvserr));
-// 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not load nvs_odo NVS");
-// 		return ESP_FAIL;
-// 	}
-// 	// Prepare pointers to substrings
-// 	const char *new_trip_ptr = strstr(req->uri, "new_trip=");
-// 	const char *new_odo_ptr = strstr(req->uri, "new_odo=");
-// 	long detectedNumber = 0;
-// 	// Check if "new_trip=" is a valid pointer (detected)
-// 	if (new_trip_ptr != NULL)
-// 	{
-// 		// Construct pointer at the first supposed numerical character
-// 		const char *tripToParse = new_trip_ptr + sizeof("new_trip=") - 1;
-// 		// atol is not checking anything. Let's check that at least the first character is either numerical or +-
-// 		if ((tripToParse[0] == '-') || (tripToParse[0] == '+') || ((tripToParse[0] >= '0') && (tripToParse[0] <= '9')))
-// 		{
-// 			ESP_LOGI(__func__, "Numeral or compatible detected, atol sorta safe to use.");
-// 			detectedNumber = atol(tripToParse);
-// 			if (detectedNumber < 0)
-// 				detectedNumber *= -1;
-// 			if (detectedNumber > UINT32_MAX)
-// 				detectedNumber = UINT32_MAX;
-// 			nvs_set_u32(h, "trip_m", (uint32_t)detectedNumber);
-// 			ESP_LOGI(__func__, "Trip updated to %lu m", (uint32_t)detectedNumber);
-// 			nvs_commit(h);
-// 		}
-// 		else
-// 		{
-// 			ESP_LOGE(__func__, "Invalid starting character %s for atol, reporting error", tripToParse[0]);
-// 			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in trip set request");
-// 			nvs_close(h);
-// 			return ESP_FAIL;
-// 		}
-// 	}
-// 	if (new_odo_ptr != NULL)
-// 	{
-// 		const char *odoToParse = new_odo_ptr + sizeof("new_odo=") - 1;
-// 		if ((odoToParse[0] == '-') || (odoToParse[0] == '+') || ((odoToParse[0] >= '0') && (odoToParse[0] <= '9')))
-// 		{
-// 			detectedNumber = atol(odoToParse);
-// 			if (detectedNumber < 0)
-// 				detectedNumber *= -1;
-// 			if (detectedNumber > UINT32_MAX)
-// 				detectedNumber = UINT32_MAX;
-// 			nvs_set_u32(h, "odometer_m", (uint32_t)detectedNumber);
-// 			ESP_LOGI(__func__, "Odometer updated to %lu m", (uint32_t)detectedNumber);
-// 			nvs_commit(h);
-// 		}
-// 		else
-// 		{
-// 			ESP_LOGE(__func__, "Invalid starting character %s for atol, reporting error", odoToParse[0]);
-// 			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in odo set request");
-// 			nvs_close(h);
-// 			return ESP_FAIL;
-// 		}
-// 	}
-// 	if (new_odo_ptr == NULL && new_trip_ptr == NULL) //Gibberish in the request
-// 	{
-// 		ESP_LOGE(__func__,"Invalid update request, no new_trip or new_odo.");
-// 		httpd_resp_send_err(req,HTTPD_400_BAD_REQUEST,"Malformed request, no correct tags");
-// 		nvs_close(h);
-// 		return ESP_FAIL;
-// 	}
-// 	// Close NVS if nothing returned before
-// 	nvs_close(h);
-// 	httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
-// 	return ESP_OK;
-// }
-
 /// @brief Web Server initialization handler
 /// @param  None
 /// @return Handle to webserver if successfully started, NULL otherwise.
@@ -790,10 +654,8 @@ static httpd_handle_t start_webserver(void)
 	}
 	httpd_uri_t index_uri = {.uri = "/", .method = HTTP_GET, .handler = index_get_handler};
 	httpd_register_uri_handler(server, &index_uri);
-
 	httpd_uri_t style_uri = {.uri = "/simple.min.css", .method = HTTP_GET, .handler = stylesheet_get_handler};
 	httpd_register_uri_handler(server, &style_uri);
-
 	httpd_uri_t version_uri = {.uri = "/version", .method = HTTP_GET, .handler = version_get_handler};
 	httpd_register_uri_handler(server, &version_uri);
 	httpd_uri_t parts_uri = {.uri = "/partitions", .method = HTTP_GET, .handler = partitions_get_handler};
@@ -804,12 +666,8 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &setboot_uri);
 	httpd_uri_t reboot_uri = {.uri = "/reboot", .method = HTTP_POST, .handler = reboot_post_handler};
 	httpd_register_uri_handler(server, &reboot_uri);
-	// httpd_uri_t odo_uri = {.uri = "/odometer", .method = HTTP_GET, .handler = odometer_get_handler};
-	// httpd_register_uri_handler(server, &odo_uri);
 	httpd_uri_t bootPart_uri = {.uri = "/prevboot", .method = HTTP_GET, .handler = prevboot_get_handler};
 	httpd_register_uri_handler(server, &bootPart_uri);
-	// httpd_uri_t set_trip_odo_uri = {.uri = "/set_trip_odo", .method = HTTP_POST, .handler = set_trip_odo_post_handler};
-	// httpd_register_uri_handler(server, &set_trip_odo_uri);
 	return server;
 }
 
@@ -847,16 +705,6 @@ extern "C" void app_main(void)
 		nvs_flash_erase();
 		nvs_flash_init();
 	}
-	// ESP_LOGI(__func__, "Init ODO NVS");
-	// err = nvs_flash_init_partition("nvs_odo");
-	// if (err != ESP_OK)
-	// 	ESP_LOGE(__func__, "Cannot init odo NVS");
-	// if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
-	// {
-	// 	ESP_LOGE(__func__, "Could not init nvs_odo NVS, erasing and retrying. - %ld", err);
-	// 	nvs_flash_erase_partition("nvs_odo");
-	// 	nvs_flash_init_partition("nvs_odo");
-	// }
 
 	esp_netif_init();
 	esp_event_loop_create_default();
