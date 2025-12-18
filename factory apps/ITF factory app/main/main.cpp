@@ -1413,7 +1413,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	uint8_t OTA_status = 0xFF;
 	int otherFrames = 0; // This should ideally be replaced by a timer
 	bool statusReceived = false;
-	while (otherFrames < 500 || !statusReceived)
+	while (otherFrames < 500 && !statusReceived)
 	{
 		rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
 		switch (rx_err)
