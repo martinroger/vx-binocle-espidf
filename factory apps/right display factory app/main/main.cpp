@@ -36,9 +36,8 @@
 #endif
 #define TAG "RDB Factory"
 
-
 /// @brief Drains a request body (non fatal)
-/// @param req 
+/// @param req
 static void drain_remaining_body(httpd_req_t *req)
 {
 	const size_t DRAIN_BUFSZ = 1024;
@@ -62,6 +61,37 @@ static void start_mdns(void)
 	mdns_init();
 	mdns_hostname_set("right-display");
 	mdns_instance_name_set("Right Display Factory");
+}
+
+/// @brief Handler for the general index GET request
+/// @param req GET /simple.min.css
+/// @return
+static esp_err_t stylesheet_get_handler(httpd_req_t *req)
+{
+	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+
+	// Look for the css file in the spiffs partition (needs to be mounted beforehand)
+	FILE *f = fopen("/spiffs/simple.min.css", "r");
+	if (!f)
+	{
+		ESP_LOGE(TAG, "Failed to open index.html");
+		httpd_resp_send_err(req, HTTPD_404_NOT_FOUND, "File not found");
+		return ESP_FAIL;
+	}
+	// Set HTTP response to text/css type
+	httpd_resp_set_type(req, "text/css");
+
+	// Chunk the file to send in buffers of 512 bytes and send it away until the end of the file.
+	char buf[512];
+	while (fgets(buf, sizeof(buf), f))
+	{
+		httpd_resp_send_chunk(req, buf, strlen(buf));
+	}
+	// Terminate with a null chunk to signal end of stream
+	httpd_resp_send_chunk(req, NULL, 0);
+	// Close the file
+	fclose(f);
+	return ESP_OK;
 }
 
 /// @brief Handler for the general index GET request
@@ -113,10 +143,11 @@ static esp_err_t version_get_handler(httpd_req_t *req)
 
 	// Compose a 256 chars buffer with a JSON payload
 	char buf[256];
-	snprintf(buf, sizeof(buf), "{\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\"}",
+	snprintf(buf, sizeof(buf), "{\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s-%s\"}",
 			 app_desc ? app_desc->project_name : "",
 			 app_desc ? app_desc->version : "",
-			 app_desc ? app_desc->date : "");
+			 app_desc ? app_desc->date : "",
+			 app_desc ? app_desc->time : "");
 	// Set response type and send the buffer away to the event listener
 	ESP_LOGI(__func__, "Response to request : %s", buf);
 	httpd_resp_set_type(req, "application/json");
@@ -166,8 +197,8 @@ static esp_err_t partitions_get_handler(httpd_req_t *req)
 			if (esp_ota_get_partition_description(p, &desc) == ESP_OK)
 			{
 				ESP_LOGI(__func__, "Partition %s : found app header", lab);
-				off += snprintf(buf + off, sizeof(buf) - off, " ,\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s\" ",
-								desc.project_name, desc.version, desc.date);
+				off += snprintf(buf + off, sizeof(buf) - off, " ,\"project_name\":\"%s\",\"version\":\"%s\",\"date\":\"%s-%s\" ",
+								desc.project_name, desc.version, desc.date, desc.time);
 				ESP_LOGD(__func__, "Offset : %u @ %u\nBuffer : %s", off, __LINE__, buf);
 			}
 			// Add partition state if not factory APP
@@ -759,6 +790,10 @@ static httpd_handle_t start_webserver(void)
 	}
 	httpd_uri_t index_uri = {.uri = "/", .method = HTTP_GET, .handler = index_get_handler};
 	httpd_register_uri_handler(server, &index_uri);
+
+	httpd_uri_t style_uri = {.uri = "/simple.min.css", .method = HTTP_GET, .handler = stylesheet_get_handler};
+	httpd_register_uri_handler(server, &style_uri);
+
 	httpd_uri_t version_uri = {.uri = "/version", .method = HTTP_GET, .handler = version_get_handler};
 	httpd_register_uri_handler(server, &version_uri);
 	httpd_uri_t parts_uri = {.uri = "/partitions", .method = HTTP_GET, .handler = partitions_get_handler};
