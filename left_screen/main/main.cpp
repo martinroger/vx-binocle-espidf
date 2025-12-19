@@ -252,15 +252,16 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
 }
 #endif
 
-/// @brief Simple functions that compares internal metrics and updates LVGL objects if the metric has changed.
-/// @return Number of objects updated
-int updateLVGLObjects()
+/// @brief Updates all cyclic elements
+/// @param forceRefresh Force a refresh of all the conditional blocks
+/// @return Number of updated elements
+int updateLVGLObjects(bool forceRefresh = false)
 {
     int updatedElements = 0;
 
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
 
-    if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10))
+    if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10) || forceRefresh)
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
         animateTargetArc(objects.speed_arc, (speed_kph / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1)) * 10);
@@ -275,7 +276,7 @@ int updateLVGLObjects()
         updatedElements++;
     }
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
-    if (p_rpm / 10 != rpm / 10)
+    if ((p_rpm / 10) != (rpm / 10) || forceRefresh)
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
         animateTargetArc(objects.rpm_arc, rpm);
@@ -309,34 +310,34 @@ int updateLVGLObjects()
         ESP_LOGD(__func__, "Turn all on - placeholder");
     }
 
-    if (p_fuelLevel_pc != fuelLevel_pc) // Fuel level percentage
+    if (p_fuelLevel_pc != fuelLevel_pc || forceRefresh) // Fuel level percentage
     {
         // lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
         lv_label_set_text_fmt(objects.fuel_level, "%03d", fuelLevel_pc);
         p_fuelLevel_pc = fuelLevel_pc;
         updatedElements++;
     }
-    if (p_coolant_degC != coolant_degC) // Coolant temperature
+    if (p_coolant_degC != coolant_degC || forceRefresh) // Coolant temperature
     {
         // lv_bar_set_value(objects.coolant_bar, coolant_degC, LV_ANIM_OFF);
         lv_label_set_text_fmt(objects.coolant, "%03d", coolant_degC);
         p_coolant_degC = coolant_degC;
         updatedElements++;
     }
-    if (p_lvVoltage_v != lvVoltage_v) // 12V Voltage value
+    if (p_lvVoltage_v != lvVoltage_v || forceRefresh) // 12V Voltage value
     {
         lv_label_set_text_fmt(objects.voltage_lvl, "%04.1fV", lvVoltage_v);
         p_lvVoltage_v = lvVoltage_v;
         updatedElements++;
     }
-    if (p_lowFuelOn != lowFuelOn) // Low Fuel computed TT
+    if (p_lowFuelOn != lowFuelOn || forceRefresh) // Low Fuel computed TT
     {
         lv_obj_set_style_image_opa(objects.low_fuel_tt, lowFuelOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         lv_obj_set_state(objects.fuel_level,LV_STATE_FOCUSED,lowFuelOn);
         p_lowFuelOn = lowFuelOn;
         updatedElements++;
     }
-    if (p_overTemperatureOn != overTemperatureOn) // Over temperature computer TT
+    if (p_overTemperatureOn != overTemperatureOn || forceRefresh) // Over temperature computer TT
     {
         lv_obj_set_style_image_opa(objects.over_temperature_tt, overTemperatureOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         lv_obj_set_state(objects.coolant,LV_STATE_FOCUSED,overTemperatureOn);
@@ -350,7 +351,7 @@ int updateLVGLObjects()
     //     p_screen_interlock_OK = screen_interlock_OK;
     //     updatedElements++;
     // }
-    if (p_internal_ST != display_board_st.internal_ST) // Internal state degraded or fault
+    if (p_internal_ST != display_board_st.internal_ST || forceRefresh) // Internal state degraded or fault
     {
         switch (display_board_st.internal_ST)
         {
@@ -369,7 +370,7 @@ int updateLVGLObjects()
         p_internal_ST = display_board_st.internal_ST;
         updatedElements++;
     }
-    if (p_itf_board_st != itf_board_st) // Same for CAN-detected ITF board state
+    if (p_itf_board_st != itf_board_st || forceRefresh) // Same for CAN-detected ITF board state
     {
         switch (itf_board_st)
         {
@@ -388,91 +389,91 @@ int updateLVGLObjects()
         p_itf_board_st = itf_board_st;
         updatedElements++;
     }
-    if (CAN_RX_TimedOut != p_CAN_RX_TimedOut) // Same for CAN Timed out indicator
+    if (CAN_RX_TimedOut != p_CAN_RX_TimedOut || forceRefresh) // Same for CAN Timed out indicator
     {
         lv_obj_set_style_opa(objects.can_state, CAN_RX_TimedOut ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_CAN_RX_TimedOut = CAN_RX_TimedOut;
         updatedElements++;
     }
-    if (p_odometer_km != odometer_km) // Odometer. Might need comparison at the uint level
+    if (p_odometer_km != odometer_km || forceRefresh) // Odometer. Might need comparison at the uint level
     {
         lv_label_set_text_fmt(objects.odometer, "%06.0f", odometer_km / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1));
         p_odometer_km = odometer_km;
         updatedElements++;
     }
-    if (p_trip_km != trip_km) // Trip, might need comparison at the uint level
+    if (p_trip_km != trip_km || forceRefresh) // Trip, might need comparison at the uint level
     {
         lv_label_set_text_fmt(objects.trip, "%05.1f", trip_km / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1));
         p_trip_km = trip_km;
         updatedElements++;
     }
-    if (p_indicatorsOn != indicatorsOn) // Double indicators arrow
+    if (p_indicatorsOn != indicatorsOn || forceRefresh) // Double indicators arrow
     {
         lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_indicatorsOn = indicatorsOn;
         updatedElements++;
     }
-    if (p_rightTurnOn != rightTurnOn) // Right indicator
+    if (p_rightTurnOn != rightTurnOn || forceRefresh) // Right indicator
     {
         // lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_rightTurnOn = rightTurnOn;
         updatedElements++;
     }
-    if (p_leftTurnOn != leftTurnOn) // Right indicator
+    if (p_leftTurnOn != leftTurnOn || forceRefresh) // Right indicator
     {
         // lv_obj_set_style_image_opa(objects.indicators_tt, indicatorsOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_leftTurnOn = leftTurnOn;
         updatedElements++;
     }
-    if (p_highBeamOn != highBeamOn) // High beams
+    if (p_highBeamOn != highBeamOn || forceRefresh) // High beams
     {
         lv_obj_set_style_image_opa(objects.hi_beam_tt, highBeamOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_highBeamOn = highBeamOn;
         updatedElements++;
     }
-    if (p_brakesOn != brakesOn) // Brakes
+    if (p_brakesOn != brakesOn || forceRefresh) // Brakes
     {
         lv_obj_set_style_image_opa(objects.brakes_tt, brakesOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_brakesOn = brakesOn;
         updatedElements++;
     }
-    if (p_absOn != absOn) // ABS
+    if (p_absOn != absOn || forceRefresh) // ABS
     {
         lv_obj_set_style_image_opa(objects.abs_tt, absOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_absOn = absOn;
         updatedElements++;
     }
-    if (p_parkingBrakeOn != parkingBrakeOn) // Parking Brake
+    if (p_parkingBrakeOn != parkingBrakeOn || forceRefresh) // Parking Brake
     {
         lv_obj_set_style_image_opa(objects.parkingbrake_tt, parkingBrakeOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_parkingBrakeOn = parkingBrakeOn;
         updatedElements++;
     }
-    if (p_lowCoolantOn != lowCoolantOn) // Low Coolant
+    if (p_lowCoolantOn != lowCoolantOn || forceRefresh) // Low Coolant
     {
         lv_obj_set_style_image_opa(objects.low_coolant_tt, lowCoolantOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_lowCoolantOn = lowCoolantOn;
         updatedElements++;
     }
-    if (p_batteryOn != batteryOn) // Battery/Alternator
+    if (p_batteryOn != batteryOn || forceRefresh) // Battery/Alternator
     {
         lv_obj_set_style_image_opa(objects.battery_tt, batteryOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_batteryOn = batteryOn;
         updatedElements++;
     }
-    if (p_lowOilOn != lowOilOn) // Low Oil Pressure
+    if (p_lowOilOn != lowOilOn || forceRefresh) // Low Oil Pressure
     {
         lv_obj_set_style_image_opa(objects.low_oil_tt, lowOilOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_lowOilOn = lowOilOn;
         updatedElements++;
     }
-    if (p_milOn != milOn) // MIL
+    if (p_milOn != milOn || forceRefresh) // MIL
     {
         lv_obj_set_style_image_opa(objects.mil_tt, milOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_milOn = milOn;
         updatedElements++;
     }
-    if (p_airbagOn != airbagOn) // Airbag
+    if (p_airbagOn != airbagOn || forceRefresh) // Airbag
     {
         lv_obj_set_style_image_opa(objects.airbag_tt, airbagOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
         p_airbagOn = airbagOn;
@@ -532,13 +533,6 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
     static binocan_ldb_uds_req_t binocan_ldb_uds_req_msg;
 #endif
     UDS_RESP_MSG.ss = 0;
-    // Debug block
-    // ESP_LOGI(__func__,"ID: 0x%04LX ",rxMsg->identifier);
-    // for (int i = 0; i < rxMsg->data_length_code; i++)
-    // {
-    //     printf("0x%02X\t",rxMsg->data[i]);
-    // }
-    // printf("\n");
 
     switch (rxMsg->identifier)
     {
@@ -1730,6 +1724,9 @@ extern "C" void app_main()
 #endif
     lvgl_port_unlock();
     vTaskDelay(pdMS_TO_TICKS(600));
+    lvgl_port_lock(-1);
+    updateLVGLObjects(true);
+    lvgl_port_unlock();
 #pragma endregion
     ESP_LOGI(__func__, "Setup done");
     if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
