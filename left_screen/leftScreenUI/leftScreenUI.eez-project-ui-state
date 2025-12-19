@@ -816,8 +816,7 @@
                       "component": "themes",
                       "enableClose": false
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -833,7 +832,8 @@
                       "component": "colors",
                       "enableClose": false
                     }
-                  ]
+                  ],
+                  "active": true
                 }
               ]
             }
@@ -972,24 +972,19 @@
       "selection": {
         "0": {
           "0": {
-            "1": {
-              "4": {},
-              "5": {
-                "$selected": true
-              }
-            },
+            "0": {},
             "2": {
-              "3": {}
+              "12": {}
             }
           }
         }
       },
       "transform": {
         "translate": {
-          "x": -348.0665210700757,
-          "y": -220.4242424242425
+          "x": -302.9765065104171,
+          "y": -263.81500000000017
         },
-        "scale": 1
+        "scale": 1.1
       },
       "timeline": {
         "isEditorActive": false,
@@ -1067,15 +1062,16 @@
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
   "lvglPart": "MAIN",
-  "lvglState": "DEFAULT",
+  "lvglState": "FOCUSED",
   "lvglExpandedPropertiesGroup": [
     "POSITION AND SIZE",
     "MISCELLANEOUS",
     "TEXT",
-    "BACKGROUND"
+    "BACKGROUND",
+    "IMAGE"
   ],
   "showInactiveFlowsInDebugger": true,
   "globalFlowZoom": true,
-  "flowZoom": 1,
+  "flowZoom": 1.1,
   "implementationLanguage": "C"
 }

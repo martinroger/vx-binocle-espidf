@@ -165,8 +165,7 @@
                       "enableClose": false,
                       "icon": "svg:hierarchy"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -254,7 +253,8 @@
                   "enableClose": false,
                   "icon": "svg:properties"
                 }
-              ]
+              ],
+              "active": true
             }
           ]
         }
@@ -1022,6 +1022,9 @@
         "0": {
           "0": {
             "0": {
+              "0": {}
+            },
+            "2": {
               "0": {
                 "$selected": true
               }
@@ -1031,10 +1034,10 @@
       },
       "transform": {
         "translate": {
-          "x": -328.1363636363636,
-          "y": -261.55454545454546
+          "x": -213.15093005952383,
+          "y": -268.23880673363067
         },
-        "scale": 1
+        "scale": 1.1
       },
       "timeline": {
         "isEditorActive": false,
@@ -1057,7 +1060,7 @@
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
   "lvglPart": "MAIN",
-  "lvglState": "DEFAULT",
+  "lvglState": "FOCUSED",
   "lvglExpandedPropertiesGroup": [
     "LAYOUT",
     "POSITION AND SIZE",
@@ -1073,6 +1076,6 @@
   ],
   "showInactiveFlowsInDebugger": true,
   "globalFlowZoom": true,
-  "flowZoom": 1,
+  "flowZoom": 1.1,
   "implementationLanguage": "C"
 }

@@ -332,12 +332,14 @@ int updateLVGLObjects()
     if (p_lowFuelOn != lowFuelOn) // Low Fuel computed TT
     {
         lv_obj_set_style_image_opa(objects.low_fuel_tt, lowFuelOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        lv_obj_set_state(objects.fuel_level,LV_STATE_FOCUSED,lowFuelOn);
         p_lowFuelOn = lowFuelOn;
         updatedElements++;
     }
     if (p_overTemperatureOn != overTemperatureOn) // Over temperature computer TT
     {
         lv_obj_set_style_image_opa(objects.over_temperature_tt, overTemperatureOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        lv_obj_set_state(objects.coolant,LV_STATE_FOCUSED,overTemperatureOn);
         p_overTemperatureOn = overTemperatureOn;
         updatedElements++;
     }
@@ -1143,6 +1145,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
 
                 odometer_km = image_size - receivedBytes;
                 trip_km = 100.0* (float)(receivedBytes) / (float)(image_size);
+                fuelLevel_pc = trip_km;
                 if (image_size == receivedBytes)
                     transferComplete = true;
             }
@@ -1318,7 +1321,7 @@ void display_board_st_PKG(void *pvParameters)
         binocan_ldb_st_pack(tx_msg.data, &binocan_ldb_st, BINOCAN_LDB_ST_LENGTH);
 #endif
         // DEBUG
-        tx_msg.data[7] = screen_interlock_OK;
+        // tx_msg.data[7] = screen_interlock_OK;
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(__func__, "Could not queue internal state message in queue");
