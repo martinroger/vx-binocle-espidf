@@ -15,7 +15,7 @@
       "displayHeight": 480,
       "circularDisplay": true,
       "displayBorderRadius": 0,
-      "darkTheme": true,
+      "darkTheme": false,
       "colorFormat": "BGR",
       "resourceFiles": [],
       "hiddenWidgetLines": "dimmed",
@@ -195,6 +195,7 @@
               },
               "timeline": [],
               "eventHandlers": [],
+              "identifier": "main_tabview",
               "leftUnit": "px",
               "topUnit": "px",
               "widthUnit": "%",
@@ -333,14 +334,14 @@
                           "INDICATOR": {
                             "DEFAULT": {
                               "arc_rounded": false,
-                              "arc_color": "#ffffff",
+                              "arc_color": "#999999",
                               "arc_opa": 100,
                               "arc_width": 12
                             }
                           },
                           "KNOB": {
                             "DEFAULT": {
-                              "bg_color": "#ff3e3e",
+                              "bg_color": "#ff3a3a",
                               "pad_top": 0,
                               "pad_bottom": 0,
                               "pad_left": 0,
@@ -2662,7 +2663,63 @@
   "userWidgets": [],
   "lvglStyles": {
     "objID": "a31bd004-35c5-b3fb-5c8b-78ea5c7693b8",
-    "styles": [],
+    "styles": [
+      {
+        "objID": "c3c9fc69-4baa-4f7a-eef9-ccc8cb15ef13",
+        "name": "screen_dark_setting",
+        "forWidgetType": "LVGLScreenWidget",
+        "childStyles": [],
+        "definition": {
+          "objID": "77a4e382-f093-4db8-ef37-194741f5b440",
+          "definition": {
+            "MAIN": {
+              "DEFAULT": {
+                "text_color": "#fafafa",
+                "bg_color": "#15171a",
+                "line_color": "#fafafa"
+              }
+            }
+          }
+        }
+      },
+      {
+        "objID": "12128a3f-06d2-4855-86fd-dcf3593a06f9",
+        "name": "scale_white_parts",
+        "forWidgetType": "LVGLScaleWidget",
+        "childStyles": [],
+        "definition": {
+          "objID": "c3f87b40-f37b-4bba-eb41-9a449ed21986",
+          "definition": {
+            "INDICATOR": {
+              "DEFAULT": {
+                "line_color": "#fafafa"
+              }
+            },
+            "ITEMS": {
+              "DEFAULT": {
+                "line_color": "#fafafa"
+              }
+            }
+          }
+        }
+      },
+      {
+        "objID": "ef58f4f3-dc97-45cf-d8ca-76af90805128",
+        "name": "arc_white_parts",
+        "forWidgetType": "LVGLArcWidget",
+        "childStyles": [],
+        "definition": {
+          "objID": "9b71d5e9-c1d2-465e-e62c-593f1b111ecb",
+          "definition": {
+            "INDICATOR": {
+              "DEFAULT": {
+                "arc_color": "#fafafa"
+              }
+            }
+          }
+        }
+      }
+    ],
     "defaultStyles": {}
   },
   "lvglGroups": {

@@ -10,6 +10,7 @@ extern "C" {
 
 typedef struct _objects_t {
     lv_obj_t *main_scr;
+    lv_obj_t *main_tabview;
     lv_obj_t *dials_tab;
     lv_obj_t *rpm_scale;
     lv_obj_t *rpm_arc;
