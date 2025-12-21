@@ -7,6 +7,7 @@
 #include <lvgl.h>
 #include "lvgl_v9_port.h"
 #include <ui.h>
+#include <styles.h>
 
 #include <math.h>
 #include "twai_daemon.h"
@@ -107,6 +108,7 @@ bool milOn, p_milOn = true;
 bool airbagOn, p_airbagOn = true;
 bool ignitionST, p_ignitionST = false;
 bool alarmOn, p_alarmOn = true;
+bool headlightsOn, p_headlightsOn = true;
 
 // Vehicle numerical parameters
 float speed_kph, p_speed_kph = 0;
@@ -141,7 +143,25 @@ extern "C" void action_reboot_factory(lv_event_t *e)
     }
 }
 
+
+
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
+void switch_theme()
+{
+    if(headlightsOn)
+    {
+        add_style_screen_dark_setting(objects.main_tabview);
+        add_style_scale_white_parts(objects.speed_scale);
+        add_style_arc_white_parts(objects.speed_arc);
+    }
+    else
+    {
+        remove_style_screen_dark_setting(objects.main_tabview);
+        remove_style_scale_white_parts(objects.speed_scale);
+        remove_style_arc_white_parts(objects.speed_arc);
+    }
+}
+
 extern "C" void action_mph_switch_toggled(lv_event_t *e)
 {
 
@@ -181,7 +201,24 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
     p_trip_km = 0;
     p_speed_kph = 0;
 }
+
+
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
+void switch_theme()
+{
+    if(headlightsOn)
+    {
+        add_style_screen_dark_setting(objects.main_tabview);
+        add_style_scale_white_parts(objects.rpm_scale);
+        add_style_arc_white_parts(objects.rpm_arc);
+    }
+    else
+    {
+        remove_style_screen_dark_setting(objects.main_tabview);
+        remove_style_scale_white_parts(objects.rpm_scale);
+        remove_style_arc_white_parts(objects.rpm_arc);
+    }
+}
 
 extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
 {
@@ -250,6 +287,8 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
         nvs_close(h);
     }
 }
+
+
 #endif
 
 /// @brief Updates all cyclic elements
@@ -479,6 +518,12 @@ int updateLVGLObjects(bool forceRefresh = false)
         p_airbagOn = airbagOn;
         updatedElements++;
     }
+    if (p_headlightsOn != headlightsOn || forceRefresh) // Headlights
+    {
+        switch_theme();
+        p_headlightsOn = headlightsOn;
+        updatedElements++;
+    }
     return updatedElements;
 }
 
@@ -686,10 +731,19 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             ESP_LOGW(__func__, "Alarm signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_alarm_ah);
             alarmOn = true; // Default value
         }
+        if (binocan_itf_active_hi_lo_itf_backlight_ah_is_in_range(binocan_itf_active_hi_lo_msg.itf_backlight_ah))
+        {
+            headlightsOn = (binocan_itf_active_hi_lo_itf_backlight_ah_decode(binocan_itf_active_hi_lo_msg.itf_backlight_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BACKLIGHT_AH_ON_CHOICE);
+        }
+        else
+        {
+            ESP_LOGW(__func__, "Backlight signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_backlight_ah);
+            headlightsOn = true; // Default value
+        }
 
-        ESP_LOGD(__func__, "Telltales: ABS %d, Airbag %d, CEL %d, High Beams %d, Low Brake Fluid %d, Low Coolant %d, Low Fuel %d, Low Oil Pressure %d, Battery/Alternator %d, Over Temperature %d, Parking Brake %d, Indicators %d, Ignition %d, Alarm %d",
+        ESP_LOGD(__func__, "Telltales: ABS %d, Airbag %d, CEL %d, High Beams %d, Low Brake Fluid %d, Low Coolant %d, Low Fuel %d, Low Oil Pressure %d, Battery/Alternator %d, Over Temperature %d, Parking Brake %d, Indicators %d, Ignition %d, Alarm %d, Headlights %d",
                  absOn, airbagOn, milOn, highBeamOn, brakesOn, lowCoolantOn, lowFuelOn, lowOilOn, batteryOn,
-                 overTemperatureOn, parkingBrakeOn, indicatorsOn, ignitionST, alarmOn);
+                 overTemperatureOn, parkingBrakeOn, indicatorsOn, ignitionST, alarmOn, headlightsOn);
     }
     break;
 
