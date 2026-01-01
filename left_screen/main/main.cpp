@@ -82,6 +82,10 @@ struct board_ST
     uint8_t rpm_alarm_override = false;
     uint32_t rpm_alarm_threshold = 6000;
     parsed_app_meta_t *app_metadata;
+    Backlight *backLight;
+    uint8_t darkBrightness = 100;
+    uint8_t lightBrightness = 100;
+    bool lightMode = true;
 } display_board_st;
 
 // Used only to selectively update in LVGL
@@ -143,22 +147,82 @@ extern "C" void action_reboot_factory(lv_event_t *e)
     }
 }
 
+extern "C" void action_test_brightness(lv_event_t *e)
+{
+    lv_obj_t *target = lv_event_get_target_obj(e);
+    uint8_t testBrightness = lv_slider_get_value(target);
+    display_board_st.backLight->setBrightness(testBrightness);
+}
 
+extern "C" void action_save_brightness(lv_event_t *e)
+{
+    lv_obj_t *target = lv_event_get_target_obj(e);
+    uint8_t targetBrightness = lv_slider_get_value(target);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (target == objects.dark_slider && targetBrightness != display_board_st.darkBrightness)
+        {
+            if (nvs_set_u8(h, "dark_bg", targetBrightness) != ESP_OK)
+                ESP_LOGE(__func__, "Could not set dark mode brightness in NVS");
+            else
+            {
+                display_board_st.darkBrightness = targetBrightness;
+                lvgl_port_lock(-1);
+                lv_label_set_text_fmt(objects.d_bright, "%u", display_board_st.darkBrightness);
+                lvgl_port_unlock();
+            }
+        }
+        else if (target == objects.light_slider && targetBrightness != display_board_st.lightBrightness)
+        {
+            if (nvs_set_u8(h, "light_bg", targetBrightness) != ESP_OK)
+                ESP_LOGE(__func__, "Could not set light mode brightness in NVS");
+            else
+            {
+                display_board_st.lightBrightness = targetBrightness;
+                lvgl_port_lock(-1);
+                lv_label_set_text_fmt(objects.l_bright, "%u", display_board_st.lightBrightness);
+                lvgl_port_unlock();
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "No value to set in NVS (wrong slider or same value)");
+            lvgl_port_lock(-1);
+            lv_label_set_text(objects.l_bright, "???");
+            lv_label_set_text(objects.d_bright, "???");
+            lvgl_port_unlock();
+        }
+        nvs_commit(h);
+        nvs_close(h);
+
+        if (display_board_st.lightMode)
+            display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+        else
+            display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+    }
+}
 
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
 void switch_theme()
 {
-    if(headlightsOn)
+    if (headlightsOn)
     {
         add_style_screen_dark_setting(objects.main_tabview);
         add_style_scale_white_parts(objects.speed_scale);
         add_style_arc_white_parts(objects.speed_arc);
+        display_board_st.lightMode = false;
+        display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
     }
     else
     {
         remove_style_screen_dark_setting(objects.main_tabview);
         remove_style_scale_white_parts(objects.speed_scale);
         remove_style_arc_white_parts(objects.speed_arc);
+        display_board_st.lightMode = true;
+        display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
     }
 }
 
@@ -202,21 +266,24 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
     p_speed_kph = 0;
 }
 
-
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
 void switch_theme()
 {
-    if(headlightsOn)
+    if (headlightsOn)
     {
         add_style_screen_dark_setting(objects.main_tabview);
         add_style_scale_white_parts(objects.rpm_scale);
         add_style_arc_white_parts(objects.rpm_arc);
+        display_board_st.lightMode = false;
+        display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
     }
     else
     {
         remove_style_screen_dark_setting(objects.main_tabview);
         remove_style_scale_white_parts(objects.rpm_scale);
         remove_style_arc_white_parts(objects.rpm_arc);
+        display_board_st.lightMode = true;
+        display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
     }
 }
 
@@ -287,7 +354,6 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
         nvs_close(h);
     }
 }
-
 
 #endif
 
@@ -372,14 +438,14 @@ int updateLVGLObjects(bool forceRefresh = false)
     if (p_lowFuelOn != lowFuelOn || forceRefresh) // Low Fuel computed TT
     {
         lv_obj_set_style_image_opa(objects.low_fuel_tt, lowFuelOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        lv_obj_set_state(objects.fuel_level,LV_STATE_FOCUSED,lowFuelOn);
+        lv_obj_set_state(objects.fuel_level, LV_STATE_FOCUSED, lowFuelOn);
         p_lowFuelOn = lowFuelOn;
         updatedElements++;
     }
     if (p_overTemperatureOn != overTemperatureOn || forceRefresh) // Over temperature computer TT
     {
         lv_obj_set_style_image_opa(objects.over_temperature_tt, overTemperatureOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        lv_obj_set_state(objects.coolant,LV_STATE_FOCUSED,overTemperatureOn);
+        lv_obj_set_state(objects.coolant, LV_STATE_FOCUSED, overTemperatureOn);
         p_overTemperatureOn = overTemperatureOn;
         updatedElements++;
     }
@@ -1144,7 +1210,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 // Send the Error Frame
                 UDS_RESP_MSG.extd = false;
                 UDS_RESP_MSG.data[0] = 0x40;
-                UDS_RESP_MSG.data[1] = 0x03; // Seq Number error
+                UDS_RESP_MSG.data[1] = 0x03;           // Seq Number error
                 UDS_RESP_MSG.data[2] = sequenceNumber; // Expected sequence number
                 for (size_t i = 3; i < 8; i++)
                 {
@@ -1156,7 +1222,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                     ESP_LOGI(__func__, "Error frame sent");
                 break;
             }
-            sequenceNumber = ((sequenceNumber + 1) & 0x0F) == 0x00 ? 0x01 : (sequenceNumber + 1)&0x0F;
+            sequenceNumber = ((sequenceNumber + 1) & 0x0F) == 0x00 ? 0x01 : (sequenceNumber + 1) & 0x0F;
             blockCounter++;
 
             // Check if the whole message can be written to OTA or if something needs to be ignored
@@ -1192,7 +1258,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
                 receivedBytes += 7;
 
                 odometer_km = image_size - receivedBytes;
-                trip_km = 100.0* (float)(receivedBytes) / (float)(image_size);
+                trip_km = 100.0 * (float)(receivedBytes) / (float)(image_size);
                 fuelLevel_pc = trip_km;
                 if (image_size == receivedBytes)
                     transferComplete = true;
@@ -1534,6 +1600,8 @@ extern "C" void app_main()
         nvs_err = nvs_get_u8(h, "mph_on", &(display_board_st.mph_selected));
         nvs_err = nvs_get_u8(h, "rpm_al_overr", &(display_board_st.rpm_alarm_override));
         nvs_err = nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold));
+        nvs_err = nvs_get_u8(h, "dark_bg", &(display_board_st.darkBrightness));
+        nvs_err = nvs_get_u8(h, "light_bg", &(display_board_st.lightBrightness));
         nvs_commit(h);
         nvs_close(h);
     }
@@ -1640,8 +1708,16 @@ extern "C" void app_main()
         }
         else
         {
-            auto backLight = board->getBacklight();
-            ESP_LOGD("Backlight OFF", " %d", backLight->off());
+            display_board_st.backLight = board->getBacklight();
+            if (display_board_st.lightMode)
+            {
+                display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+            }
+            else
+            {
+                display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+            }
+
             // Screen test when in debug mode
 #if CONFIG_LOG_DEFAULT_LEVEL >= 4
             auto expander = board->getIO_Expander()->getBase();
@@ -1671,6 +1747,10 @@ extern "C" void app_main()
     lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", app_metadata->version, app_metadata->date, app_metadata->time);
     lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
     lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
+    lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);
+    lv_slider_set_value(objects.light_slider, display_board_st.lightBrightness, LV_ANIM_OFF);
+    lv_label_set_text_fmt(objects.l_bright, "%u", display_board_st.lightBrightness);
+    lv_label_set_text_fmt(objects.d_bright, "%u", display_board_st.darkBrightness);
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.rpm_scale, 20, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
@@ -1760,7 +1840,11 @@ extern "C" void app_main()
     lv_obj_set_style_opa(objects.airbag_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
     lvgl_port_unlock();
     vTaskDelay(100);
-    ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
+    // ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
+    if (display_board_st.lightMode)
+        display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+    else
+        display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
     // This probably needs to be called in a second point
     lvgl_port_lock(-1);
 #ifdef CONFIG_LEFT_SIDE_DISPLAY

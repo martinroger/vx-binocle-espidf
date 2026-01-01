@@ -33,6 +33,10 @@ typedef struct _objects_t {
     lv_obj_t *inc_rpm_alarm_btn;
     lv_obj_t *dec_rpm_alarm_btn;
     lv_obj_t *save_rpm_alarm_btn;
+    lv_obj_t *light_slider;
+    lv_obj_t *dark_slider;
+    lv_obj_t *l_bright;
+    lv_obj_t *d_bright;
     lv_obj_t *debug_tab;
     lv_obj_t *voltage_lvl;
     lv_obj_t *odometer;
