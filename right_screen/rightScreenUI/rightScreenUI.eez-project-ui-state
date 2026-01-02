@@ -1,7 +1,7 @@
 {
   "navigation": {
     "selectedUserPageObject": "[rightScreenUI.eez-project]:/userPages/0",
-    "selectedActionObject": "[rightScreenUI.eez-project]:/actions/2",
+    "selectedActionObject": "[rightScreenUI.eez-project]:/actions/5",
     "selectedStyleObject": "[rightScreenUI.eez-project]:/lvglStyles/styles/2",
     "selectedThemeObject": "[rightScreenUI.eez-project]:/themes/0",
     "selectedBitmapObject": "[rightScreenUI.eez-project]:/bitmaps/12",
@@ -1027,9 +1027,8 @@
         "0": {
           "0": {
             "1": {
-              "6": {
-                "$selected": true
-              }
+              "6": {},
+              "$selected": true
             }
           }
         }

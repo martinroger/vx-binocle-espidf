@@ -144,11 +144,12 @@ void switch_theme(bool darkMode = headlightsOn)
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
         add_style_scale_white_parts(objects.speed_scale);
         add_style_arc_white_parts(objects.speed_arc);
+        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, true);
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
         add_style_scale_white_parts(objects.rpm_scale);
         add_style_arc_white_parts(objects.rpm_arc);
 #endif
-        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, true);
+
         display_board_st.lightMode = false;
         display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
     }
@@ -159,11 +160,12 @@ void switch_theme(bool darkMode = headlightsOn)
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
         remove_style_scale_white_parts(objects.speed_scale);
         remove_style_arc_white_parts(objects.speed_arc);
+        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, false);
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
         remove_style_scale_white_parts(objects.rpm_scale);
         remove_style_arc_white_parts(objects.rpm_arc);
 #endif
-        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, false);
+
         display_board_st.lightMode = true;
         display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
     }
@@ -181,6 +183,8 @@ extern "C" void action_reboot_factory(lv_event_t *e)
             ESP_LOGE(__func__, "Could not restart ESP");
     }
 }
+
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
 
 extern "C" void action_test_brightness(lv_event_t *e)
 {
@@ -283,29 +287,6 @@ extern "C" void action_mode_switch_toggled(lv_event_t *e)
     }
 }
 
-#ifdef CONFIG_RIGHT_SIDE_DISPLAY
-// void switch_theme(bool darkMode = headlightsOn)
-// {
-//     if (darkMode)
-//     {
-//         add_style_screen_dark_setting(objects.main_tabview);
-//         add_style_scale_white_parts(objects.speed_scale);
-//         add_style_arc_white_parts(objects.speed_arc);
-//         lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, true);
-//         display_board_st.lightMode = false;
-//         display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
-//     }
-//     else
-//     {
-//         remove_style_screen_dark_setting(objects.main_tabview);
-//         remove_style_scale_white_parts(objects.speed_scale);
-//         remove_style_arc_white_parts(objects.speed_arc);
-//         lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, false);
-//         display_board_st.lightMode = true;
-//         display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
-//     }
-// }
-
 extern "C" void action_mph_switch_toggled(lv_event_t *e)
 {
 
@@ -347,27 +328,6 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
 }
 
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
-// void switch_theme(bool darkMode = headlightsOn)
-// {
-//     if (darkMode)
-//     {
-//         add_style_screen_dark_setting(objects.main_tabview);
-//         add_style_scale_white_parts(objects.rpm_scale);
-//         add_style_arc_white_parts(objects.rpm_arc);
-//         lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, true);
-//         display_board_st.lightMode = false;
-//         display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
-//     }
-//     else
-//     {
-//         remove_style_screen_dark_setting(objects.main_tabview);
-//         remove_style_scale_white_parts(objects.rpm_scale);
-//         remove_style_arc_white_parts(objects.rpm_arc);
-//         lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, false);
-//         display_board_st.lightMode = true;
-//         display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
-//     }
-// }
 
 extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
 {
@@ -462,6 +422,27 @@ int updateLVGLObjects(bool forceRefresh = false)
         p_speed_kph = speed_kph;
         updatedElements++;
     }
+
+    if ((display_board_st.modeLocked != (lv_obj_has_state(objects.mode_lock_switch, LV_STATE_CHECKED))) || forceRefresh)
+    {
+        lv_obj_set_state(objects.mode_lock_switch, LV_STATE_CHECKED, display_board_st.modeLocked);
+        lv_obj_set_state(objects.theme_switch, LV_STATE_DISABLED, !(display_board_st.modeLocked));
+        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, !(display_board_st.lightMode));
+        updatedElements++;
+    }
+    if ((display_board_st.darkBrightness) != lv_slider_get_value(objects.dark_slider) || forceRefresh)
+    {
+        lv_label_set_text_fmt(objects.d_bright, "%u", display_board_st.darkBrightness);
+        lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);
+        updatedElements++;
+    }
+    if ((display_board_st.lightBrightness) != lv_slider_get_value(objects.light_slider) || forceRefresh)
+    {
+        lv_label_set_text_fmt(objects.l_bright, "%u", display_board_st.lightBrightness);
+        lv_slider_set_value(objects.light_slider, display_board_st.lightBrightness, LV_ANIM_OFF);
+        updatedElements++;
+    }
+
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
     if ((p_rpm / 10) != (rpm / 10) || forceRefresh)
     {
@@ -673,25 +654,6 @@ int updateLVGLObjects(bool forceRefresh = false)
             switch_theme(); // Implicitely uses the headlightsOn
         }
         p_headlightsOn = headlightsOn;
-        updatedElements++;
-    }
-    if ((display_board_st.modeLocked != (lv_obj_has_state(objects.mode_lock_switch, LV_STATE_CHECKED))) || forceRefresh)
-    {
-        lv_obj_set_state(objects.mode_lock_switch, LV_STATE_CHECKED, display_board_st.modeLocked);
-        lv_obj_set_state(objects.theme_switch, LV_STATE_DISABLED, !(display_board_st.modeLocked));
-        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, !(display_board_st.lightMode));
-        updatedElements++;
-    }
-    if ((display_board_st.darkBrightness) != lv_slider_get_value(objects.dark_slider) || forceRefresh)
-    {
-        lv_label_set_text_fmt(objects.d_bright, "%u", display_board_st.darkBrightness);
-        lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);
-        updatedElements++;
-    }
-    if ((display_board_st.lightBrightness) != lv_slider_get_value(objects.light_slider) || forceRefresh)
-    {
-        lv_label_set_text_fmt(objects.l_bright, "%u", display_board_st.lightBrightness);
-        lv_slider_set_value(objects.light_slider, display_board_st.lightBrightness, LV_ANIM_OFF);
         updatedElements++;
     }
 
@@ -1091,6 +1053,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             ESP_LOGW(__func__, "LDB SM Status signal out of range: %d", binocan_ldb_st_msg.ldb_sm_st);
             screen_interlock_OK = false; // Default value
         }
+        /*
         // Light mode indicator
         if (binocan_ldb_st_xdb_light_mode_is_in_range(binocan_ldb_st_msg.xdb_light_mode))
         {
@@ -1196,6 +1159,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             if ((display_board_st.lightMode))
                 display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
         }
+                */
     }
     break;
 
@@ -1222,13 +1186,26 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         // Light mode indicator
         if (binocan_rdb_st_xdb_light_mode_is_in_range(binocan_rdb_st_msg.xdb_light_mode))
         {
-            if (display_board_st.lightMode != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode)) // somehow they are different
+            if ((display_board_st.lightMode != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode))) // somehow they are different, after init phase
             {
                 if (lvgl_port_lock(-1))
                 {
                     display_board_st.lightMode = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode);
                     switch_theme(!(display_board_st.lightMode));
                     lvgl_port_unlock();
+                }
+                if (display_board_st.modeLocked) // Write light mode if mode lock is engaged
+                {
+                    nvs_handle_t h;
+                    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+                    else
+                    {
+                        if (nvs_set_u8(h, "light_th", (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+                            ESP_LOGW(__func__, "Could not set light mode in NVS");
+                        nvs_commit(h);
+                        nvs_close(h);
+                    }
                 }
             }
         }
@@ -1927,7 +1904,8 @@ extern "C" void app_main()
         nvs_err = nvs_get_u8(h, "dark_bg", &(display_board_st.darkBrightness));
         nvs_err = nvs_get_u8(h, "light_bg", &(display_board_st.lightBrightness));
         nvs_err = nvs_get_u8(h, "th_locked", (uint8_t *)&(display_board_st.modeLocked));
-        nvs_err = nvs_get_u8(h, "light_th", (uint8_t *)&(display_board_st.lightMode));
+        if (display_board_st.modeLocked)
+            nvs_err = nvs_get_u8(h, "light_th", (uint8_t *)&(display_board_st.lightMode));
         nvs_commit(h);
         nvs_close(h);
     }
@@ -2069,14 +2047,13 @@ extern "C" void app_main()
     ESP_LOGI(__func__, "Loading UI");
     ESP_UTILS_CHECK_FALSE_EXIT(lvgl_port_lock(-1), "Failed to perform initial LVGL Mutex lock");
     ui_init(); // Load the UI library and draw it
+    if (display_board_st.modeLocked)
+        switch_theme(!(display_board_st.lightMode));
     // Set up the debug screen
     lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", app_metadata->version, app_metadata->date, app_metadata->time);
     lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
     lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
-    lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);
-    lv_slider_set_value(objects.light_slider, display_board_st.lightBrightness, LV_ANIM_OFF);
-    lv_label_set_text_fmt(objects.l_bright, "%u", display_board_st.lightBrightness);
-    lv_label_set_text_fmt(objects.d_bright, "%u", display_board_st.darkBrightness);
+
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
     lv_obj_set_style_pad_radial(objects.rpm_scale, 20, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
@@ -2105,6 +2082,14 @@ extern "C" void app_main()
     }
 
 #elifdef CONFIG_RIGHT_SIDE_DISPLAY
+    lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);
+    lv_slider_set_value(objects.light_slider, display_board_st.lightBrightness, LV_ANIM_OFF);
+    lv_label_set_text_fmt(objects.l_bright, "%u", display_board_st.lightBrightness);
+    lv_label_set_text_fmt(objects.d_bright, "%u", display_board_st.darkBrightness);
+    lv_obj_set_state(objects.mode_lock_switch, LV_STATE_CHECKED, display_board_st.modeLocked);
+    lv_obj_set_state(objects.theme_switch, LV_STATE_DISABLED, !(display_board_st.modeLocked));
+    lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, !(display_board_st.lightMode));
+
     lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     if (display_board_st.mph_selected == 0)
     {
