@@ -89,15 +89,15 @@ BO_ 304 ITF_board_version: 8 ITF
  SG_ ITF_version_MUX M : 0|2@1+ (1,0) [0|3] "" Vector__XXX
 
 BO_ 290 RDB_ST: 8 RDB
- SG_ XDB_light_brightness : 16|7@1+ (1,0) [0|100] "" Vector__XXX
- SG_ XDB_dark_brightness : 8|7@1+ (1,0) [0|100] "" Vector__XXX
+ SG_ XDB_light_brightness : 16|7@1+ (1,0) [10|100] "" Vector__XXX
+ SG_ XDB_dark_brightness : 8|7@1+ (1,0) [10|100] "" Vector__XXX
  SG_ XDB_mode_lock : 15|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ XDB_light_mode : 23|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ RDB_SM_ST : 0|4@1+ (1,0) [0|15] ""  LDB
 
 BO_ 289 LDB_ST: 8 LDB
- SG_ XDB_light_brightness : 16|7@1+ (1,0) [0|100] "" Vector__XXX
- SG_ XDB_dark_brightness : 8|7@1+ (1,0) [0|100] "" Vector__XXX
+ SG_ XDB_light_brightness : 16|7@1+ (1,0) [10|100] "" Vector__XXX
+ SG_ XDB_dark_brightness : 8|7@1+ (1,0) [10|100] "" Vector__XXX
  SG_ XDB_mode_lock : 15|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ XDB_light_mode : 23|1@1+ (1,0) [0|1] "" Vector__XXX
  SG_ LDB_SM_ST : 0|4@1+ (1,0) [0|15] ""  RDB

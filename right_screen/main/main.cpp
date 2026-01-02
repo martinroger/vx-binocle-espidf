@@ -86,6 +86,7 @@ struct board_ST
     uint8_t darkBrightness = 100;
     uint8_t lightBrightness = 100;
     bool lightMode = true;
+    bool modeLocked = false;
 } display_board_st;
 
 // Used only to selectively update in LVGL
@@ -133,6 +134,40 @@ static const char *rpm_scale_labels[10] = {"0", "1000", "2000", "3000", "4000", 
 #pragma endregion
 
 #pragma region Helper functions
+
+void switch_theme(bool darkMode = headlightsOn)
+{
+    if (darkMode)
+    {
+        add_style_screen_dark_setting(objects.main_tabview);
+
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+        add_style_scale_white_parts(objects.speed_scale);
+        add_style_arc_white_parts(objects.speed_arc);
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+        add_style_scale_white_parts(objects.rpm_scale);
+        add_style_arc_white_parts(objects.rpm_arc);
+#endif
+        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, true);
+        display_board_st.lightMode = false;
+        display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+    }
+    else
+    {
+        remove_style_screen_dark_setting(objects.main_tabview);
+
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+        remove_style_scale_white_parts(objects.speed_scale);
+        remove_style_arc_white_parts(objects.speed_arc);
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+        remove_style_scale_white_parts(objects.rpm_scale);
+        remove_style_arc_white_parts(objects.rpm_arc);
+#endif
+        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, false);
+        display_board_st.lightMode = true;
+        display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+    }
+}
 
 extern "C" void action_reboot_factory(lv_event_t *e)
 {
@@ -205,26 +240,71 @@ extern "C" void action_save_brightness(lv_event_t *e)
     }
 }
 
-#ifdef CONFIG_RIGHT_SIDE_DISPLAY
-void switch_theme()
+extern "C" void action_mode_lock_switch_toggled(lv_event_t *e)
 {
-    if (headlightsOn)
-    {
-        add_style_screen_dark_setting(objects.main_tabview);
-        add_style_scale_white_parts(objects.speed_scale);
-        add_style_arc_white_parts(objects.speed_arc);
-        display_board_st.lightMode = false;
-        display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
-    }
+    display_board_st.modeLocked = lv_obj_has_state(objects.mode_lock_switch, LV_STATE_CHECKED);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
     else
     {
-        remove_style_screen_dark_setting(objects.main_tabview);
-        remove_style_scale_white_parts(objects.speed_scale);
-        remove_style_arc_white_parts(objects.speed_arc);
-        display_board_st.lightMode = true;
-        display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+        if (nvs_set_u8(h, "th_locked", (uint8_t)(display_board_st.modeLocked)) != ESP_OK)
+            ESP_LOGE(__func__, "Could not set theme lock in NVS");
+        else
+        {
+            if (lvgl_port_lock(-1))
+            {
+                lv_obj_set_state(objects.theme_switch, LV_STATE_DISABLED, !(display_board_st.modeLocked)); // Free access to the switch for the theme
+                lvgl_port_unlock();
+            }
+        }
+        nvs_commit(h);
+        nvs_close(h);
     }
 }
+
+extern "C" void action_mode_switch_toggled(lv_event_t *e)
+{
+    display_board_st.lightMode = !(lv_obj_has_state(objects.theme_switch, LV_STATE_CHECKED));
+    if (lvgl_port_lock(-1))
+    {
+        switch_theme(!(display_board_st.lightMode));
+        lvgl_port_unlock();
+    }
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u8(h, "light_th", (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+            ESP_LOGE(__func__, "Could not set theme mode in NVS");
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+// void switch_theme(bool darkMode = headlightsOn)
+// {
+//     if (darkMode)
+//     {
+//         add_style_screen_dark_setting(objects.main_tabview);
+//         add_style_scale_white_parts(objects.speed_scale);
+//         add_style_arc_white_parts(objects.speed_arc);
+//         lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, true);
+//         display_board_st.lightMode = false;
+//         display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+//     }
+//     else
+//     {
+//         remove_style_screen_dark_setting(objects.main_tabview);
+//         remove_style_scale_white_parts(objects.speed_scale);
+//         remove_style_arc_white_parts(objects.speed_arc);
+//         lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, false);
+//         display_board_st.lightMode = true;
+//         display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+//     }
+// }
 
 extern "C" void action_mph_switch_toggled(lv_event_t *e)
 {
@@ -267,25 +347,27 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
 }
 
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
-void switch_theme()
-{
-    if (headlightsOn)
-    {
-        add_style_screen_dark_setting(objects.main_tabview);
-        add_style_scale_white_parts(objects.rpm_scale);
-        add_style_arc_white_parts(objects.rpm_arc);
-        display_board_st.lightMode = false;
-        display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
-    }
-    else
-    {
-        remove_style_screen_dark_setting(objects.main_tabview);
-        remove_style_scale_white_parts(objects.rpm_scale);
-        remove_style_arc_white_parts(objects.rpm_arc);
-        display_board_st.lightMode = true;
-        display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
-    }
-}
+// void switch_theme(bool darkMode = headlightsOn)
+// {
+//     if (darkMode)
+//     {
+//         add_style_screen_dark_setting(objects.main_tabview);
+//         add_style_scale_white_parts(objects.rpm_scale);
+//         add_style_arc_white_parts(objects.rpm_arc);
+//         lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, true);
+//         display_board_st.lightMode = false;
+//         display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+//     }
+//     else
+//     {
+//         remove_style_screen_dark_setting(objects.main_tabview);
+//         remove_style_scale_white_parts(objects.rpm_scale);
+//         remove_style_arc_white_parts(objects.rpm_arc);
+//         lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, false);
+//         display_board_st.lightMode = true;
+//         display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+//     }
+// }
 
 extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
 {
@@ -586,10 +668,33 @@ int updateLVGLObjects(bool forceRefresh = false)
     }
     if (p_headlightsOn != headlightsOn || forceRefresh) // Headlights
     {
-        switch_theme();
+        if (!(display_board_st.modeLocked))
+        {
+            switch_theme(); // Implicitely uses the headlightsOn
+        }
         p_headlightsOn = headlightsOn;
         updatedElements++;
     }
+    if ((display_board_st.modeLocked != (lv_obj_has_state(objects.mode_lock_switch, LV_STATE_CHECKED))) || forceRefresh)
+    {
+        lv_obj_set_state(objects.mode_lock_switch, LV_STATE_CHECKED, display_board_st.modeLocked);
+        lv_obj_set_state(objects.theme_switch, LV_STATE_DISABLED, !(display_board_st.modeLocked));
+        lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, !(display_board_st.lightMode));
+        updatedElements++;
+    }
+    if ((display_board_st.darkBrightness) != lv_slider_get_value(objects.dark_slider) || forceRefresh)
+    {
+        lv_label_set_text_fmt(objects.d_bright, "%u", display_board_st.darkBrightness);
+        lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);
+        updatedElements++;
+    }
+    if ((display_board_st.lightBrightness) != lv_slider_get_value(objects.light_slider) || forceRefresh)
+    {
+        lv_label_set_text_fmt(objects.l_bright, "%u", display_board_st.lightBrightness);
+        lv_slider_set_value(objects.light_slider, display_board_st.lightBrightness, LV_ANIM_OFF);
+        updatedElements++;
+    }
+
     return updatedElements;
 }
 
@@ -976,6 +1081,7 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
             break;
         }
+        // General state message check
         if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
         {
             screen_interlock_OK = ((uint8_t)binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
@@ -984,6 +1090,111 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         {
             ESP_LOGW(__func__, "LDB SM Status signal out of range: %d", binocan_ldb_st_msg.ldb_sm_st);
             screen_interlock_OK = false; // Default value
+        }
+        // Light mode indicator
+        if (binocan_ldb_st_xdb_light_mode_is_in_range(binocan_ldb_st_msg.xdb_light_mode))
+        {
+            if (display_board_st.lightMode != (bool)binocan_ldb_st_xdb_light_mode_decode(binocan_ldb_st_msg.xdb_light_mode)) // somehow they are different
+            {
+                if (lvgl_port_lock(-1))
+                {
+                    display_board_st.lightMode = (bool)binocan_ldb_st_xdb_light_mode_decode(binocan_ldb_st_msg.xdb_light_mode);
+                    switch_theme(!(display_board_st.lightMode));
+                    lvgl_port_unlock();
+                }
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "LDB light mode out of range: %d", binocan_ldb_st_msg.xdb_light_mode);
+        }
+        // Mode lock
+        if (binocan_ldb_st_xdb_mode_lock_is_in_range(binocan_ldb_st_msg.xdb_mode_lock))
+        {
+            if (display_board_st.modeLocked != (bool)binocan_ldb_st_xdb_light_mode_decode(binocan_ldb_st_msg.xdb_mode_lock)) // Mode lock is different
+            {
+                nvs_handle_t h;
+                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+                else
+                {
+                    if (nvs_set_u8(h, "th_locked", (uint8_t)(binocan_ldb_st_xdb_light_mode_decode(binocan_ldb_st_msg.xdb_mode_lock))) != ESP_OK) // Write mode lock to NVS
+                        ESP_LOGW(__func__, "Could not set theme lock in NVS");
+                    else
+                    {
+                        display_board_st.modeLocked = (bool)binocan_ldb_st_xdb_light_mode_decode(binocan_ldb_st_msg.xdb_mode_lock); // Update mode lock system variable
+                        if (display_board_st.modeLocked)                                                                            // Write light mode if mode lock is engaged
+                        {
+                            if (nvs_set_u8(h, "light_th", (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+                                ESP_LOGW(__func__, "Could not set light mode in NVS");
+                        }
+                    }
+                    nvs_commit(h);
+                    nvs_close(h);
+                }
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "LDB mode lock out of range: %d", binocan_ldb_st_msg.xdb_mode_lock);
+        }
+        // Dark brightness
+        if (binocan_ldb_st_xdb_dark_brightness_is_in_range(binocan_ldb_st_msg.xdb_dark_brightness))
+        {
+            uint8_t newBrightness = binocan_ldb_st_xdb_dark_brightness_decode(binocan_ldb_st_msg.xdb_dark_brightness);
+            if (newBrightness != display_board_st.darkBrightness)
+            {
+                nvs_handle_t h;
+                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+                else
+                {
+                    if (nvs_set_u8(h, "dark_bg", newBrightness) != ESP_OK)
+                        ESP_LOGW(__func__, "Could not set dark brightness value in NVS");
+                    else
+                    {
+                        display_board_st.darkBrightness = newBrightness;
+                        if (!(display_board_st.lightMode))
+                            display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+                    }
+                }
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "LDB dark brightness out of range: %d", binocan_ldb_st_msg.xdb_dark_brightness);
+            display_board_st.darkBrightness = 100;
+            if (!(display_board_st.lightMode))
+                display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+        }
+        // Light brightness
+        if (binocan_ldb_st_xdb_light_brightness_is_in_range(binocan_ldb_st_msg.xdb_light_brightness))
+        {
+            uint8_t newBrightness = binocan_ldb_st_xdb_light_brightness_decode(binocan_ldb_st_msg.xdb_light_brightness);
+            if (newBrightness != display_board_st.lightBrightness)
+            {
+                nvs_handle_t h;
+                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+                else
+                {
+                    if (nvs_set_u8(h, "light_bg", newBrightness) != ESP_OK)
+                        ESP_LOGW(__func__, "Could not set light brightness value in NVS");
+                    else
+                    {
+                        display_board_st.lightBrightness = newBrightness;
+                        if ((display_board_st.lightMode))
+                            display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+                    }
+                }
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "LDB light brightness out of range: %d", binocan_ldb_st_msg.xdb_light_brightness);
+            display_board_st.lightBrightness = 100;
+            if ((display_board_st.lightMode))
+                display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
         }
     }
     break;
@@ -1007,6 +1218,111 @@ esp_err_t dispatchFrame(twai_message_t *rxMsg)
         {
             ESP_LOGW(__func__, "RDB SM Status signal out of range: %d", binocan_rdb_st_msg.rdb_sm_st);
             screen_interlock_OK = false; // Default value
+        }
+        // Light mode indicator
+        if (binocan_rdb_st_xdb_light_mode_is_in_range(binocan_rdb_st_msg.xdb_light_mode))
+        {
+            if (display_board_st.lightMode != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode)) // somehow they are different
+            {
+                if (lvgl_port_lock(-1))
+                {
+                    display_board_st.lightMode = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode);
+                    switch_theme(!(display_board_st.lightMode));
+                    lvgl_port_unlock();
+                }
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "RDB light mode out of range: %d", binocan_rdb_st_msg.xdb_light_mode);
+        }
+        // Mode lock
+        if (binocan_rdb_st_xdb_mode_lock_is_in_range(binocan_rdb_st_msg.xdb_mode_lock))
+        {
+            if (display_board_st.modeLocked != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock)) // Mode lock is different
+            {
+                nvs_handle_t h;
+                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+                else
+                {
+                    if (nvs_set_u8(h, "th_locked", (uint8_t)(binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock))) != ESP_OK) // Write mode lock to NVS
+                        ESP_LOGW(__func__, "Could not set theme lock in NVS");
+                    else
+                    {
+                        display_board_st.modeLocked = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock); // Update mode lock system variable
+                        if (display_board_st.modeLocked)                                                                            // Write light mode if mode lock is engaged
+                        {
+                            if (nvs_set_u8(h, "light_th", (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+                                ESP_LOGW(__func__, "Could not set light mode in NVS");
+                        }
+                    }
+                    nvs_commit(h);
+                    nvs_close(h);
+                }
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "RDB mode lock out of range: %d", binocan_rdb_st_msg.xdb_mode_lock);
+        }
+        // Dark brightness
+        if (binocan_rdb_st_xdb_dark_brightness_is_in_range(binocan_rdb_st_msg.xdb_dark_brightness))
+        {
+            uint8_t newBrightness = binocan_rdb_st_xdb_dark_brightness_decode(binocan_rdb_st_msg.xdb_dark_brightness);
+            if (newBrightness != display_board_st.darkBrightness)
+            {
+                nvs_handle_t h;
+                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+                else
+                {
+                    if (nvs_set_u8(h, "dark_bg", newBrightness) != ESP_OK)
+                        ESP_LOGW(__func__, "Could not set dark brightness value in NVS");
+                    else
+                    {
+                        display_board_st.darkBrightness = newBrightness;
+                        if (!(display_board_st.lightMode))
+                            display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+                    }
+                }
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "RDB dark brightness out of range: %d", binocan_rdb_st_msg.xdb_dark_brightness);
+            display_board_st.darkBrightness = 100;
+            if (!(display_board_st.lightMode))
+                display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+        }
+        // Light brightness
+        if (binocan_rdb_st_xdb_light_brightness_is_in_range(binocan_rdb_st_msg.xdb_light_brightness))
+        {
+            uint8_t newBrightness = binocan_rdb_st_xdb_light_brightness_decode(binocan_rdb_st_msg.xdb_light_brightness);
+            if (newBrightness != display_board_st.lightBrightness)
+            {
+                nvs_handle_t h;
+                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+                else
+                {
+                    if (nvs_set_u8(h, "light_bg", newBrightness) != ESP_OK)
+                        ESP_LOGW(__func__, "Could not set light brightness value in NVS");
+                    else
+                    {
+                        display_board_st.lightBrightness = newBrightness;
+                        if ((display_board_st.lightMode))
+                            display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+                    }
+                }
+            }
+        }
+        else
+        {
+            ESP_LOGW(__func__, "RDB light brightness out of range: %d", binocan_rdb_st_msg.xdb_light_brightness);
+            display_board_st.lightBrightness = 100;
+            if ((display_board_st.lightMode))
+                display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
         }
     }
     break;
@@ -1428,10 +1744,18 @@ void display_board_st_PKG(void *pvParameters)
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_RDB_ST_CYCLE_TIME_MS));
         binocan_rdb_st.rdb_sm_st = binocan_rdb_st_rdb_sm_st_encode(display_board_st.internal_ST);
+        binocan_rdb_st.xdb_dark_brightness = binocan_rdb_st_xdb_dark_brightness_encode(display_board_st.darkBrightness);
+        binocan_rdb_st.xdb_light_brightness = binocan_rdb_st_xdb_light_brightness_encode(display_board_st.lightBrightness);
+        binocan_rdb_st.xdb_light_mode = binocan_rdb_st_xdb_light_mode_encode(display_board_st.lightMode);
+        binocan_rdb_st.xdb_mode_lock = binocan_rdb_st_xdb_mode_lock_encode(display_board_st.modeLocked);
         binocan_rdb_st_pack(tx_msg.data, &binocan_rdb_st, BINOCAN_RDB_ST_LENGTH);
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_LDB_ST_CYCLE_TIME_MS));
         binocan_ldb_st.ldb_sm_st = binocan_ldb_st_ldb_sm_st_encode(display_board_st.internal_ST);
+        binocan_ldb_st.xdb_dark_brightness = binocan_ldb_st_xdb_dark_brightness_encode(display_board_st.darkBrightness);
+        binocan_ldb_st.xdb_light_brightness = binocan_ldb_st_xdb_light_brightness_encode(display_board_st.lightBrightness);
+        binocan_ldb_st.xdb_light_mode = binocan_ldb_st_xdb_light_mode_encode(display_board_st.lightMode);
+        binocan_ldb_st.xdb_mode_lock = binocan_ldb_st_xdb_mode_lock_encode(display_board_st.modeLocked);
         binocan_ldb_st_pack(tx_msg.data, &binocan_ldb_st, BINOCAN_LDB_ST_LENGTH);
 #endif
         // DEBUG
@@ -1602,6 +1926,8 @@ extern "C" void app_main()
         nvs_err = nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold));
         nvs_err = nvs_get_u8(h, "dark_bg", &(display_board_st.darkBrightness));
         nvs_err = nvs_get_u8(h, "light_bg", &(display_board_st.lightBrightness));
+        nvs_err = nvs_get_u8(h, "th_locked", (uint8_t *)&(display_board_st.modeLocked));
+        nvs_err = nvs_get_u8(h, "light_th", (uint8_t *)&(display_board_st.lightMode));
         nvs_commit(h);
         nvs_close(h);
     }
