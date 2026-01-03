@@ -14,6 +14,7 @@
 #include "twai_daemon.h"
 #include "binocan.h"
 
+#pragma region COMMON
 /// @brief Dispatcher linked to the TWAI daemon. Parses received CAN frames
 /// @param rxMsg Received TWAI frame
 /// @return Error code, if relevant
@@ -1170,3 +1171,9 @@ inline void display_board_version_PKG(void *pvParameters)
         }
     }
 }
+
+#pragma endregion
+
+#pragma region SPECIFIC
+
+#pragma endregion
