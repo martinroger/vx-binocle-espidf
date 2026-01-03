@@ -1,7 +1,7 @@
 {
   "navigation": {
     "selectedUserPageObject": "[rightScreenUI.eez-project]:/userPages/0",
-    "selectedActionObject": "[rightScreenUI.eez-project]:/actions/-1",
+    "selectedActionObject": "[rightScreenUI.eez-project]:/actions/5",
     "selectedStyleObject": "[rightScreenUI.eez-project]:/lvglStyles/styles/2",
     "selectedThemeObject": "[rightScreenUI.eez-project]:/themes/0",
     "selectedBitmapObject": "[rightScreenUI.eez-project]:/bitmaps/12",
@@ -1026,12 +1026,9 @@
       "selection": {
         "0": {
           "0": {
-            "0": {
-              "0": {}
-            },
-            "1": {},
-            "2": {
-              "0": {}
+            "1": {
+              "6": {},
+              "$selected": true
             }
           }
         }
@@ -1039,7 +1036,7 @@
       "transform": {
         "translate": {
           "x": -213.15093005952383,
-          "y": -268.23880673363067
+          "y": -221.23880673363055
         },
         "scale": 1.1
       },
@@ -1074,7 +1071,7 @@
   "showComponentDescriptions": true,
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
-  "lvglPart": "INDICATOR",
+  "lvglPart": "MAIN",
   "lvglState": "DEFAULT",
   "lvglExpandedPropertiesGroup": [
     "LAYOUT",

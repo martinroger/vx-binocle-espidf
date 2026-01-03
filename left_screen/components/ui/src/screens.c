@@ -296,14 +296,14 @@ void create_screen_main_scr() {
                             // override alarm sw
                             lv_obj_t *obj = lv_switch_create(parent_obj);
                             objects.override_alarm_sw = obj;
-                            lv_obj_set_pos(obj, -127, -60);
+                            lv_obj_set_pos(obj, -127, -70);
                             lv_obj_set_size(obj, 50, 25);
                             lv_obj_add_event_cb(obj, action_set_rpm_alarm_override, LV_EVENT_RELEASED, (void *)0);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                         }
                         {
                             lv_obj_t *obj = lv_label_create(parent_obj);
-                            lv_obj_set_pos(obj, 27, -60);
+                            lv_obj_set_pos(obj, 27, -70);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -313,7 +313,7 @@ void create_screen_main_scr() {
                             // rpm_alarm_spinbox
                             lv_obj_t *obj = lv_spinbox_create(parent_obj);
                             objects.rpm_alarm_spinbox = obj;
-                            lv_obj_set_pos(obj, 0, 0);
+                            lv_obj_set_pos(obj, 0, -10);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_spinbox_set_digit_format(obj, 5, 0);
                             lv_spinbox_set_range(obj, 0, 10000);
@@ -333,7 +333,7 @@ void create_screen_main_scr() {
                             // inc_rpm_alarm_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.inc_rpm_alarm_btn = obj;
-                            lv_obj_set_pos(obj, 140, 0);
+                            lv_obj_set_pos(obj, 140, -10);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_inc_rpm_spinbox, LV_EVENT_PRESSED, (void *)0);
                             lv_obj_add_state(obj, LV_STATE_DISABLED);
@@ -354,7 +354,7 @@ void create_screen_main_scr() {
                             // dec_rpm_alarm_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.dec_rpm_alarm_btn = obj;
-                            lv_obj_set_pos(obj, -140, 0);
+                            lv_obj_set_pos(obj, -140, -10);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_dec_rpm_spinbox, LV_EVENT_PRESSED, (void *)0);
                             lv_obj_add_state(obj, LV_STATE_DISABLED);
@@ -375,7 +375,7 @@ void create_screen_main_scr() {
                             // save_rpm_alarm_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.save_rpm_alarm_btn = obj;
-                            lv_obj_set_pos(obj, 0, 67);
+                            lv_obj_set_pos(obj, 0, 57);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, 50);
                             lv_obj_add_event_cb(obj, action_save_rpm_spinbox, LV_EVENT_PRESSED, (void *)0);
                             lv_obj_add_state(obj, LV_STATE_DISABLED);

@@ -31,6 +31,12 @@ typedef struct _objects_t {
     lv_obj_t *voltage_lvl;
     lv_obj_t *settings_tab;
     lv_obj_t *mph_on;
+    lv_obj_t *light_slider;
+    lv_obj_t *dark_slider;
+    lv_obj_t *l_bright;
+    lv_obj_t *d_bright;
+    lv_obj_t *mode_lock_switch;
+    lv_obj_t *theme_switch;
     lv_obj_t *debug_tab;
     lv_obj_t *fuel_level;
     lv_obj_t *low_fuel_tt;
