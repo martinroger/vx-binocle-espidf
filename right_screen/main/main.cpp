@@ -265,6 +265,10 @@ extern "C" void action_mode_lock_switch_toggled(lv_event_t *e)
         nvs_commit(h);
         nvs_close(h);
     }
+    if (!(display_board_st.modeLocked))
+    {
+        p_headlightsOn = !headlightsOn;
+    }
 }
 
 extern "C" void action_mode_switch_toggled(lv_event_t *e)
