@@ -12,6 +12,11 @@ menu "Display Application"
         
     endchoice
 
+    config DATA_REFRESH_INTERVAL
+        int "Milliseconds between refreshes of LVGL objects based on CAN data"
+        default 25 
+        range 5 100
+
     config OTA_BLOCK_SIZE
         int "0-255. block transmissions to prevent buffer overrun"
         default 255

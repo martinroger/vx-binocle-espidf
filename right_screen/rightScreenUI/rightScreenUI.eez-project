@@ -665,7 +665,7 @@
                         "definition": {
                           "MAIN": {
                             "DEFAULT": {
-                              "img_recolor": "#3251ff",
+                              "img_recolor": "3251FF",
                               "img_recolor_opa": 255,
                               "align": "CENTER"
                             }

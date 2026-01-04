@@ -153,6 +153,5 @@ void CAN_TX_Task(void *pvParameters)
                 ESP_LOGD(TAG, "Could not TX TWAI message!");
             }
         }
-        // vTaskDelay(pdMS_TO_TICKS(CAN_TX_POLL_MS));
     }
 }
