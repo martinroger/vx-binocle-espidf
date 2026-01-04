@@ -22,21 +22,20 @@ uint8_t sma_sizes[NUM_ADC_CHANNELS] = {CONFIG_SMA_0_SIZE, CONFIG_SMA_1_SIZE, CON
 // Binding structure for each SMA to their respective channel
 typedef struct
 {
-    sma_handle_t *sma;
-
-    uint8_t channel;
+    sma_handle_t *sma; // Pointer to SMA accumulator
+    uint8_t channel;   // Channel index (0-3)
 } adc_channel_ctx_t;
 
 // Array of context structures for each SMA-ADC pair.
 static adc_channel_ctx_t adc_channels[NUM_ADC_CHANNELS] = {0};
 
 // Task used to transfer ADC readings to the SMA. Only one task for all four channels !
-TaskHandle_t adc_to_sma_handle;
-static SemaphoreHandle_t adc_to_sma_Semaphore;
+TaskHandle_t adc_to_sma_handle;                // Task to regroup ADC readings towards their dedicated channel (round robin)
+static SemaphoreHandle_t adc_to_sma_Semaphore; // ADC access semaphore
 
 /// @brief Cyclic task that measures all channels in sequence, and passes the value to the respective SMA
 /// @param pvParameters
-void adc_to_sma_task(void *pvParameters)
+inline void adc_to_sma_task(void *pvParameters)
 {
     while (1)
     {
@@ -60,7 +59,7 @@ void adc_to_sma_task(void *pvParameters)
 
 /// @brief Initialization function for the ADC processor, sets up task and Semaphore
 /// @return
-esp_err_t initialize_adc_processor()
+inline esp_err_t initialize_adc_processor()
 {
     // Create semaphore
     adc_to_sma_Semaphore = xSemaphoreCreateBinary();
@@ -84,7 +83,7 @@ esp_err_t initialize_adc_processor()
     {
         for (uint8_t i = 0; i < NUM_ADC_CHANNELS; ++i)
         {
-            ESP_LOGI(TAG,"Initialising channel and SMA #%u",i);
+            ESP_LOGI(TAG, "Initialising channel and SMA #%u", i);
             adc_channels[i].channel = i;
             uint16_t startValue = adc_measure_channel_raw(i); // Fill with a first measurement
             adc_channels[i].sma = sma_init_full(sma_sizes[i], startValue);
@@ -100,7 +99,7 @@ esp_err_t initialize_adc_processor()
     }
     else
     {
-        ESP_LOGE(TAG,"Could not lock ADC-SMA Semaphore for initialization. Aborting.");
+        ESP_LOGE(TAG, "Could not lock ADC-SMA Semaphore for initialization. Aborting.");
         return ESP_FAIL;
     }
 

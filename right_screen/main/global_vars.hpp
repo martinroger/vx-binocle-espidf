@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-
 #include "esp_display_panel.hpp"
 #include "version_parser.h"
 #include "binocan.h"
@@ -45,24 +44,25 @@ T swap_endian(T u)
 #endif
 
 #pragma region COMMON
+/// @brief Internal state structure
 struct board_ST
 {
-    bool screen_interlock_OK = false;
-    uint8_t internal_ST = XDB_SM_ST_OFF;
-    uint8_t mph_selected = false;
-    uint8_t rpm_alarm_override = false;
-    uint32_t rpm_alarm_threshold = 6000;
-    parsed_app_meta_t *app_metadata;
-    Backlight *backLight;
-    uint8_t darkBrightness = 100;
-    uint8_t lightBrightness = 100;
-    bool lightMode = true;
-    bool modeLocked = false;
+    bool screen_interlock_OK = false;    // Left to right screen interlock state
+    uint8_t internal_ST = XDB_SM_ST_OFF; // Internal board state
+    uint8_t mph_selected = false;        // MPH unit selected over KPH
+    uint8_t rpm_alarm_override = false;  // RPM alarm override from vehicle
+    uint32_t rpm_alarm_threshold = 6000; // RPM value at which to trigger alarm
+    parsed_app_meta_t *app_metadata;     // App metadata
+    Backlight *backLight;                // Pointer to backligh controller
+    uint8_t darkBrightness = 100;        // Screen brightness in dark mode
+    uint8_t lightBrightness = 100;       // Screen brightness in light mode
+    bool lightMode = true;               // Light mode active indicator
+    bool modeLocked = false;             // Light/Dark mode override lock indicator
 } display_board_st;
 
 // Validation-related booleans
-bool rollBackPossible;
-bool firstBoot;
+bool rollBackPossible; // Is rollback possible ?
+bool firstBoot;        // Is this the first boot after OTA ?
 
 // Used only to selectively update in LVGL
 bool screen_interlock_OK, p_screen_interlock_OK = false; // Checks opposite display status

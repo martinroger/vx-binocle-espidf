@@ -67,11 +67,18 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         lv_label_set_text_fmt(objects.rpm, "%04ld", (long)((rpm / 10) * 10));
-        lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override == 1) ? (rpm > display_board_st.rpm_alarm_threshold) : alarmOn);
+        lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) : alarmOn);
 
         p_rpm = rpm;
         updatedElements++;
     }
+    if (((p_alarmOn != alarmOn) && !(display_board_st.rpm_alarm_override)) || forceRefresh)
+    {
+        lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, alarmOn);
+        p_alarmOn = alarmOn;
+        updatedElements++;
+    }
+
 #endif
     if (CAN_RX_TimedOut) // Turn all on if there is a CAN Timeout
     {

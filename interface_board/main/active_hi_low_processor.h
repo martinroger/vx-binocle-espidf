@@ -26,40 +26,41 @@
 #define EXP_IO_14_BITMASK (1 << 14)
 #define EXP_IO_15_BITMASK (1 << 15)
 
-struct active_hi_lo_grp_t {
-bool AH_ignition = false;
-bool AH_hi_beams = false;
-bool AL_alternator = false;
-bool AL_brake_low = false;
-bool AL_parking_brake = false;
-bool AL_oil_pressure = false;
-bool AL_airbag = false;
-bool AL_CEL = false;
-bool AH_right_turn = false;
-bool AH_left_turn = false;
-bool AL_ABS = false;
-bool AL_door = false;
-bool AH_coolant_low = false;
-bool AL_button = false;
-bool AH_alarm = false;
-bool AH_backlight = false;
+/// @brief Structure holding the logic values for the inputs. Physical values will be INVERTED !
+struct active_hi_lo_grp_t
+{
+    bool AH_ignition = false;      // Ignition presence, active HIGH
+    bool AH_hi_beams = false;      // High beams enabled, active HIGH
+    bool AL_alternator = false;    // Alternator/Charge telltale, active LOW
+    bool AL_brake_low = false;     // Brake (fluid) alter, active LOW
+    bool AL_parking_brake = false; // Parking Brake indicator, active LOW
+    bool AL_oil_pressure = false;  // Low oil pressure telltale, active LOW
+    bool AL_airbag = false;        // Airbag fault telltale, active LOW
+    bool AL_CEL = false;           // Check Engine Light, active LOW
+    bool AH_right_turn = false;    // Right turn indicator, active HIGH
+    bool AH_left_turn = false;     // Left turn indicator, active HIGH
+    bool AL_ABS = false;           // ABS telltale, active LOW
+    bool AL_door = false;          // Door switch, active LOW
+    bool AH_coolant_low = false;   // Coolant level alert, active HIGH
+    bool AL_button = false;        // Steering column input button, active LOW
+    bool AH_alarm = false;         // Alarm ? RPM ? only on tubbies ? active HIGH assumed
+    bool AH_backlight = false;     // Backlight/low beams input, active HIGH
 } active_hi_lo_grp;
 
 /// @brief Utility that associates a boolean return to a position being ON in the bitmask
 /// @param bitfield 8-bit bitfield containing the various values of the IO expander
 /// @param bitmask Bitmask to filter the exact boolean to parse
 /// @return
-bool read_bitmask(uint16_t bitfield, uint16_t bitmask)
+inline bool read_bitmask(uint16_t bitfield, uint16_t bitmask)
 {
     bool ret = false;
     ret = ((bitfield & bitmask) == bitmask);
     return ret;
 }
 
-
 /// @brief Initialisation routine for expander IO active high low routines
 /// @return ESP_OK when all initialised correctly, otherwise ESP_FAIL
-esp_err_t initialize_exp_active_hi_lo_proc()
+inline esp_err_t initialize_exp_active_hi_lo_proc()
 {
     if (initialize_io_expanders() != ESP_OK)
     {

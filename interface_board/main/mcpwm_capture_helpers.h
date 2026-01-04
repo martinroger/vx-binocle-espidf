@@ -15,16 +15,16 @@
 /// @brief Holder structure for the raw metrics of a pwm (single sample) and computed metrics
 typedef struct
 {
-    uint32_t pos_edge_ts;      // Tick timestamp of the last positive edge
-    uint32_t prev_pos_edge_ts; // Tick tmestamp of the previous positive edge
-    uint32_t period_ticks;     // Period in ticks between two positive edges
-    uint32_t neg_edge_ts;      // Tick timestamp of the last negative edge
-    uint32_t deltaT;           // Tick difference between the last negative and positive edge
-    uint32_t pulse_counter;
-    float duty_cycle = 0.0;
-    float frequency = 0.0;
-    gptimer_handle_t timeout_detect_timer;
-    bool timedOut = false;
+    uint32_t pos_edge_ts;                  // Tick timestamp of the last positive edge
+    uint32_t prev_pos_edge_ts;             // Tick tmestamp of the previous positive edge
+    uint32_t period_ticks;                 // Period in ticks between two positive edges
+    uint32_t neg_edge_ts;                  // Tick timestamp of the last negative edge
+    uint32_t deltaT;                       // Tick difference between the last negative and positive edge
+    uint32_t pulse_counter;                // Pulse counter used to determined travelled distance
+    float duty_cycle = 0.0;                // Computed duty cycle
+    float frequency = 0.0;                 // Computed frequency
+    gptimer_handle_t timeout_detect_timer; // Handle to general purpose timer used to detect timeout
+    bool timedOut = false;                 // Whether the channel has not received new pulses
 } pwm_info_t;
 
 /// @brief GP Timer callback triggered if the timer is not reset within CONFIG_PWM_DETECT_TIMEOUT ms
@@ -32,7 +32,7 @@ typedef struct
 /// @param edata
 /// @param user_data
 /// @return
-static bool IRAM_ATTR gptimer_timeout_isr_generic(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data)
+static inline bool IRAM_ATTR gptimer_timeout_isr_generic(gptimer_handle_t timer, const gptimer_alarm_event_data_t *edata, void *user_data)
 {
     pwm_info_t *target_pwm_signal = static_cast<pwm_info_t *>(user_data);
     bool need_yield = false;
@@ -46,26 +46,16 @@ static bool IRAM_ATTR gptimer_timeout_isr_generic(gptimer_handle_t timer, const 
 /// @brief Compute frequency and duty cycle
 /// @param pwm_info Target for a specific PWM capture channel
 /// @param clock_Hz Capture source clock (natively locked at 80MHz)
-/// @return ESP_OK if there is a successful compute, ESP_FAIL if the compute failed because of timeout or 0 ticks.
-esp_err_t compute_freq_dut(volatile pwm_info_t *pwm_info, uint32_t clock_Hz = 80000000)
+/// @return ESP_OK if there is a successful compute, ESP_FAIL if the compute failed because 0 ticks, ESP_ERR_TIMEOUT if there has been no new pulses
+inline esp_err_t compute_freq_dut(volatile pwm_info_t *pwm_info, uint32_t clock_Hz = 80000000)
 {
-    // Get current time in microseconds
 
-    // Convert last positive edge timestamp to microseconds (assuming timer ticks at clock_Hz)
-    // Timestamp is updated by ISR mcpwm_capture_cb_generic
-    // uint64_t last_edge_us = ((uint64_t)pwm_info->pos_edge_ts * 1000000ULL) / clock_Hz;
-    // If last edge was more than 1000ms ago, return 0 -> Case of a 1s timeout
-    // CONFIG_PWM_DETECT_TIMEOUT * 1000ULL))
-    // pwm_info->frequency = 0;
-    // pwm_info->duty_cycle = 0;
-    // return ESP_ERR_TIMEOUT;
     if (pwm_info->timedOut)
     {
         pwm_info->frequency = 0;
         pwm_info->duty_cycle = 0;
         return ESP_ERR_TIMEOUT;
     }
-
     // Rare case where the period between two positive edges is 0 ticks
     if (pwm_info->period_ticks == 0)
     {
@@ -84,14 +74,13 @@ esp_err_t compute_freq_dut(volatile pwm_info_t *pwm_info, uint32_t clock_Hz = 80
 /// @param edata Event data
 /// @param user_data Target PWM data structure to update
 /// @return Always false because currently not triggering a context switch
-static bool IRAM_ATTR mcpwm_capture_cb_generic(mcpwm_cap_channel_handle_t cap_chan,
-                                               const mcpwm_capture_event_data_t *edata,
-                                               void *user_data)
+static inline bool IRAM_ATTR mcpwm_capture_cb_generic(mcpwm_cap_channel_handle_t cap_chan,
+                                                      const mcpwm_capture_event_data_t *edata,
+                                                      void *user_data)
 {
     // Cast the correct pwm_info_t
     pwm_info_t *target_pwm_signal = static_cast<pwm_info_t *>(user_data);
 
-    // portENTER_CRITICAL_ISR(&counter_mux);    // Not sure if needed, seems OK without ?
     // Time Out timer section
     if (target_pwm_signal->timedOut)
         target_pwm_signal->timedOut = false;
@@ -117,7 +106,6 @@ static bool IRAM_ATTR mcpwm_capture_cb_generic(mcpwm_cap_channel_handle_t cap_ch
         // Calculate "ON" time in ticks to get the duty cycle
         target_pwm_signal->deltaT = target_pwm_signal->neg_edge_ts - target_pwm_signal->pos_edge_ts;
     }
-    // portEXIT_CRITICAL_ISR(&counter_mux);     // Not sure if needed, seems OK without ?
     return false;
 }
 
@@ -126,9 +114,9 @@ static bool IRAM_ATTR mcpwm_capture_cb_generic(mcpwm_cap_channel_handle_t cap_ch
 /// @param cap_gpio Physical GPIO associated for capture
 /// @param pwm_info_buffer Target PWM info buffer that will be updated by the capture callback
 /// @return ESP_OK if all started correctly, ESP_FAIL otherwise (not implemented yet)
-esp_err_t set_capture_channel(mcpwm_cap_channel_handle_t target_cap_chan,
-                              gpio_num_t cap_gpio,
-                              volatile pwm_info_t *pwm_info_buffer)
+inline esp_err_t set_capture_channel(mcpwm_cap_channel_handle_t target_cap_chan,
+                                     gpio_num_t cap_gpio,
+                                     volatile pwm_info_t *pwm_info_buffer)
 {
     // MCPWM Capture timer set up. Only one used.
     static mcpwm_cap_timer_handle_t cap_timer = NULL;
