@@ -7,7 +7,7 @@
 #include "driver/twai.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "esp_timer.h"
+// #include "esp_timer.h"
 
 #ifndef CONFIG_CAN_RX
 #define CONFIG_CAN_RX 3
@@ -18,8 +18,6 @@
 #endif
 
 // Only active if the TWAI_WATCHDOG is used
-
-
 
 
 typedef esp_err_t frameDispatcher_t(twai_message_t *messageToDispatch);

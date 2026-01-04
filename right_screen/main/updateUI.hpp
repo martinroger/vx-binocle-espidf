@@ -3,9 +3,13 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
+
+#include "coefficients.h"
 
 #include "global_vars.hpp"
 #include "theme.hpp"
+#include "twai_daemon.h"
 
 
 /// @brief Updates all cyclic elements
