@@ -1,7 +1,7 @@
 {
   "navigation": {
     "selectedUserPageObject": "[rightScreenUI.eez-project]:/userPages/0",
-    "selectedActionObject": "[rightScreenUI.eez-project]:/actions/5",
+    "selectedActionObject": "[rightScreenUI.eez-project]:/actions/4",
     "selectedStyleObject": "[rightScreenUI.eez-project]:/lvglStyles/styles/2",
     "selectedThemeObject": "[rightScreenUI.eez-project]:/themes/0",
     "selectedBitmapObject": "[rightScreenUI.eez-project]:/bitmaps/12",
@@ -198,7 +198,6 @@
                   "type": "tabset",
                   "id": "EDITORS",
                   "weight": 71.24248496993988,
-                  "selected": 1,
                   "enableDeleteWhenEmpty": false,
                   "enableClose": false,
                   "children": [
@@ -225,8 +224,7 @@
                       },
                       "icon": "svg:page"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -258,7 +256,8 @@
                   "enableClose": false,
                   "icon": "svg:properties"
                 }
-              ]
+              ],
+              "active": true
             }
           ]
         }

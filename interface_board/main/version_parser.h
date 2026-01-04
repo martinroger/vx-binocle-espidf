@@ -38,7 +38,7 @@ typedef struct parsed_app_meta_t
  *
  * @return ESP_OK on success, ESP_FAIL on failure.
  */
-esp_err_t parse_app_metadata(parsed_app_meta_t *out)
+inline esp_err_t parse_app_metadata(parsed_app_meta_t *out)
 {
     if (!out)
         return ESP_FAIL;

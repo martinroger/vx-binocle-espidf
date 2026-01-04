@@ -665,7 +665,7 @@
                         "definition": {
                           "MAIN": {
                             "DEFAULT": {
-                              "img_recolor": "#3251ff",
+                              "img_recolor": "3251FF",
                               "img_recolor_opa": 255,
                               "align": "CENTER"
                             }
@@ -1026,7 +1026,7 @@
                             "DEFAULT": {
                               "text_font": "whiteRabbit_24px",
                               "align": "CENTER",
-                              "text_color": "#ffc200",
+                              "text_color": "#ffab00",
                               "text_align": "CENTER"
                             }
                           }
@@ -1077,7 +1077,7 @@
                             "DEFAULT": {
                               "text_font": "whiteRabbit_24px",
                               "align": "CENTER",
-                              "text_color": "#ffc200",
+                              "text_color": "#ffab00",
                               "text_align": "CENTER"
                             }
                           }
@@ -2042,7 +2042,7 @@
                         "definition": {
                           "MAIN": {
                             "DEFAULT": {
-                              "img_recolor": "#ffc200",
+                              "img_recolor": "#ffab00",
                               "img_recolor_opa": 255,
                               "align": "CENTER"
                             }
@@ -2095,7 +2095,7 @@
                         "definition": {
                           "MAIN": {
                             "DEFAULT": {
-                              "img_recolor": "#ffc200",
+                              "img_recolor": "#ffab00",
                               "img_recolor_opa": 255,
                               "align": "CENTER"
                             }
