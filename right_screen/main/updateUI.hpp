@@ -5,18 +5,50 @@
 #include <stdbool.h>
 #include <math.h>
 
+#include "esp_timer.h"
+
 #include "coefficients.h"
 
 #include "global_vars.hpp"
 #include "theme.hpp"
 #include "twai_daemon.h"
 
+#define SLOW_BLINK_PERIOD 300000
+#define FAST_BLINK_PERIOD 100000
+
+bool blinkOn = false; // Whether the blinker is sending a valid value or not
+
+/// @brief Blink variable inverter
+/// @param arg 
+inline void blink_timer_callback(void *arg)
+{
+    blinkOn = !blinkOn;
+}
+
+esp_timer_handle_t blink_timer_Hdl; // Handle for the general blink timer
+
+/// @brief Creates and starts general blink timer
+/// @return ESP_OK if started, error otherwise
+inline esp_err_t initBlinkTimer()
+{
+    esp_err_t ret;
+    const esp_timer_create_args_t blink_timer_args = {
+        .callback = &blink_timer_callback,
+        .name = "blink_timer"};
+    ret = esp_timer_create(&blink_timer_args, &blink_timer_Hdl);
+    if (ret == ESP_OK)
+    {
+        ret = esp_timer_start_periodic(blink_timer_Hdl, SLOW_BLINK_PERIOD);
+    }
+    return ret;
+}
 
 /// @brief Updates all cyclic elements
 /// @param forceRefresh Force a refresh of all the conditional blocks
 /// @return Number of updated elements
 inline int updateLVGLObjects(bool forceRefresh = false)
 {
+    uint64_t blinkTimerPeriod;
     int updatedElements = 0;
 
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
@@ -24,14 +56,14 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10) || forceRefresh)
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
-        animateTargetArc(objects.speed_arc, (speed_kph / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1)) * 10);
+        animateTargetArc(objects.speed_arc, (speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)) * 10);
         // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         if ((long)round(speed_kph) != (long)round(p_speed_kph))
-            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1)));
+            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)));
         p_speed_kph = speed_kph;
         updatedElements++;
     }
@@ -67,16 +99,69 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         lv_label_set_text_fmt(objects.rpm, "%04ld", (long)((rpm / 10) * 10));
-        lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) : alarmOn);
-
+        // lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) && (blinkOn || !(display_board_st.rpm_alarm_blink)) : alarmOn);
         p_rpm = rpm;
         updatedElements++;
     }
+    // RPM alarm override
+    if ((display_board_st.rpm_alarm_override))
+    {
+        if (rpm > display_board_st.rpm_alarm_threshold)
+            lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (blinkOn || !(display_board_st.rpm_alarm_blink)));
+        else if (lv_obj_has_state(objects.rpm, LV_STATE_FOCUSED))
+            lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, false);
+        updatedElements++;
+    }
+    // Non RPM alarm override
     if (((p_alarmOn != alarmOn) && !(display_board_st.rpm_alarm_override)) || forceRefresh)
     {
         lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, alarmOn);
         p_alarmOn = alarmOn;
         updatedElements++;
+    }
+    // If shift indicator is being used
+    if (display_board_st.use_shift_indicator              // Shift indicator is ON
+        && !lowFuelOn                                     // Low fuel alarm is OFF
+        && !overTemperatureOn                             // Over temperature alarm is OFF
+        && screen_interlock_OK                            // Screen interlock is OK
+        && !CAN_RX_TimedOut                               // CAN is not timed out
+        && (display_board_st.internal_ST == XDB_SM_ST_OK) // Degraded flag is not set
+        && (itf_board_st == XDB_SM_ST_OK)                 // ITF board is OK
+    )
+    {
+        esp_timer_get_period(blink_timer_Hdl, &blinkTimerPeriod);
+        if (rpm >= display_board_st.shift_low_threshold)
+        {          
+            if (rpm >= display_board_st.shift_top_threshold) //Top zone
+            {
+                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0xFF3A3A), LV_PART_MAIN | LV_STATE_DEFAULT);
+                if (blinkTimerPeriod != FAST_BLINK_PERIOD)
+                    esp_timer_restart(blink_timer_Hdl, FAST_BLINK_PERIOD);
+            }
+            else if (rpm >= display_board_st.shift_mid_threshold) // Mid Zone
+            {
+                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0xFFAB00), LV_PART_MAIN | LV_STATE_DEFAULT);
+                if (blinkTimerPeriod != (FAST_BLINK_PERIOD + SLOW_BLINK_PERIOD) / 2)
+                    esp_timer_restart(blink_timer_Hdl, (FAST_BLINK_PERIOD + SLOW_BLINK_PERIOD) / 2);
+            }
+            else // Low Zone
+            {
+                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0x00B734), LV_PART_MAIN | LV_STATE_DEFAULT);
+                if (blinkTimerPeriod != SLOW_BLINK_PERIOD)
+                    esp_timer_restart(blink_timer_Hdl, SLOW_BLINK_PERIOD);
+            }
+            lv_obj_set_style_opa(objects.shift_label, blinkOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        }
+        else
+        {
+            lv_obj_set_style_opa(objects.shift_label, LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        }
+    }
+    else
+    {
+        lv_obj_set_style_opa(objects.shift_label, LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        if (blinkTimerPeriod != SLOW_BLINK_PERIOD)
+                    esp_timer_restart(blink_timer_Hdl, SLOW_BLINK_PERIOD);
     }
 
 #endif
@@ -144,11 +229,11 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         switch (display_board_st.internal_ST)
         {
         case XDB_SM_ST_DEGRADED:
-            lv_obj_set_style_text_color(objects.internal_state, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_color(objects.internal_state, lv_color_hex(0xFFAB00), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
             break;
         case XDB_SM_ST_FAULT:
-            lv_obj_set_style_text_color(objects.internal_state, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_color(objects.internal_state, lv_color_hex(0xFF3A3A), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
             break;
         default:
@@ -163,11 +248,11 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         switch (itf_board_st)
         {
         case XDB_SM_ST_DEGRADED:
-            lv_obj_set_style_text_color(objects.itf_state, lv_palette_main(LV_PALETTE_ORANGE), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_color(objects.itf_state, lv_color_hex(0xFFAB00), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
             break;
         case XDB_SM_ST_FAULT:
-            lv_obj_set_style_text_color(objects.itf_state, lv_palette_main(LV_PALETTE_RED), LV_PART_MAIN | LV_STATE_DEFAULT);
+            lv_obj_set_style_text_color(objects.itf_state, lv_color_hex(0xFF3A3A), LV_PART_MAIN | LV_STATE_DEFAULT);
             lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
             break;
         default:

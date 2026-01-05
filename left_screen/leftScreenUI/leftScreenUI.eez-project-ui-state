@@ -1,7 +1,6 @@
 {
   "navigation": {
     "selectedUserPageObject": "[leftScreenUI.eez-project]:/userPages/0",
-    "selectedActionObject": "[leftScreenUI.eez-project]:/actions/-1",
     "selectedStyleObject": "[leftScreenUI.eez-project]:/lvglStyles/styles/0",
     "selectedFontObject": "[leftScreenUI.eez-project]:/fonts/5",
     "subnavigationSelectedItems": {}
@@ -166,8 +165,7 @@
                       "enableClose": false,
                       "icon": "svg:hierarchy"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -218,7 +216,8 @@
                   },
                   "icon": "svg:page"
                 }
-              ]
+              ],
+              "active": true
             },
             {
               "type": "row",
