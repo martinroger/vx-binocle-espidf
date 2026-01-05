@@ -718,7 +718,7 @@
                         "definition": {
                           "MAIN": {
                             "DEFAULT": {
-                              "img_recolor": "#00ff3d",
+                              "img_recolor": "#00b734",
                               "img_recolor_opa": 255,
                               "align": "CENTER"
                             }

@@ -4,7 +4,6 @@
     "selectedActionObject": "[rightScreenUI.eez-project]:/actions/4",
     "selectedStyleObject": "[rightScreenUI.eez-project]:/lvglStyles/styles/2",
     "selectedThemeObject": "[rightScreenUI.eez-project]:/themes/0",
-    "selectedThemeColorObject": "[rightScreenUI.eez-project]:/colors/-1",
     "selectedBitmapObject": "[rightScreenUI.eez-project]:/bitmaps/12",
     "subnavigationSelectedItems": {}
   },
@@ -170,7 +169,8 @@
                       "enableClose": false,
                       "icon": "svg:hierarchy"
                     }
-                  ]
+                  ],
+                  "active": true
                 },
                 {
                   "type": "tabset",
@@ -226,8 +226,7 @@
                       },
                       "icon": "svg:page"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -1029,12 +1028,14 @@
           "0": {
             "0": {},
             "1": {
-              "3": {
-                "$selected": true
-              },
+              "3": {},
               "6": {}
             },
-            "2": {}
+            "2": {
+              "9": {
+                "$selected": true
+              }
+            }
           }
         }
       },
@@ -1076,7 +1077,7 @@
   "showComponentDescriptions": true,
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
-  "lvglPart": "MAIN",
+  "lvglPart": "KNOB",
   "lvglState": "DEFAULT",
   "lvglExpandedPropertiesGroup": [
     "LAYOUT",

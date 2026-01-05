@@ -635,6 +635,8 @@ extern "C" void app_main()
 
         startup_anim();
     }
+    if (initBlinkTimer() != ESP_OK)
+        ESP_LOGW(__func__, "Blinking timer could not be started.");
 
 #pragma endregion
 
