@@ -73,10 +73,10 @@ inline void startup_anim()
     lv_spinbox_set_value(objects.shift_top_spinbox, display_board_st.shift_top_threshold);
 
     // Probably need to set spinbox limits here
-    lv_spinbox_set_max_value(objects.shift_low_spinbox,display_board_st.shift_mid_threshold-1);
-    lv_spinbox_set_min_value(objects.shift_mid_spinbox,display_board_st.shift_low_threshold+1);
-    lv_spinbox_set_max_value(objects.shift_mid_spinbox,display_board_st.shift_top_threshold-1);
-    lv_spinbox_set_min_value(objects.shift_top_spinbox,display_board_st.shift_mid_threshold+1);
+    lv_spinbox_set_max_value(objects.shift_low_spinbox, display_board_st.shift_mid_threshold - 1);
+    lv_spinbox_set_min_value(objects.shift_mid_spinbox, display_board_st.shift_low_threshold + 1);
+    lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
+    lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
 
 #elifdef CONFIG_RIGHT_SIDE_DISPLAY
     lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);

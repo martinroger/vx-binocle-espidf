@@ -268,6 +268,17 @@ extern "C" void action_inc_rpm_spinbox(lv_event_t *e)
     if (lvgl_port_lock(-1))
     {
         lv_spinbox_increment(target_spinbox);
+        if (target_spinbox != objects.rpm_alarm_spinbox)
+        {
+            display_board_st.shift_low_threshold = lv_spinbox_get_value(objects.shift_low_spinbox);
+            display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
+            display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
+            lv_spinbox_set_max_value(objects.shift_low_spinbox, display_board_st.shift_mid_threshold - 1);
+            lv_spinbox_set_min_value(objects.shift_mid_spinbox, display_board_st.shift_low_threshold + 1);
+            lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
+            lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
+        }
+
         lvgl_port_unlock();
     }
 }
@@ -298,6 +309,16 @@ extern "C" void action_dec_rpm_spinbox(lv_event_t *e)
     if (lvgl_port_lock(-1))
     {
         lv_spinbox_decrement(target_spinbox);
+        if (target_spinbox != objects.rpm_alarm_spinbox)
+        {
+            display_board_st.shift_low_threshold = lv_spinbox_get_value(objects.shift_low_spinbox);
+            display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
+            display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
+            lv_spinbox_set_max_value(objects.shift_low_spinbox, display_board_st.shift_mid_threshold - 1);
+            lv_spinbox_set_min_value(objects.shift_mid_spinbox, display_board_st.shift_low_threshold + 1);
+            lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
+            lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
+        }
         lvgl_port_unlock();
     }
 }
@@ -325,6 +346,13 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
             display_board_st.shift_low_threshold = lv_spinbox_get_value(objects.shift_low_spinbox);
             display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
             display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
+
+            if (nvs_set_u32(h, "shft_low", display_board_st.shift_low_threshold) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot save shift light low threshold");
+            if (nvs_set_u32(h, "shft_mid", display_board_st.shift_mid_threshold) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot save shift light mid threshold");
+            if (nvs_set_u32(h, "shft_top", display_board_st.shift_top_threshold) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot save shift light top threshold");
         }
         nvs_commit(h);
         nvs_close(h);
