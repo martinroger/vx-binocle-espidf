@@ -122,7 +122,6 @@
                   "type": "tabset",
                   "id": "#c4db1be0-b98a-4ccd-92aa-a2b11b5b6a1a",
                   "weight": 0.6608260325406758,
-                  "selected": 2,
                   "enableClose": false,
                   "children": [
                     {
@@ -216,8 +215,7 @@
                   },
                   "icon": "svg:page"
                 }
-              ],
-              "active": true
+              ]
             },
             {
               "type": "row",
@@ -237,7 +235,8 @@
                       "enableClose": false,
                       "icon": "svg:properties"
                     }
-                  ]
+                  ],
+                  "active": true
                 },
                 {
                   "type": "tabset",
@@ -1007,16 +1006,15 @@
               "10": {},
               "20": {}
             },
-            "2": {
-              "$selected": true
-            }
+            "2": {},
+            "$selected": true
           }
         }
       },
       "transform": {
         "translate": {
           "x": -302.9765065104171,
-          "y": -476.81500000000017
+          "y": -550.8150000000002
         },
         "scale": 1.1
       },
@@ -1101,11 +1099,12 @@
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
   "lvglPart": "MAIN",
-  "lvglState": "DEFAULT",
+  "lvglState": "CHECKED",
   "lvglExpandedPropertiesGroup": [
     "MISCELLANEOUS",
     "TEXT",
-    "IMAGE"
+    "BACKGROUND",
+    "ARC"
   ],
   "showInactiveFlowsInDebugger": true,
   "globalFlowZoom": true,

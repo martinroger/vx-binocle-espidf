@@ -16,10 +16,10 @@
 #define SLOW_BLINK_PERIOD 300000
 #define FAST_BLINK_PERIOD 100000
 
-bool blinkOn = false; // Whether the blinker is sending a valid value or not
+bool p_blinkOn, blinkOn = false; // Whether the blinker is sending a valid value or not
 
 /// @brief Blink variable inverter
-/// @param arg 
+/// @param arg
 inline void blink_timer_callback(void *arg)
 {
     blinkOn = !blinkOn;
@@ -100,13 +100,26 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         lv_label_set_text_fmt(objects.rpm, "%04ld", (long)((rpm / 10) * 10));
         // lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) && (blinkOn || !(display_board_st.rpm_alarm_blink)) : alarmOn);
+        if (rpm >= display_board_st.shift_mid_threshold)
+        {
+            if ((rpm >= display_board_st.shift_top_threshold) && !(lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED)))
+                lv_obj_add_state(objects.rpm_arc, LV_STATE_FOCUSED);
+            else if (!(lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED)) || lv_obj_has_state(objects.rpm_arc,LV_STATE_FOCUSED))
+            {
+                if (lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED))
+                    lv_obj_remove_state(objects.rpm_arc, LV_STATE_FOCUSED);
+                lv_obj_add_state(objects.rpm_arc, LV_STATE_CHECKED);
+            }
+        }
+        else if (lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED) || lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED))
+            lv_obj_remove_state(objects.rpm_arc, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_CHECKED));
         p_rpm = rpm;
         updatedElements++;
     }
     // RPM alarm override
     if ((display_board_st.rpm_alarm_override))
     {
-        if (rpm > display_board_st.rpm_alarm_threshold)
+        if ((rpm > display_board_st.rpm_alarm_threshold))
             lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (blinkOn || !(display_board_st.rpm_alarm_blink)));
         else if (lv_obj_has_state(objects.rpm, LV_STATE_FOCUSED))
             lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, false);
@@ -120,49 +133,38 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         updatedElements++;
     }
     // If shift indicator is being used
-    if (display_board_st.use_shift_indicator              // Shift indicator is ON
-        && !lowFuelOn                                     // Low fuel alarm is OFF
-        && !overTemperatureOn                             // Over temperature alarm is OFF
-        && screen_interlock_OK                            // Screen interlock is OK
-        && !CAN_RX_TimedOut                               // CAN is not timed out
-        && (display_board_st.internal_ST == XDB_SM_ST_OK) // Degraded flag is not set
-        && (itf_board_st == XDB_SM_ST_OK)                 // ITF board is OK
+    if (display_board_st.use_shift_indicator // Shift indicator is ON
+        && (p_blinkOn != blinkOn)            // Blink inversion is needed
     )
     {
         esp_timer_get_period(blink_timer_Hdl, &blinkTimerPeriod);
-        if (rpm >= display_board_st.shift_low_threshold)
-        {          
-            if (rpm >= display_board_st.shift_top_threshold) //Top zone
-            {
-                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0xFF3A3A), LV_PART_MAIN | LV_STATE_DEFAULT);
-                if (blinkTimerPeriod != FAST_BLINK_PERIOD)
-                    esp_timer_restart(blink_timer_Hdl, FAST_BLINK_PERIOD);
-            }
-            else if (rpm >= display_board_st.shift_mid_threshold) // Mid Zone
-            {
-                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0xFFAB00), LV_PART_MAIN | LV_STATE_DEFAULT);
-                if (blinkTimerPeriod != (FAST_BLINK_PERIOD + SLOW_BLINK_PERIOD) / 2)
-                    esp_timer_restart(blink_timer_Hdl, (FAST_BLINK_PERIOD + SLOW_BLINK_PERIOD) / 2);
-            }
-            else // Low Zone
-            {
-                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0x00B734), LV_PART_MAIN | LV_STATE_DEFAULT);
-                if (blinkTimerPeriod != SLOW_BLINK_PERIOD)
-                    esp_timer_restart(blink_timer_Hdl, SLOW_BLINK_PERIOD);
-            }
-            lv_obj_set_style_opa(objects.shift_label, blinkOn ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        }
-        else
+        if (rpm >= display_board_st.shift_top_threshold) // Top zone
         {
-            lv_obj_set_style_opa(objects.shift_label, LV_OPA_TRANSP, LV_STATE_DEFAULT);
+            lv_obj_set_state(objects.main_tabview, LV_STATE_FOCUSED, blinkOn);
+            if (blinkTimerPeriod != FAST_BLINK_PERIOD)
+                esp_timer_restart(blink_timer_Hdl, FAST_BLINK_PERIOD);
+        }
+        else if (rpm >= display_board_st.shift_mid_threshold) // Mid Zone
+        {
+            if (lv_obj_has_state(objects.main_tabview, LV_STATE_FOCUSED))
+                lv_obj_remove_state(objects.main_tabview, LV_STATE_FOCUSED);
+
+            lv_obj_set_state(objects.main_tabview, LV_STATE_CHECKED, blinkOn);
+            if (blinkTimerPeriod != (FAST_BLINK_PERIOD + SLOW_BLINK_PERIOD) / 2)
+                esp_timer_restart(blink_timer_Hdl, (FAST_BLINK_PERIOD + SLOW_BLINK_PERIOD) / 2);
+        }
+        else // Low Zone
+        {
+            lv_obj_remove_state(objects.main_tabview, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_CHECKED));
+            if (blinkTimerPeriod != SLOW_BLINK_PERIOD)
+                esp_timer_restart(blink_timer_Hdl, SLOW_BLINK_PERIOD);
         }
     }
-    else
-    {
-        lv_obj_set_style_opa(objects.shift_label, LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        if (blinkTimerPeriod != SLOW_BLINK_PERIOD)
-                    esp_timer_restart(blink_timer_Hdl, SLOW_BLINK_PERIOD);
-    }
+    // If somehow the shift indicator is disactivated mid-blink
+    if (!(display_board_st.use_shift_indicator) && (lv_obj_has_state(objects.main_tabview, LV_STATE_FOCUSED) || lv_obj_has_state(objects.main_tabview, LV_STATE_CHECKED)))
+        lv_obj_remove_state(objects.main_tabview, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_CHECKED));
+
+    p_blinkOn = blinkOn;
 
 #endif
     if (CAN_RX_TimedOut) // Turn all on if there is a CAN Timeout
