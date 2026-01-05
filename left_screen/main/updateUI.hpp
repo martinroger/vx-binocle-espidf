@@ -11,7 +11,6 @@
 #include "theme.hpp"
 #include "twai_daemon.h"
 
-
 /// @brief Updates all cyclic elements
 /// @param forceRefresh Force a refresh of all the conditional blocks
 /// @return Number of updated elements
@@ -77,6 +76,36 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, alarmOn);
         p_alarmOn = alarmOn;
         updatedElements++;
+    }
+
+    if (display_board_st.use_shift_indicator              // Shift indicator is ON
+        && !lowFuelOn                                     // Low fuel alarm is OFF
+        && !overTemperatureOn                             // Over temperature alarm is OFF
+        && screen_interlock_OK                            // Screen interlock is OK
+        && !CAN_RX_TimedOut                               // CAN is not timed out
+        && (display_board_st.internal_ST == XDB_SM_ST_OK) // Degraded flag is not set
+        && (itf_board_st == XDB_SM_ST_OK)                 // ITF board is OK
+    )
+    {
+        if (rpm >= display_board_st.shift_low_threshold)
+        {
+            if (rpm >= display_board_st.shift_top_threshold)
+                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0xFF3A3A), LV_PART_MAIN | LV_STATE_DEFAULT);
+            else if (rpm >= display_board_st.shift_mid_threshold)
+                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0xFFAB00), LV_PART_MAIN | LV_STATE_DEFAULT);
+            else
+                lv_obj_set_style_text_color(objects.shift_label, lv_color_hex(0x00B734), LV_PART_MAIN | LV_STATE_DEFAULT);
+            // Controlled by blinker timer in the future
+            lv_obj_set_style_opa(objects.shift_label, LV_OPA_COVER, LV_STATE_DEFAULT);
+        }
+        else
+        {
+            lv_obj_set_style_opa(objects.shift_label, LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        }
+    }
+    else
+    {
+        lv_obj_set_style_opa(objects.shift_label, LV_OPA_TRANSP, LV_STATE_DEFAULT);
     }
 
 #endif
