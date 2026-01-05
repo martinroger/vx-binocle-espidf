@@ -4,6 +4,7 @@
     "selectedActionObject": "[rightScreenUI.eez-project]:/actions/4",
     "selectedStyleObject": "[rightScreenUI.eez-project]:/lvglStyles/styles/2",
     "selectedThemeObject": "[rightScreenUI.eez-project]:/themes/0",
+    "selectedThemeColorObject": "[rightScreenUI.eez-project]:/colors/-1",
     "selectedBitmapObject": "[rightScreenUI.eez-project]:/bitmaps/12",
     "subnavigationSelectedItems": {}
   },
@@ -25,7 +26,7 @@
           },
           {
             "type": "border",
-            "selected": 0,
+            "selected": 3,
             "size": 240,
             "location": "right",
             "children": [
@@ -126,7 +127,7 @@
                   "type": "tabset",
                   "id": "#a4c7b740-9392-4106-95ee-d68e3491a0d7",
                   "weight": 0.43463263194204904,
-                  "selected": 2,
+                  "selected": 1,
                   "enableClose": false,
                   "children": [
                     {
@@ -198,6 +199,7 @@
                   "type": "tabset",
                   "id": "EDITORS",
                   "weight": 71.24248496993988,
+                  "selected": 1,
                   "enableDeleteWhenEmpty": false,
                   "enableClose": false,
                   "children": [
@@ -224,7 +226,8 @@
                       },
                       "icon": "svg:page"
                     }
-                  ]
+                  ],
+                  "active": true
                 },
                 {
                   "type": "tabset",
@@ -256,8 +259,7 @@
                   "enableClose": false,
                   "icon": "svg:properties"
                 }
-              ],
-              "active": true
+              ]
             }
           ]
         }
@@ -846,8 +848,7 @@
                       "component": "themes",
                       "enableClose": false
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -863,7 +864,8 @@
                       "component": "colors",
                       "enableClose": false
                     }
-                  ]
+                  ],
+                  "active": true
                 }
               ]
             }
@@ -1025,10 +1027,14 @@
       "selection": {
         "0": {
           "0": {
+            "0": {},
             "1": {
-              "6": {},
-              "$selected": true
-            }
+              "3": {
+                "$selected": true
+              },
+              "6": {}
+            },
+            "2": {}
           }
         }
       },
@@ -1077,12 +1083,12 @@
     "POSITION AND SIZE",
     "PADDING",
     "MISCELLANEOUS",
-    "LINE",
     "ARC",
     "TEXT",
     "OUTLINE",
     "SHADOW",
-    "IMAGE"
+    "IMAGE",
+    "LINE"
   ],
   "showInactiveFlowsInDebugger": true,
   "globalFlowZoom": true,

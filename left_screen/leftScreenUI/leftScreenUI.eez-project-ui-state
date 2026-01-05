@@ -1,8 +1,9 @@
 {
   "navigation": {
     "selectedUserPageObject": "[leftScreenUI.eez-project]:/userPages/0",
-    "selectedActionObject": "[leftScreenUI.eez-project]:/actions/1",
+    "selectedActionObject": "[leftScreenUI.eez-project]:/actions/-1",
     "selectedStyleObject": "[leftScreenUI.eez-project]:/lvglStyles/styles/0",
+    "selectedFontObject": "[leftScreenUI.eez-project]:/fonts/5",
     "subnavigationSelectedItems": {}
   },
   "layoutModel": {
@@ -23,7 +24,6 @@
           },
           {
             "type": "border",
-            "selected": 0,
             "size": 240,
             "location": "right",
             "children": [
@@ -122,7 +122,7 @@
                 {
                   "type": "tabset",
                   "id": "#c4db1be0-b98a-4ccd-92aa-a2b11b5b6a1a",
-                  "weight": 0.2878598247809762,
+                  "weight": 0.6608260325406758,
                   "selected": 2,
                   "enableClose": false,
                   "children": [
@@ -150,13 +150,12 @@
                       "enableClose": false,
                       "icon": "material:code"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
                   "id": "#c0008549-141b-40f5-9289-76e66accbbdf",
-                  "weight": 1.7121401752190237,
+                  "weight": 1.3391739674593242,
                   "enableClose": false,
                   "children": [
                     {
@@ -238,12 +237,13 @@
                       "enableClose": false,
                       "icon": "svg:properties"
                     }
-                  ]
+                  ],
+                  "active": true
                 },
                 {
                   "type": "tabset",
-                  "id": "#98d610bf-0ed0-4330-9fab-9c7100ec5e2b",
-                  "weight": 1,
+                  "id": "#bd4e91ba-bec2-4928-99bb-c08506c404f2",
+                  "weight": 0.5,
                   "children": [
                     {
                       "type": "tab",
@@ -450,7 +450,8 @@
                       "enableClose": false,
                       "icon": "svg:watch_panel"
                     }
-                  ]
+                  ],
+                  "active": true
                 }
               ]
             },
@@ -458,10 +459,21 @@
               "type": "tabset",
               "id": "RUNTIME-EDITORS",
               "weight": 1,
-              "selected": -1,
               "enableDeleteWhenEmpty": false,
               "enableClose": false,
-              "children": []
+              "children": [
+                {
+                  "type": "tab",
+                  "id": "#e4e325c7-995a-4380-a5b9-5300314b5181",
+                  "name": "mainScr",
+                  "component": "editor",
+                  "config": {
+                    "objectPath": "[leftScreenUI.eez-project]:/userPages/0",
+                    "permanent": false
+                  },
+                  "icon": "svg:page"
+                }
+              ]
             },
             {
               "type": "row",
@@ -994,7 +1006,9 @@
             "1": {
               "2": {
                 "$selected": true
-              }
+              },
+              "3": {},
+              "5": {}
             },
             "2": {}
           }
@@ -1003,7 +1017,7 @@
       "transform": {
         "translate": {
           "x": -302.9765065104171,
-          "y": -263.81500000000017
+          "y": -337.81500000000017
         },
         "scale": 1.1
       },
@@ -1081,21 +1095,22 @@
   "searchMatchWholeWord": false,
   "replaceEnabled": false,
   "replaceText": "",
-  "pageRuntimeFrontFace": true,
+  "pageRuntimeFrontFace": false,
   "breakpoints": {},
   "watchExpressions": [],
   "showComponentDescriptions": true,
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
-  "lvglPart": "INDICATOR",
-  "lvglState": "DEFAULT",
+  "lvglPart": "SELECTED",
+  "lvglState": "DISABLED",
   "lvglExpandedPropertiesGroup": [
     "POSITION AND SIZE",
     "MISCELLANEOUS",
     "TEXT",
     "ARC",
     "BACKGROUND",
-    "LINE"
+    "LINE",
+    "IMAGE"
   ],
   "showInactiveFlowsInDebugger": true,
   "globalFlowZoom": true,

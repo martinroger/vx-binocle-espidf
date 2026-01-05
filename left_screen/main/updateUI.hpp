@@ -24,14 +24,14 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10) || forceRefresh)
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
-        animateTargetArc(objects.speed_arc, (speed_kph / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1)) * 10);
+        animateTargetArc(objects.speed_arc, (speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)) * 10);
         // // lv_arc_align_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_arc_rotate_obj_to_angle(objects.itf_speed_kph_arc, objects.itf_speed_kph_needle, 0);
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         if ((long)round(speed_kph) != (long)round(p_speed_kph))
-            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1)));
+            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)));
         p_speed_kph = speed_kph;
         updatedElements++;
     }
