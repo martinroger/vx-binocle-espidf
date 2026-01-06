@@ -102,13 +102,13 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) && (blinkOn || !(display_board_st.rpm_alarm_blink)) : alarmOn);
         if (rpm >= display_board_st.shift_mid_threshold)
         {
-            if ((rpm >= display_board_st.shift_top_threshold) && !(lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED))) // In the red zone, not yet focused
+            if ((rpm >= display_board_st.shift_top_threshold)) // Not focused or still has checked
             {
                 lv_obj_add_state(objects.rpm_arc, LV_STATE_FOCUSED);     // Make it focused
                 if (lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED)) // Remove orange checked if present
                     lv_obj_remove_state(objects.rpm_arc, LV_STATE_CHECKED);
             }
-            else if (!(lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED)) || lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED)) // Not in the red zone, but is not checked or has still red zone
+            else if (!(lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED))) // Not in the red zone, but is not checked or has still red zone
             {
                 if (lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED)) // remove red zone attributes
                     lv_obj_remove_state(objects.rpm_arc, LV_STATE_FOCUSED);

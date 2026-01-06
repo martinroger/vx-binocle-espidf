@@ -342,8 +342,8 @@
                           "INDICATOR": {
                             "DEFAULT": {
                               "arc_rounded": false,
-                              "arc_color": "#999999",
-                              "arc_opa": 100,
+                              "arc_color": "#00b734",
+                              "arc_opa": 180,
                               "arc_width": 12
                             }
                           },
@@ -353,7 +353,8 @@
                               "pad_top": 0,
                               "pad_bottom": 0,
                               "pad_left": 0,
-                              "pad_right": 0
+                              "pad_right": 0,
+                              "opa": 0
                             }
                           }
                         }

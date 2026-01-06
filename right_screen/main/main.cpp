@@ -252,10 +252,6 @@ extern "C" void action_inc_rpm_spinbox(lv_event_t *e)
     {
         target_spinbox = objects.rpm_alarm_spinbox;
     }
-    if (target_button == objects.inc_shift_low_btn)
-    {
-        target_spinbox = objects.shift_low_spinbox;
-    }
     if (target_button == objects.inc_shift_mid_btn)
     {
         target_spinbox = objects.shift_mid_spinbox;
@@ -270,11 +266,8 @@ extern "C" void action_inc_rpm_spinbox(lv_event_t *e)
         lv_spinbox_increment(target_spinbox);
         if (target_spinbox != objects.rpm_alarm_spinbox)
         {
-            display_board_st.shift_low_threshold = lv_spinbox_get_value(objects.shift_low_spinbox);
             display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
             display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
-            lv_spinbox_set_max_value(objects.shift_low_spinbox, display_board_st.shift_mid_threshold - 1);
-            lv_spinbox_set_min_value(objects.shift_mid_spinbox, display_board_st.shift_low_threshold + 1);
             lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
             lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
         }
@@ -293,10 +286,6 @@ extern "C" void action_dec_rpm_spinbox(lv_event_t *e)
     {
         target_spinbox = objects.rpm_alarm_spinbox;
     }
-    if (target_button == objects.dec_shift_low_btn)
-    {
-        target_spinbox = objects.shift_low_spinbox;
-    }
     if (target_button == objects.dec_shift_mid_btn)
     {
         target_spinbox = objects.shift_mid_spinbox;
@@ -311,11 +300,8 @@ extern "C" void action_dec_rpm_spinbox(lv_event_t *e)
         lv_spinbox_decrement(target_spinbox);
         if (target_spinbox != objects.rpm_alarm_spinbox)
         {
-            display_board_st.shift_low_threshold = lv_spinbox_get_value(objects.shift_low_spinbox);
             display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
             display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
-            lv_spinbox_set_max_value(objects.shift_low_spinbox, display_board_st.shift_mid_threshold - 1);
-            lv_spinbox_set_min_value(objects.shift_mid_spinbox, display_board_st.shift_low_threshold + 1);
             lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
             lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
         }
@@ -343,12 +329,9 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
         }
         if (target == objects.save_shift_ind_btn)
         {
-            display_board_st.shift_low_threshold = lv_spinbox_get_value(objects.shift_low_spinbox);
             display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
             display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
 
-            if (nvs_set_u32(h, "shft_low", display_board_st.shift_low_threshold) != ESP_OK)
-                ESP_LOGE(__func__, "Cannot save shift light low threshold");
             if (nvs_set_u32(h, "shft_mid", display_board_st.shift_mid_threshold) != ESP_OK)
                 ESP_LOGE(__func__, "Cannot save shift light mid threshold");
             if (nvs_set_u32(h, "shft_top", display_board_st.shift_top_threshold) != ESP_OK)
@@ -369,8 +352,6 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
     {
         if (nvs_set_u8(h, "shft_ind", (uint8_t)display_board_st.use_shift_indicator) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save shift indicator status");
-        if (nvs_get_u32(h, "shft_low", &(display_board_st.shift_low_threshold)) != ESP_OK)
-            ESP_LOGW(__func__, "Could not retrieve shift low threshold from NVS");
         if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
         if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
@@ -381,15 +362,10 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
     if (lvgl_port_lock(-1))
     {
         lv_obj_set_state(objects.save_shift_ind_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_obj_set_state(objects.inc_shift_low_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_obj_set_state(objects.dec_shift_low_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
         lv_obj_set_state(objects.inc_shift_mid_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
         lv_obj_set_state(objects.dec_shift_mid_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
         lv_obj_set_state(objects.inc_shift_top_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
         lv_obj_set_state(objects.dec_shift_top_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-
-        lv_obj_set_state(objects.shift_low_spinbox, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_spinbox_set_value(objects.shift_low_spinbox, display_board_st.shift_low_threshold);
 
         lv_obj_set_state(objects.shift_mid_spinbox, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
         lv_spinbox_set_value(objects.shift_mid_spinbox, display_board_st.shift_mid_threshold);
@@ -501,8 +477,6 @@ extern "C" void app_main()
             ESP_LOGW(__func__, "Could not retrieve the RPM alarm blinker status from NVS");
         if (nvs_get_u8(h, "shft_ind", (uint8_t *)&(display_board_st.use_shift_indicator)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the shift indicator status from NVS");
-        if (nvs_get_u32(h, "shft_low", &(display_board_st.shift_low_threshold)) != ESP_OK)
-            ESP_LOGW(__func__, "Could not retrieve shift low threshold from NVS");
         if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
         if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)

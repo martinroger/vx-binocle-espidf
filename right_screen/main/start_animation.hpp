@@ -56,15 +56,10 @@ inline void startup_anim()
     // Settings screen shift indicator section
     lv_obj_set_state(objects.shift_ind_sw, LV_STATE_CHECKED, display_board_st.use_shift_indicator);
     lv_obj_set_state(objects.save_shift_ind_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-    lv_obj_set_state(objects.inc_shift_low_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-    lv_obj_set_state(objects.dec_shift_low_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
     lv_obj_set_state(objects.inc_shift_mid_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
     lv_obj_set_state(objects.dec_shift_mid_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
     lv_obj_set_state(objects.inc_shift_top_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
     lv_obj_set_state(objects.dec_shift_top_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-
-    lv_obj_set_state(objects.shift_low_spinbox, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-    lv_spinbox_set_value(objects.shift_low_spinbox, display_board_st.shift_low_threshold);
 
     lv_obj_set_state(objects.shift_mid_spinbox, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
     lv_spinbox_set_value(objects.shift_mid_spinbox, display_board_st.shift_mid_threshold);
@@ -73,8 +68,6 @@ inline void startup_anim()
     lv_spinbox_set_value(objects.shift_top_spinbox, display_board_st.shift_top_threshold);
 
     // Probably need to set spinbox limits here
-    lv_spinbox_set_max_value(objects.shift_low_spinbox, display_board_st.shift_mid_threshold - 1);
-    lv_spinbox_set_min_value(objects.shift_mid_spinbox, display_board_st.shift_low_threshold + 1);
     lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
     lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
 
