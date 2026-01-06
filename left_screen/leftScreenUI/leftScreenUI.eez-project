@@ -2111,7 +2111,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
-                      "disabledState": true,
+                      "disabledState": false,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -2246,7 +2246,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
-                      "disabledState": true,
+                      "disabledState": false,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -2354,7 +2354,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
-                      "disabledState": true,
+                      "disabledState": false,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -2403,7 +2403,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
-                      "disabledState": true,
+                      "disabledState": false,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -2538,7 +2538,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
-                      "disabledState": true,
+                      "disabledState": false,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -2646,7 +2646,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
-                      "disabledState": true,
+                      "disabledState": false,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {
@@ -2756,7 +2756,7 @@
                       "scrollSnapX": "",
                       "scrollSnapY": "",
                       "checkedStateType": "literal",
-                      "disabledState": true,
+                      "disabledState": false,
                       "disabledStateType": "literal",
                       "states": "",
                       "localStyles": {

@@ -450,7 +450,6 @@ void create_screen_main_scr() {
                             lv_spinbox_set_rollover(obj, false);
                             lv_spinbox_set_step(obj, 1);
                             lv_spinbox_set_value(obj, 0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_60px, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -467,7 +466,6 @@ void create_screen_main_scr() {
                             lv_obj_set_pos(obj, 130, 29);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_inc_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_bg_color(obj, lv_color_hex(0xffffab00), LV_PART_MAIN | LV_STATE_DEFAULT);
                             {
@@ -489,7 +487,6 @@ void create_screen_main_scr() {
                             lv_obj_set_pos(obj, -130, 29);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_dec_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_bg_color(obj, lv_color_hex(0xffffab00), LV_PART_MAIN | LV_STATE_DEFAULT);
                             {
@@ -515,7 +512,6 @@ void create_screen_main_scr() {
                             lv_spinbox_set_rollover(obj, false);
                             lv_spinbox_set_step(obj, 1);
                             lv_spinbox_set_value(obj, 0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_60px, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -532,7 +528,6 @@ void create_screen_main_scr() {
                             lv_obj_set_pos(obj, 130, 100);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_inc_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_bg_color(obj, lv_color_hex(0xffff3a3a), LV_PART_MAIN | LV_STATE_DEFAULT);
                             {
@@ -554,7 +549,6 @@ void create_screen_main_scr() {
                             lv_obj_set_pos(obj, -130, 100);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_dec_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_bg_color(obj, lv_color_hex(0xffff3a3a), LV_PART_MAIN | LV_STATE_DEFAULT);
                             {
@@ -576,7 +570,6 @@ void create_screen_main_scr() {
                             lv_obj_set_pos(obj, -7, 172);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, 50);
                             lv_obj_add_event_cb(obj, action_save_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             {
                                 lv_obj_t *parent_obj = obj;

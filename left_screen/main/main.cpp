@@ -44,17 +44,8 @@ extern "C" void action_reset_settings(lv_event_t *e)
     if (nvs_err == ESP_OK)
     {
         nvs_err = nvs_flash_init();
-        if (lvgl_port_lock(-1) && (nvs_err == ESP_OK))
-        {
-            lv_obj_set_state(objects.reset_settings_btn, LV_STATE_DISABLED, true);
-            lvgl_port_unlock();
-            vTaskDelay(pdMS_TO_TICKS(2000));
-            if (lvgl_port_lock(-1))
-            {
-                lv_obj_set_state(objects.reset_settings_btn, LV_STATE_DISABLED, false);
-                lvgl_port_unlock();
-            }
-        }
+        if (nvs_err == ESP_OK)
+            return;
         else
             esp_restart();
     }
@@ -380,6 +371,7 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
     {
         if (nvs_set_u8(h, "shft_ind", (uint8_t)display_board_st.use_shift_indicator) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save shift indicator status");
+            // Following two gets are not really needed
         if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
         if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
@@ -387,7 +379,7 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
         nvs_commit(h);
         nvs_close(h);
     }
-    if (lvgl_port_lock(-1))
+    /* if (lvgl_port_lock(-1))
     {
         lv_obj_set_state(objects.save_shift_ind_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
         lv_obj_set_state(objects.inc_shift_mid_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
@@ -401,7 +393,7 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
         lv_obj_set_state(objects.shift_top_spinbox, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
         lv_spinbox_set_value(objects.shift_top_spinbox, display_board_st.shift_top_threshold);
         lvgl_port_unlock();
-    }
+    } */
 }
 #endif
 #pragma endregion
