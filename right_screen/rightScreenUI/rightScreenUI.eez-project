@@ -1897,7 +1897,7 @@
                               "align": "CENTER"
                             },
                             "FOCUSED": {
-                              "text_color": "#ffc200"
+                              "text_color": "#ffab00"
                             }
                           }
                         }

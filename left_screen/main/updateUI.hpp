@@ -102,16 +102,20 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) && (blinkOn || !(display_board_st.rpm_alarm_blink)) : alarmOn);
         if (rpm >= display_board_st.shift_mid_threshold)
         {
-            if ((rpm >= display_board_st.shift_top_threshold) && !(lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED)))
-                lv_obj_add_state(objects.rpm_arc, LV_STATE_FOCUSED);
-            else if (!(lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED)) || lv_obj_has_state(objects.rpm_arc,LV_STATE_FOCUSED))
+            if ((rpm >= display_board_st.shift_top_threshold) && !(lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED))) // In the red zone, not yet focused
             {
-                if (lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED))
+                lv_obj_add_state(objects.rpm_arc, LV_STATE_FOCUSED);     // Make it focused
+                if (lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED)) // Remove orange checked if present
+                    lv_obj_remove_state(objects.rpm_arc, LV_STATE_CHECKED);
+            }
+            else if (!(lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED)) || lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED)) // Not in the red zone, but is not checked or has still red zone
+            {
+                if (lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED)) // remove red zone attributes
                     lv_obj_remove_state(objects.rpm_arc, LV_STATE_FOCUSED);
-                lv_obj_add_state(objects.rpm_arc, LV_STATE_CHECKED);
+                lv_obj_add_state(objects.rpm_arc, LV_STATE_CHECKED); // make it orange
             }
         }
-        else if (lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED) || lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED))
+        else if (lv_obj_has_state(objects.rpm_arc, LV_STATE_FOCUSED) || lv_obj_has_state(objects.rpm_arc, LV_STATE_CHECKED)) // not in orange or red zone, clear both values
             lv_obj_remove_state(objects.rpm_arc, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_CHECKED));
         p_rpm = rpm;
         updatedElements++;
@@ -125,7 +129,7 @@ inline int updateLVGLObjects(bool forceRefresh = false)
             lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, false);
         updatedElements++;
     }
-    // Non RPM alarm override
+    // Non RPM alarm override for tubbies
     if (((p_alarmOn != alarmOn) && !(display_board_st.rpm_alarm_override)) || forceRefresh)
     {
         lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, alarmOn);
@@ -140,22 +144,24 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         esp_timer_get_period(blink_timer_Hdl, &blinkTimerPeriod);
         if (rpm >= display_board_st.shift_top_threshold) // Top zone
         {
-            lv_obj_set_state(objects.main_tabview, LV_STATE_FOCUSED, blinkOn);
-            if (blinkTimerPeriod != FAST_BLINK_PERIOD)
+            lv_obj_set_state(objects.main_tabview, LV_STATE_FOCUSED, blinkOn); // Make it red depending on blinkOn value
+            if (lv_obj_has_state(objects.main_tabview, LV_STATE_CHECKED))      // In any case remove the orange
+                lv_obj_remove_state(objects.main_tabview, LV_STATE_CHECKED);
+            if (blinkTimerPeriod != FAST_BLINK_PERIOD) // Move to fast blinking
                 esp_timer_restart(blink_timer_Hdl, FAST_BLINK_PERIOD);
         }
         else if (rpm >= display_board_st.shift_mid_threshold) // Mid Zone
         {
-            if (lv_obj_has_state(objects.main_tabview, LV_STATE_FOCUSED))
+            if (lv_obj_has_state(objects.main_tabview, LV_STATE_FOCUSED)) // Remove RED if present
                 lv_obj_remove_state(objects.main_tabview, LV_STATE_FOCUSED);
-
             lv_obj_set_state(objects.main_tabview, LV_STATE_CHECKED, blinkOn);
-            if (blinkTimerPeriod != (FAST_BLINK_PERIOD + SLOW_BLINK_PERIOD) / 2)
-                esp_timer_restart(blink_timer_Hdl, (FAST_BLINK_PERIOD + SLOW_BLINK_PERIOD) / 2);
+            if (blinkTimerPeriod != SLOW_BLINK_PERIOD)
+                esp_timer_restart(blink_timer_Hdl, SLOW_BLINK_PERIOD);
         }
         else // Low Zone
         {
-            lv_obj_remove_state(objects.main_tabview, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_CHECKED));
+            if (lv_obj_has_state(objects.main_tabview, LV_STATE_CHECKED) || lv_obj_has_state(objects.main_tabview, LV_STATE_FOCUSED)) // If red or orange
+                lv_obj_remove_state(objects.main_tabview, (lv_state_t)(LV_STATE_FOCUSED | LV_STATE_CHECKED));
             if (blinkTimerPeriod != SLOW_BLINK_PERIOD)
                 esp_timer_restart(blink_timer_Hdl, SLOW_BLINK_PERIOD);
         }
