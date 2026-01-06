@@ -371,7 +371,7 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
     {
         if (nvs_set_u8(h, "shft_ind", (uint8_t)display_board_st.use_shift_indicator) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save shift indicator status");
-            // Following two gets are not really needed
+        // Following two gets are not really needed
         if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
         if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
@@ -379,21 +379,29 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
         nvs_commit(h);
         nvs_close(h);
     }
-    /* if (lvgl_port_lock(-1))
+}
+
+/// @brief Updates the 10-100 RPM decimation indicator
+/// @param e LV event VALUE CHANGED
+extern "C" void action_decimation_update(lv_event_t *e)
+{
+    if (lv_obj_has_state(objects.decimation_sw, LV_STATE_CHECKED))
+        display_board_st.rpm_decimation = 100;
+    else
+        display_board_st.rpm_decimation = 10;
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
     {
-        lv_obj_set_state(objects.save_shift_ind_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_obj_set_state(objects.inc_shift_mid_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_obj_set_state(objects.dec_shift_mid_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_obj_set_state(objects.inc_shift_top_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_obj_set_state(objects.dec_shift_top_btn, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-
-        lv_obj_set_state(objects.shift_mid_spinbox, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_spinbox_set_value(objects.shift_mid_spinbox, display_board_st.shift_mid_threshold);
-
-        lv_obj_set_state(objects.shift_top_spinbox, LV_STATE_DISABLED, !(display_board_st.use_shift_indicator));
-        lv_spinbox_set_value(objects.shift_top_spinbox, display_board_st.shift_top_threshold);
-        lvgl_port_unlock();
-    } */
+        if (nvs_set_u32(h, "rpm_dec", display_board_st.rpm_decimation) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save RPM decimator status");
+        
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    p_rpm = 1000; // Force refresh indirectly
+    rpm = 0;
 }
 #endif
 #pragma endregion
@@ -501,6 +509,8 @@ extern "C" void app_main()
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
         if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift top threshold from NVS");
+        if (nvs_get_u32(h, "rpm_dec", &(display_board_st.rpm_decimation)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve RPM decimation factor from NVS");
 
         if (nvs_get_u8(h, "dark_bg", &(display_board_st.darkBrightness)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the dark mode brightness value.");
@@ -643,7 +653,7 @@ extern "C" void app_main()
 
         if (firstBoot)
         {
-            #ifdef CONFIG_RIGHT_SIDE_DISPLAY
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
             if (lvgl_port_lock(-1))
             {
                 lv_obj_add_state(objects.speed, LV_STATE_CHECKED);
@@ -653,11 +663,12 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
-                    lv_label_set_text(objects.speed, "000");
+                    //lv_label_set_text(objects.speed, "000");
+                    updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
             }
-            #elifdef CONFIG_LEFT_SIDE_DISPLAY
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
             if (lvgl_port_lock(-1))
             {
                 lv_obj_add_state(objects.rpm, LV_STATE_CHECKED);
@@ -667,11 +678,12 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
-                    lv_label_set_text(objects.rpm, "0000");
+                    //lv_label_set_text(objects.rpm, "0000");
+                    updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
             }
-            #endif
+#endif
         }
     }
     vTaskResume(CAN_RX_tsk_hdl);

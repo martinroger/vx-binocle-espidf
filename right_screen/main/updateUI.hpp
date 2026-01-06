@@ -13,7 +13,7 @@
 #include "theme.hpp"
 #include "twai_daemon.h"
 
-#define SLOW_BLINK_PERIOD 300000
+#define SLOW_BLINK_PERIOD 200000
 #define FAST_BLINK_PERIOD 100000
 
 bool p_blinkOn, blinkOn = false; // Whether the blinker is sending a valid value or not
@@ -53,7 +53,7 @@ inline int updateLVGLObjects(bool forceRefresh = false)
 
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
 
-    if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10) || forceRefresh)
+    if ((long)(p_speed_kph * 10) != (long)(speed_kph * 10) || forceRefresh) // Probably should use lround
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
         animateTargetArc(objects.speed_arc, (speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)) * 10);
@@ -62,8 +62,8 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
-        if ((long)round(speed_kph) != (long)round(p_speed_kph))
-            lv_label_set_text_fmt(objects.speed, "%03ld", (long)round(speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)));
+        if (lround(speed_kph) != lround(p_speed_kph))
+            lv_label_set_text_fmt(objects.speed, "%03ld", lround(speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)));
         p_speed_kph = speed_kph;
         updatedElements++;
     }
@@ -89,7 +89,7 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     }
 
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
-    if ((p_rpm / 10) != (rpm / 10) || forceRefresh)
+    if (lround(p_rpm / 10.0) != lround(rpm / 10.0) || forceRefresh)
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
         animateTargetArc(objects.rpm_arc, rpm);
@@ -98,7 +98,8 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
-        lv_label_set_text_fmt(objects.rpm, "%04ld", (long)((rpm / 10) * 10));
+        if (((lround(p_rpm / (float)(display_board_st.rpm_decimation)) != lround(rpm / (float)(display_board_st.rpm_decimation)))) || forceRefresh)
+            lv_label_set_text_fmt(objects.rpm, "%04ld", (display_board_st.rpm_decimation * lround(((float)rpm) / (display_board_st.rpm_decimation))));
         // lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) && (blinkOn || !(display_board_st.rpm_alarm_blink)) : alarmOn);
         if (rpm >= display_board_st.shift_mid_threshold)
         {

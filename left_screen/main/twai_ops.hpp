@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -956,7 +957,7 @@ inline esp_err_t itf_fast_metrics_Handler(twai_message_t *rxMsg)
     }
     if (binocan_itf_fast_metrics_itf_rpm_is_in_range(binocan_itf_fast_metrics_msg.itf_rpm))
     {
-        rpm = (uint32_t)round(binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm));
+        rpm = (uint32_t)lround(binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm));
     }
     else
     {
@@ -1075,330 +1076,48 @@ inline esp_err_t dispatchFrame(twai_message_t *rxMsg)
     case BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID:
     {
         ret = itf_active_hi_lo_Handler(rxMsg);
-        /* if (binocan_itf_active_hi_lo_unpack(&binocan_itf_active_hi_lo_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-        {
-            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-            break;
-        }
-        if (binocan_itf_active_hi_lo_itf_abs_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_abs_al_tt))
-        {
-            absOn = !(binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "ABS telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_abs_al_tt);
-            absOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_airbag_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt))
-        {
-            airbagOn = !(binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Airbag telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_airbag_al_tt);
-            airbagOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_cel_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_cel_al_tt))
-        {
-            milOn = !(binocan_itf_active_hi_lo_itf_cel_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_cel_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_CEL_AL_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Check Engine Light telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_cel_al_tt);
-            milOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt))
-        {
-            highBeamOn = (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_HI_BEAMS_AH_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "High beams telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt);
-            highBeamOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_brake_low_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt))
-        {
-            brakesOn = !(binocan_itf_active_hi_lo_itf_brake_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BRAKE_LOW_AL_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Low brake fluid telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt);
-            brakesOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt))
-        {
-            lowCoolantOn = (binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AH_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Low coolant level telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt);
-            lowCoolantOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_fuel_low_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_fuel_low_tt))
-        {
-            lowFuelOn = (binocan_itf_active_hi_lo_itf_fuel_low_tt_decode(binocan_itf_active_hi_lo_msg.itf_fuel_low_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_FUEL_LOW_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Low fuel level telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_fuel_low_tt);
-            lowFuelOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt))
-        {
-            lowOilOn = !(binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OIL_PRESSURE_AL_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Low oil pressure telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt);
-            lowOilOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_alternator_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt))
-        {
-            batteryOn = !(binocan_itf_active_hi_lo_itf_alternator_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALTERNATOR_AL_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Battery or alternator telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_alternator_al_tt);
-            batteryOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_over_temperature_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_over_temperature_tt))
-        {
-            overTemperatureOn = (binocan_itf_active_hi_lo_itf_over_temperature_tt_decode(binocan_itf_active_hi_lo_msg.itf_over_temperature_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OVER_TEMPERATURE_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Coolant overtemperature telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_over_temperature_tt);
-            overTemperatureOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_parking_brake_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt))
-        {
-            parkingBrakeOn = !(binocan_itf_active_hi_lo_itf_parking_brake_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_PARKING_BRAKE_AL_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Parking brake telltale signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt);
-            parkingBrakeOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) && binocan_itf_active_hi_lo_itf_right_turn_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt))
-        {
-            indicatorsOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE) ||
-                           (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
-            leftTurnOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE);
-            rightTurnOn = (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Turn indicators telltale signal out of range: L %d - R %d", binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt, binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt);
-            indicatorsOn = true;
-            rightTurnOn = true;
-            leftTurnOn = true;
-        }
-
-        if (binocan_itf_active_hi_lo_itf_ignition_ah_st_is_in_range(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st))
-        {
-            ignitionST = (binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Ignition Status signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_ignition_ah_st);
-            ignitionST = false; // Default value
-        }
-        if (binocan_itf_active_hi_lo_itf_alarm_ah_is_in_range(binocan_itf_active_hi_lo_msg.itf_alarm_ah))
-        {
-            alarmOn = (binocan_itf_active_hi_lo_itf_alarm_ah_decode(binocan_itf_active_hi_lo_msg.itf_alarm_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALARM_AH_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Alarm signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_alarm_ah);
-            alarmOn = true; // Default value
-        }
-        if (binocan_itf_active_hi_lo_itf_backlight_ah_is_in_range(binocan_itf_active_hi_lo_msg.itf_backlight_ah))
-        {
-            headlightsOn = (binocan_itf_active_hi_lo_itf_backlight_ah_decode(binocan_itf_active_hi_lo_msg.itf_backlight_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BACKLIGHT_AH_ON_CHOICE);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Backlight signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_backlight_ah);
-            headlightsOn = true; // Default value
-        }
-
-        ESP_LOGD(__func__, "Telltales: ABS %d, Airbag %d, CEL %d, High Beams %d, Low Brake Fluid %d, Low Coolant %d, Low Fuel %d, Low Oil Pressure %d, Battery/Alternator %d, Over Temperature %d, Parking Brake %d, Indicators %d, Ignition %d, Alarm %d, Headlights %d",
-                 absOn, airbagOn, milOn, highBeamOn, brakesOn, lowCoolantOn, lowFuelOn, lowOilOn, batteryOn,
-                 overTemperatureOn, parkingBrakeOn, indicatorsOn, ignitionST, alarmOn, headlightsOn); */
     }
     break;
 
     case BINOCAN_ITF_SLOW_METRICS_FRAME_ID:
     {
         ret = itf_slow_metrics_Handler(rxMsg);
-        /* if (binocan_itf_slow_metrics_unpack(&binocan_itf_slow_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-        {
-            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-            break;
-        }
-
-        if (binocan_itf_slow_metrics_itf_coolant_temp_is_in_range(binocan_itf_slow_metrics_msg.itf_coolant_temp))
-        {
-            coolant_degC = (uint8_t)round(binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp));
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Coolant temperature signal out of range: %d", binocan_itf_slow_metrics_msg.itf_coolant_temp);
-            coolant_degC = 255;       // Default value
-            overTemperatureOn = true; // Set over temperature on if coolant is out of range
-        }
-
-        if (binocan_itf_slow_metrics_itf_fuel_level_pc_is_in_range(binocan_itf_slow_metrics_msg.itf_fuel_level_pc))
-        {
-            fuelLevel_pc = (uint8_t)round(binocan_itf_slow_metrics_itf_fuel_level_pc_decode(binocan_itf_slow_metrics_msg.itf_fuel_level_pc));
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Fuel level signal out of range: %d", binocan_itf_slow_metrics_msg.itf_fuel_level_pc);
-            fuelLevel_pc = 0; // Default value
-            lowFuelOn = true; // Set low fuel on if fuel level is out of range
-        }
-
-        if (binocan_itf_slow_metrics_itf_lv_voltage_v_is_in_range(binocan_itf_slow_metrics_msg.itf_lv_voltage_v))
-        {
-            lvVoltage_v = (float)binocan_itf_slow_metrics_itf_lv_voltage_v_decode(binocan_itf_slow_metrics_msg.itf_lv_voltage_v);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "LV Voltage signal out of range: %d", binocan_itf_slow_metrics_msg.itf_lv_voltage_v);
-            batteryOn = true; // Set battery on if LV voltage is out of range
-        }
-
-        ESP_LOGD(__func__, "Slow Metrics: Coolant %d, Fuel Level %d, LV Voltage %.2f",
-                 coolant_degC, fuelLevel_pc, lvVoltage_v); */
     }
     break;
 
     case BINOCAN_ITF_FAST_METRICS_FRAME_ID:
     {
         ret = itf_fast_metrics_Handler(rxMsg);
-        /*         if (binocan_itf_fast_metrics_unpack(&binocan_itf_fast_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-                {
-                    ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-                    break;
-                }
-                if (binocan_itf_fast_metrics_itf_rpm_is_in_range(binocan_itf_fast_metrics_msg.itf_rpm))
-                {
-                    rpm = (uint32_t)round(binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm));
-                }
-                else
-                {
-                    ESP_LOGW(__func__, "RPM signal out of range: %d", binocan_itf_fast_metrics_msg.itf_rpm);
-                    rpm = 0; // Default value
-                }
-
-                if (binocan_itf_fast_metrics_itf_speed_kph_is_in_range(binocan_itf_fast_metrics_msg.itf_speed_kph))
-                {
-                    speed_kph = (float)binocan_itf_fast_metrics_itf_speed_kph_decode(binocan_itf_fast_metrics_msg.itf_speed_kph);
-                }
-                else
-                {
-                    ESP_LOGW(__func__, "Speed signal out of range: %d", binocan_itf_fast_metrics_msg.itf_speed_kph);
-                    speed_kph = 0; // Default value
-                }
-
-                ESP_LOGD(__func__, "Vehicle Metrics: RPM %lu, Speed %.2f", rpm, speed_kph); */
     }
     break;
 
     case BINOCAN_ITF_ODOMETER_FRAME_ID:
     {
         ret = itf_odometer_Handler(rxMsg);
-        /* if (binocan_itf_odometer_unpack(&binocan_itf_odometer_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-        {
-            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-            break;
-        }
-        if (binocan_itf_odometer_itf_odometer_km_is_in_range(binocan_itf_odometer_msg.itf_odometer_km) && binocan_itf_odometer_itf_odo_rem_m_is_in_range(binocan_itf_odometer_msg.itf_odo_rem_m))
-        {
-            odometer_km = binocan_itf_odometer_itf_odometer_km_decode(binocan_itf_odometer_msg.itf_odometer_km) + binocan_itf_odometer_itf_odo_rem_m_decode(binocan_itf_odometer_msg.itf_odo_rem_m) / 1000.0;
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Odometer could not be decoded : %d + %d /1000", binocan_itf_odometer_itf_odometer_km_decode(binocan_itf_odometer_msg.itf_odometer_km), binocan_itf_odometer_itf_odo_rem_m_decode(binocan_itf_odometer_msg.itf_odo_rem_m));
-            odometer_km = 0;
-        }
-
-        if (binocan_itf_odometer_itf_trip_km_is_in_range(binocan_itf_odometer_msg.itf_trip_km) && binocan_itf_odometer_itf_trip_rem_m_is_in_range(binocan_itf_odometer_msg.itf_trip_rem_m))
-        {
-            trip_km = binocan_itf_odometer_itf_trip_km_decode(binocan_itf_odometer_msg.itf_trip_km) + binocan_itf_odometer_itf_trip_rem_m_decode(binocan_itf_odometer_msg.itf_trip_rem_m) / 1000.0;
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Trip could not be decoded : %d + %d /1000", binocan_itf_odometer_itf_trip_km_decode(binocan_itf_odometer_msg.itf_trip_km), binocan_itf_odometer_itf_trip_rem_m_decode(binocan_itf_odometer_msg.itf_trip_rem_m));
-            trip_km = 0;
-        }
-
-        ESP_LOGD(__func__, "Odometer : %0.1f km Trip: %0.1f", odometer_km, trip_km); */
     }
     break;
 
     case BINOCAN_EXT_OIL_METRICS_FRAME_ID:
     {
         ret = ext_oil_metrics_Handler(rxMsg);
-        /* if (binocan_ext_oil_metrics_unpack(&binocan_ext_oil_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-        {
-            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-            break;
-        } */
     }
     break;
 
     case BINOCAN_EXT_CHARGECOOLING_METRICS_FRAME_ID:
     {
         ret = ext_chargecooling_metrics_Handler(rxMsg);
-        /*  if (binocan_ext_chargecooling_metrics_unpack(&binocan_ext_chargecooling_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-         {
-             ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-             break;
-         } */
     }
     break;
 
     case BINOCAN_ITF_BOARD_ST_FRAME_ID:
     {
         ret = itf_board_st_Handler(rxMsg);
-        /* if (binocan_itf_board_st_unpack(&binocan_itf_board_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-        {
-            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-            break;
-        }
-        if (binocan_itf_board_st_itf_sm_st_is_in_range(binocan_itf_board_st_msg.itf_sm_st))
-        {
-            itf_board_st = (uint8_t)binocan_itf_board_st_itf_sm_st_decode(binocan_itf_board_st_msg.itf_sm_st);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "ITF SM Status signal out of range: %d", binocan_itf_board_st_msg.itf_sm_st);
-            itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE; // Default value
-        } */
     }
     break;
 
     case BINOCAN_ITF_BOARD_VERSION_FRAME_ID:
     {
         ret = itf_board_version_Handler(rxMsg);
-        /* if (binocan_itf_board_version_unpack(&binocan_itf_board_version_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
-        {
-            ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
-            break;
-        } */
     }
     break;
 

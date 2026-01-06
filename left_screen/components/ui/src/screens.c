@@ -68,7 +68,7 @@ void create_screen_main_scr() {
                             lv_obj_set_pos(obj, 0, 0);
                             lv_obj_set_size(obj, 478, 478);
                             lv_arc_set_range(obj, 0, 8000);
-                            lv_arc_set_value(obj, 500);
+                            lv_arc_set_value(obj, 0);
                             lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICKABLE);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_arc_opa(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
@@ -303,6 +303,33 @@ void create_screen_main_scr() {
                     {
                         lv_obj_t *parent_obj = obj;
                         {
+                            // decimation_sw
+                            lv_obj_t *obj = lv_switch_create(parent_obj);
+                            objects.decimation_sw = obj;
+                            lv_obj_set_pos(obj, 0, -204);
+                            lv_obj_set_size(obj, 50, 25);
+                            lv_obj_add_event_cb(obj, action_decimation_update, LV_EVENT_VALUE_CHANGED, (void *)0);
+                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                        }
+                        {
+                            lv_obj_t *obj = lv_label_create(parent_obj);
+                            lv_obj_set_pos(obj, -45, -204);
+                            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_label_set_text(obj, "10");
+                        }
+                        {
+                            lv_obj_t *obj = lv_label_create(parent_obj);
+                            lv_obj_set_pos(obj, 52, -204);
+                            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_label_set_text(obj, "100");
+                        }
+                        {
                             // override alarm sw
                             lv_obj_t *obj = lv_switch_create(parent_obj);
                             objects.override_alarm_sw = obj;
@@ -425,19 +452,19 @@ void create_screen_main_scr() {
                             // shift_ind_sw
                             lv_obj_t *obj = lv_switch_create(parent_obj);
                             objects.shift_ind_sw = obj;
-                            lv_obj_set_pos(obj, -127, -25);
+                            lv_obj_set_pos(obj, -93, -29);
                             lv_obj_set_size(obj, 50, 25);
                             lv_obj_add_event_cb(obj, action_shift_indicator_toggled, LV_EVENT_VALUE_CHANGED, (void *)0);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                         }
                         {
                             lv_obj_t *obj = lv_label_create(parent_obj);
-                            lv_obj_set_pos(obj, 35, -25);
+                            lv_obj_set_pos(obj, 28, -29);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_label_set_text(obj, "Use SHIFT indicator");
+                            lv_label_set_text(obj, "BLINKFEST !!!");
                         }
                         {
                             // shift_mid_spinbox
@@ -567,7 +594,7 @@ void create_screen_main_scr() {
                             // save_shift_ind_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.save_shift_ind_btn = obj;
-                            lv_obj_set_pos(obj, -7, 172);
+                            lv_obj_set_pos(obj, 0, 172);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, 50);
                             lv_obj_add_event_cb(obj, action_save_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);

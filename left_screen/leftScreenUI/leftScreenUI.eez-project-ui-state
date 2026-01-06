@@ -1,6 +1,7 @@
 {
   "navigation": {
     "selectedUserPageObject": "[leftScreenUI.eez-project]:/userPages/0",
+    "selectedActionObject": "[leftScreenUI.eez-project]:/actions/8",
     "selectedStyleObject": "[leftScreenUI.eez-project]:/lvglStyles/styles/0",
     "selectedFontObject": "[leftScreenUI.eez-project]:/fonts/5",
     "subnavigationSelectedItems": {}
@@ -165,7 +166,8 @@
                       "enableClose": false,
                       "icon": "svg:hierarchy"
                     }
-                  ]
+                  ],
+                  "active": true
                 },
                 {
                   "type": "tabset",
@@ -236,8 +238,7 @@
                       "enableClose": false,
                       "icon": "svg:properties"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -1001,13 +1002,11 @@
           "0": {
             "0": {
               "1": {},
-              "2": {
-                "$selected": true
-              }
+              "2": {}
             },
             "1": {
-              "2": {},
-              "17": {}
+              "5": {},
+              "20": {}
             },
             "2": {}
           }

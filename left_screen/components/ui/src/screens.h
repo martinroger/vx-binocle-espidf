@@ -28,6 +28,7 @@ typedef struct _objects_t {
     lv_obj_t *itf_state;
     lv_obj_t *interlock_state;
     lv_obj_t *settings_tab;
+    lv_obj_t *decimation_sw;
     lv_obj_t *override_alarm_sw;
     lv_obj_t *rpm_alarm_spinbox;
     lv_obj_t *inc_rpm_alarm_btn;
