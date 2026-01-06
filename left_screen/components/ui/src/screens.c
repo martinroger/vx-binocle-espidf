@@ -73,18 +73,19 @@ void create_screen_main_scr() {
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_arc_opa(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_arc_rounded(obj, false, LV_PART_INDICATOR | LV_STATE_DEFAULT);
-                            lv_obj_set_style_arc_color(obj, lv_color_hex(0xff999999), LV_PART_INDICATOR | LV_STATE_DEFAULT);
-                            lv_obj_set_style_arc_opa(obj, 100, LV_PART_INDICATOR | LV_STATE_DEFAULT);
+                            lv_obj_set_style_arc_color(obj, lv_color_hex(0xff00b734), LV_PART_INDICATOR | LV_STATE_DEFAULT);
+                            lv_obj_set_style_arc_opa(obj, 180, LV_PART_INDICATOR | LV_STATE_DEFAULT);
                             lv_obj_set_style_arc_width(obj, 12, LV_PART_INDICATOR | LV_STATE_DEFAULT);
                             lv_obj_set_style_arc_color(obj, lv_color_hex(0xffff3a3a), LV_PART_INDICATOR | LV_STATE_FOCUSED);
                             lv_obj_set_style_arc_opa(obj, 255, LV_PART_INDICATOR | LV_STATE_FOCUSED);
                             lv_obj_set_style_arc_color(obj, lv_color_hex(0xffffab00), LV_PART_INDICATOR | LV_STATE_CHECKED);
                             lv_obj_set_style_arc_opa(obj, 255, LV_PART_INDICATOR | LV_STATE_CHECKED);
-                            lv_obj_set_style_bg_color(obj, lv_color_hex(0xffff3a3a), LV_PART_KNOB | LV_STATE_DEFAULT);
                             lv_obj_set_style_pad_top(obj, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
                             lv_obj_set_style_pad_bottom(obj, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
                             lv_obj_set_style_pad_left(obj, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
                             lv_obj_set_style_pad_right(obj, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
+                            lv_obj_set_style_bg_color(obj, lv_color_hex(0xffff3a3a), LV_PART_KNOB | LV_STATE_DEFAULT);
+                            lv_obj_set_style_opa(obj, 0, LV_PART_KNOB | LV_STATE_DEFAULT);
                         }
                         {
                             // rpm
@@ -116,7 +117,7 @@ void create_screen_main_scr() {
                             lv_obj_clear_flag(obj, LV_OBJ_FLAG_CLICK_FOCUSABLE|LV_OBJ_FLAG_GESTURE_BUBBLE|LV_OBJ_FLAG_PRESS_LOCK|LV_OBJ_FLAG_SCROLLABLE|LV_OBJ_FLAG_SCROLL_CHAIN_HOR|LV_OBJ_FLAG_SCROLL_CHAIN_VER|LV_OBJ_FLAG_SCROLL_ELASTIC|LV_OBJ_FLAG_SCROLL_MOMENTUM|LV_OBJ_FLAG_SCROLL_WITH_ARROW|LV_OBJ_FLAG_SNAPPABLE);
                             lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffffc200), LV_PART_MAIN | LV_STATE_FOCUSED);
+                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffffab00), LV_PART_MAIN | LV_STATE_FOCUSED);
                             lv_label_set_text(obj, "100");
                         }
                         {
@@ -437,78 +438,13 @@ void create_screen_main_scr() {
                             lv_label_set_text(obj, "Use SHIFT indicator");
                         }
                         {
-                            // shift_low_spinbox
-                            lv_obj_t *obj = lv_spinbox_create(parent_obj);
-                            objects.shift_low_spinbox = obj;
-                            lv_obj_set_pos(obj, 7, 36);
-                            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-                            lv_spinbox_set_digit_format(obj, 5, 0);
-                            lv_spinbox_set_range(obj, 1500, 10000);
-                            lv_spinbox_set_rollover(obj, false);
-                            lv_spinbox_set_step(obj, 1);
-                            lv_spinbox_set_value(obj, 0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
-                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_60px, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffa1a1a1), LV_PART_MAIN | LV_STATE_DISABLED);
-                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffa1a1a1), LV_PART_SELECTED | LV_STATE_DISABLED);
-                            lv_obj_set_style_text_color(obj, lv_color_hex(0xffa1a1a1), LV_PART_CURSOR | LV_STATE_DISABLED);
-                            lv_obj_set_style_bg_color(obj, lv_color_hex(0xff626262), LV_PART_CURSOR | LV_STATE_DISABLED);
-                            lv_obj_set_style_bg_color(obj, lv_color_hex(0xff00b734), LV_PART_CURSOR | LV_STATE_DEFAULT);
-                        }
-                        {
-                            // inc_shift_low_btn
-                            lv_obj_t *obj = lv_button_create(parent_obj);
-                            objects.inc_shift_low_btn = obj;
-                            lv_obj_set_pos(obj, 137, 36);
-                            lv_obj_set_size(obj, 50, 50);
-                            lv_obj_add_event_cb(obj, action_inc_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
-                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_obj_set_style_bg_color(obj, lv_color_hex(0xff00b734), LV_PART_MAIN | LV_STATE_DEFAULT);
-                            {
-                                lv_obj_t *parent_obj = obj;
-                                {
-                                    lv_obj_t *obj = lv_label_create(parent_obj);
-                                    lv_obj_set_pos(obj, 0, 0);
-                                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-                                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                                    lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
-                                    lv_label_set_text(obj, "+");
-                                }
-                            }
-                        }
-                        {
-                            // dec_shift_low_btn
-                            lv_obj_t *obj = lv_button_create(parent_obj);
-                            objects.dec_shift_low_btn = obj;
-                            lv_obj_set_pos(obj, -123, 36);
-                            lv_obj_set_size(obj, 50, 50);
-                            lv_obj_add_event_cb(obj, action_dec_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
-                            lv_obj_add_state(obj, LV_STATE_DISABLED);
-                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                            lv_obj_set_style_bg_color(obj, lv_color_hex(0xff00b734), LV_PART_MAIN | LV_STATE_DEFAULT);
-                            {
-                                lv_obj_t *parent_obj = obj;
-                                {
-                                    lv_obj_t *obj = lv_label_create(parent_obj);
-                                    lv_obj_set_pos(obj, 0, 0);
-                                    lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
-                                    lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
-                                    lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
-                                    lv_label_set_text(obj, "-");
-                                }
-                            }
-                        }
-                        {
                             // shift_mid_spinbox
                             lv_obj_t *obj = lv_spinbox_create(parent_obj);
                             objects.shift_mid_spinbox = obj;
-                            lv_obj_set_pos(obj, 7, 107);
+                            lv_obj_set_pos(obj, 0, 29);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_spinbox_set_digit_format(obj, 5, 0);
-                            lv_spinbox_set_range(obj, 0, 10000);
+                            lv_spinbox_set_range(obj, 1500, 10000);
                             lv_spinbox_set_rollover(obj, false);
                             lv_spinbox_set_step(obj, 1);
                             lv_spinbox_set_value(obj, 0);
@@ -526,7 +462,7 @@ void create_screen_main_scr() {
                             // inc_shift_mid_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.inc_shift_mid_btn = obj;
-                            lv_obj_set_pos(obj, 137, 107);
+                            lv_obj_set_pos(obj, 130, 29);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_inc_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
                             lv_obj_add_state(obj, LV_STATE_DISABLED);
@@ -548,7 +484,7 @@ void create_screen_main_scr() {
                             // dec_shift_mid_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.dec_shift_mid_btn = obj;
-                            lv_obj_set_pos(obj, -123, 107);
+                            lv_obj_set_pos(obj, -130, 29);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_dec_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
                             lv_obj_add_state(obj, LV_STATE_DISABLED);
@@ -570,7 +506,7 @@ void create_screen_main_scr() {
                             // shift_top_spinbox
                             lv_obj_t *obj = lv_spinbox_create(parent_obj);
                             objects.shift_top_spinbox = obj;
-                            lv_obj_set_pos(obj, 7, 178);
+                            lv_obj_set_pos(obj, 0, 100);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
                             lv_spinbox_set_digit_format(obj, 5, 0);
                             lv_spinbox_set_range(obj, 0, 10000);
@@ -591,7 +527,7 @@ void create_screen_main_scr() {
                             // inc_shift_top_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.inc_shift_top_btn = obj;
-                            lv_obj_set_pos(obj, 137, 178);
+                            lv_obj_set_pos(obj, 130, 100);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_inc_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
                             lv_obj_add_state(obj, LV_STATE_DISABLED);
@@ -613,7 +549,7 @@ void create_screen_main_scr() {
                             // dec_shift_top_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.dec_shift_top_btn = obj;
-                            lv_obj_set_pos(obj, -123, 178);
+                            lv_obj_set_pos(obj, -130, 100);
                             lv_obj_set_size(obj, 50, 50);
                             lv_obj_add_event_cb(obj, action_dec_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
                             lv_obj_add_state(obj, LV_STATE_DISABLED);
@@ -635,7 +571,7 @@ void create_screen_main_scr() {
                             // save_shift_ind_btn
                             lv_obj_t *obj = lv_button_create(parent_obj);
                             objects.save_shift_ind_btn = obj;
-                            lv_obj_set_pos(obj, 0, 250);
+                            lv_obj_set_pos(obj, -7, 172);
                             lv_obj_set_size(obj, LV_SIZE_CONTENT, 50);
                             lv_obj_add_event_cb(obj, action_save_rpm_spinbox, LV_EVENT_CLICKED, (void *)0);
                             lv_obj_add_state(obj, LV_STATE_DISABLED);
@@ -654,7 +590,7 @@ void create_screen_main_scr() {
                         }
                         {
                             lv_obj_t *obj = lv_obj_create(parent_obj);
-                            lv_obj_set_pos(obj, 7, 499);
+                            lv_obj_set_pos(obj, 0, 421);
                             lv_obj_set_size(obj, LV_PCT(100), LV_PCT(30));
                             lv_obj_set_style_pad_left(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_pad_top(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);

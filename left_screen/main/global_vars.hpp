@@ -54,7 +54,6 @@ struct board_ST
     uint32_t rpm_alarm_threshold = 6000; // RPM value at which to trigger alarm
     bool rpm_alarm_blink = false;        // Whether the alarm blinker is enabled
     bool use_shift_indicator = false;    // Activation of the SHIFT alarm
-    uint32_t shift_low_threshold = 4500; // Green SHIFT RPM threshold
     uint32_t shift_mid_threshold = 5500; // Orange SHIFT RPM threshold
     uint32_t shift_top_threshold = 6500; // Red SHIFT RPM threshold
     parsed_app_meta_t *app_metadata;     // App metadata

@@ -35,9 +35,6 @@ typedef struct _objects_t {
     lv_obj_t *save_rpm_alarm_btn;
     lv_obj_t *blink_alarm_sw;
     lv_obj_t *shift_ind_sw;
-    lv_obj_t *shift_low_spinbox;
-    lv_obj_t *inc_shift_low_btn;
-    lv_obj_t *dec_shift_low_btn;
     lv_obj_t *shift_mid_spinbox;
     lv_obj_t *inc_shift_mid_btn;
     lv_obj_t *dec_shift_mid_btn;
