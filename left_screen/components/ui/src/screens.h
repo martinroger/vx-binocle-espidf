@@ -56,6 +56,7 @@ typedef struct _objects_t {
     lv_obj_t *project_info;
     lv_obj_t *current_partition;
     lv_obj_t *reboot_factory;
+    lv_obj_t *reset_settings_btn;
 } objects_t;
 
 extern objects_t objects;

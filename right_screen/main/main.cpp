@@ -36,6 +36,30 @@ extern "C" void action_reboot_factory(lv_event_t *e)
     }
 }
 
+/// @brief Erases the NVS for all keys. Triggers a restart if the button sequence cannot be completed
+/// @param e LV event is clicked
+extern "C" void action_reset_settings(lv_event_t *e)
+{
+    esp_err_t nvs_err = nvs_flash_erase();
+    if (nvs_err == ESP_OK)
+    {
+        nvs_err = nvs_flash_init();
+        if (lvgl_port_lock(-1) && (nvs_err == ESP_OK))
+        {
+            lv_obj_set_state(objects.reset_settings_btn, LV_STATE_DISABLED, true);
+            lvgl_port_unlock();
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            if (lvgl_port_lock(-1))
+            {
+                lv_obj_set_state(objects.reset_settings_btn, LV_STATE_DISABLED, false);
+                lvgl_port_unlock();
+            }
+        }
+        else
+            esp_restart();
+    }
+}
+
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
 
 /// @brief Test brightness at slider value when pressing
@@ -227,6 +251,8 @@ extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
     }
 }
 
+/// @brief Check switch to blink RPM reading when RPM is above threshold has been toggled
+/// @param e LV event VALUE_CHANGED
 extern "C" void action_blink_rpm_alarm_toggled(lv_event_t *e)
 {
     display_board_st.rpm_alarm_blink = lv_obj_has_state(objects.blink_alarm_sw, LV_STATE_CHECKED);
@@ -342,6 +368,8 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
     }
 }
 
+/// @brief The "blinkfest" shift indicator has been checked or unchecked
+/// @param e LV event VALUE_CHANGED
 extern "C" void action_shift_indicator_toggled(lv_event_t *e)
 {
     display_board_st.use_shift_indicator = lv_obj_has_state(objects.shift_ind_sw, LV_STATE_CHECKED);
@@ -620,6 +648,39 @@ extern "C" void app_main()
         esp_ota_mark_app_valid_cancel_rollback();
         display_board_st.internal_ST = XDB_SM_ST_OK;
         ESP_LOGI(__func__, "App image is valid.");
+
+        if (firstBoot)
+        {
+            #ifdef CONFIG_RIGHT_SIDE_DISPLAY
+            if (lvgl_port_lock(-1))
+            {
+                lv_obj_add_state(objects.speed, LV_STATE_CHECKED);
+                lv_label_set_text(objects.speed, "OTA OK");
+                lvgl_port_unlock();
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                if (lvgl_port_lock(-1))
+                {
+                    lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
+                    lv_label_set_text(objects.speed, "000");
+                    lvgl_port_unlock();
+                }
+            }
+            #elifdef CONFIG_LEFT_SIDE_DISPLAY
+            if (lvgl_port_lock(-1))
+            {
+                lv_obj_add_state(objects.rpm, LV_STATE_CHECKED);
+                lv_label_set_text(objects.rpm, "OTA OK");
+                lvgl_port_unlock();
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                if (lvgl_port_lock(-1))
+                {
+                    lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
+                    lv_label_set_text(objects.rpm, "0000");
+                    lvgl_port_unlock();
+                }
+            }
+            #endif
+        }
     }
     vTaskResume(CAN_RX_tsk_hdl);
 

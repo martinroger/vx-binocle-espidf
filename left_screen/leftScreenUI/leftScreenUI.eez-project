@@ -166,6 +166,14 @@
       "localVariables": [],
       "userProperties": [],
       "name": "blink_rpm_alarm_toggled"
+    },
+    {
+      "objID": "e0372416-d075-4cfc-edb5-85918ce6e0cd",
+      "components": [],
+      "connectionLines": [],
+      "localVariables": [],
+      "userProperties": [],
+      "name": "reset_settings"
     }
   ],
   "userPages": [
@@ -418,6 +426,7 @@
                       "clickableFlagType": "literal",
                       "flagScrollbarMode": "",
                       "flagScrollDirection": "",
+                      "checkedState": false,
                       "checkedStateType": "literal",
                       "disabledStateType": "literal",
                       "states": "",
@@ -431,6 +440,10 @@
                             },
                             "FOCUSED": {
                               "text_color": "ff3a3a"
+                            },
+                            "CHECKED": {
+                              "text_font": "whiteRabbit_70px",
+                              "text_color": "#00b734"
                             }
                           }
                         }
@@ -3482,7 +3495,7 @@
                       "eventHandlers": [
                         {
                           "objID": "5770d0b3-d905-4f7a-e65a-e98427bd8bf9",
-                          "eventName": "RELEASED",
+                          "eventName": "CLICKED",
                           "handlerType": "action",
                           "action": "reboot_factory",
                           "userData": 0
@@ -3562,6 +3575,113 @@
                           "MAIN": {
                             "DEFAULT": {
                               "align": "CENTER"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0
+                    },
+                    {
+                      "objID": "4bb8a6b4-f0d1-4dc3-e9c9-f9a99f1e5565",
+                      "type": "LVGLButtonWidget",
+                      "left": 0,
+                      "top": 135,
+                      "width": 144,
+                      "height": 33,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "10b2a4ee-dcd6-4856-8a9e-7be3936d2b49",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "timeline": [],
+                      "eventHandlers": [
+                        {
+                          "objID": "1dfe40fa-55e1-4a7e-cab2-ab60373d7f07",
+                          "eventName": "CLICKED",
+                          "handlerType": "action",
+                          "action": "reset_settings",
+                          "userData": 0
+                        }
+                      ],
+                      "identifier": "reset_settings_btn",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "content",
+                      "heightUnit": "content",
+                      "children": [
+                        {
+                          "objID": "b62732a7-4c7c-438c-b5d0-1c18be9298a5",
+                          "type": "LVGLLabelWidget",
+                          "left": 0,
+                          "top": 0,
+                          "width": 112,
+                          "height": 13,
+                          "customInputs": [],
+                          "customOutputs": [],
+                          "style": {
+                            "objID": "bd49dae4-3668-4649-cfc2-5fe0a51fec04",
+                            "useStyle": "default",
+                            "conditionalStyles": [],
+                            "childStyles": []
+                          },
+                          "timeline": [],
+                          "eventHandlers": [],
+                          "leftUnit": "px",
+                          "topUnit": "px",
+                          "widthUnit": "content",
+                          "heightUnit": "content",
+                          "children": [],
+                          "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                          "hiddenFlagType": "literal",
+                          "clickableFlagType": "literal",
+                          "flagScrollbarMode": "",
+                          "flagScrollDirection": "",
+                          "scrollSnapX": "",
+                          "scrollSnapY": "",
+                          "checkedStateType": "literal",
+                          "disabledStateType": "literal",
+                          "states": "",
+                          "localStyles": {
+                            "objID": "785dcf0c-b8ce-44e1-e411-88b47637334c",
+                            "definition": {
+                              "MAIN": {
+                                "DEFAULT": {
+                                  "align": "CENTER",
+                                  "text_font": "whiteRabbit_14px"
+                                }
+                              }
+                            }
+                          },
+                          "group": "",
+                          "groupIndex": 0,
+                          "text": "RESET SETTINGS",
+                          "textType": "literal",
+                          "longMode": "WRAP",
+                          "recolor": false
+                        }
+                      ],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_ON_FOCUS|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlag": true,
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "5acc99a0-4e02-49eb-b92c-263a3eca6fc2",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "align": "CENTER",
+                              "bg_color": "#ff3a3a"
                             }
                           }
                         }

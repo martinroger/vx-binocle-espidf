@@ -158,6 +158,14 @@
       "localVariables": [],
       "userProperties": [],
       "name": "mode_switch_toggled"
+    },
+    {
+      "objID": "2c5ecd1f-6e91-4a3d-b740-7406a7258654",
+      "components": [],
+      "connectionLines": [],
+      "localVariables": [],
+      "userProperties": [],
+      "name": "reset_settings"
     }
   ],
   "userPages": [
@@ -411,6 +419,10 @@
                             "DEFAULT": {
                               "align": "CENTER",
                               "text_font": "whiteRabbit_128px"
+                            },
+                            "CHECKED": {
+                              "text_color": "#00b734",
+                              "text_font": "whiteRabbit_70px"
                             }
                           }
                         }
@@ -2649,7 +2661,7 @@
                       "eventHandlers": [
                         {
                           "objID": "54be3836-1478-4236-d9d6-87d876e05341",
-                          "eventName": "RELEASED",
+                          "eventName": "CLICKED",
                           "handlerType": "action",
                           "action": "reboot_factory",
                           "userData": 0
@@ -2729,6 +2741,113 @@
                           "MAIN": {
                             "DEFAULT": {
                               "align": "CENTER"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0
+                    },
+                    {
+                      "objID": "1dd178c1-b8f2-4280-e79b-48d5e9e2407b",
+                      "type": "LVGLButtonWidget",
+                      "left": 0,
+                      "top": 135,
+                      "width": 144,
+                      "height": 33,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "03278588-028e-4788-b5d9-549aa17436d9",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "timeline": [],
+                      "eventHandlers": [
+                        {
+                          "objID": "7e6c254f-cc72-4198-98fa-6e3ac9a85e1e",
+                          "eventName": "CLICKED",
+                          "handlerType": "action",
+                          "action": "reset_settings",
+                          "userData": 0
+                        }
+                      ],
+                      "identifier": "reset_settings_btn",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "content",
+                      "heightUnit": "content",
+                      "children": [
+                        {
+                          "objID": "0fd5dbed-8c3f-4d13-e0ef-69c42595ad70",
+                          "type": "LVGLLabelWidget",
+                          "left": 0,
+                          "top": 0,
+                          "width": 112,
+                          "height": 13,
+                          "customInputs": [],
+                          "customOutputs": [],
+                          "style": {
+                            "objID": "2585796b-cb29-4fd1-c324-aa1f04a2bb82",
+                            "useStyle": "default",
+                            "conditionalStyles": [],
+                            "childStyles": []
+                          },
+                          "timeline": [],
+                          "eventHandlers": [],
+                          "leftUnit": "px",
+                          "topUnit": "px",
+                          "widthUnit": "content",
+                          "heightUnit": "content",
+                          "children": [],
+                          "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                          "hiddenFlagType": "literal",
+                          "clickableFlagType": "literal",
+                          "flagScrollbarMode": "",
+                          "flagScrollDirection": "",
+                          "scrollSnapX": "",
+                          "scrollSnapY": "",
+                          "checkedStateType": "literal",
+                          "disabledStateType": "literal",
+                          "states": "",
+                          "localStyles": {
+                            "objID": "7859a8a4-70ea-4506-8f4c-bd1e340210a6",
+                            "definition": {
+                              "MAIN": {
+                                "DEFAULT": {
+                                  "align": "CENTER",
+                                  "text_font": "whiteRabbit_14px"
+                                }
+                              }
+                            }
+                          },
+                          "group": "",
+                          "groupIndex": 0,
+                          "text": "RESET SETTINGS",
+                          "textType": "literal",
+                          "longMode": "WRAP",
+                          "recolor": false
+                        }
+                      ],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_ON_FOCUS|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlag": true,
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "4bd656d5-6e0c-4a7c-80be-08feec6becf5",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "align": "CENTER",
+                              "bg_color": "#ff3a3a"
                             }
                           }
                         }

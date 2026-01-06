@@ -10,6 +10,7 @@ extern void action_dec_rpm_spinbox(lv_event_t * e);
 extern void action_save_rpm_spinbox(lv_event_t * e);
 extern void action_shift_indicator_toggled(lv_event_t * e);
 extern void action_blink_rpm_alarm_toggled(lv_event_t * e);
+extern void action_reset_settings(lv_event_t * e);
 
 
 #endif /*EEZ_LVGL_UI_ACTIONS_H*/
