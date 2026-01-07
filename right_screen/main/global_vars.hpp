@@ -49,9 +49,14 @@ struct board_ST
 {
     bool screen_interlock_OK = false;    // Left to right screen interlock state
     uint8_t internal_ST = XDB_SM_ST_OFF; // Internal board state
-    uint8_t mph_selected = false;        // MPH unit selected over KPH
-    uint8_t rpm_alarm_override = false;  // RPM alarm override from vehicle
+    bool mph_selected = false;           // MPH unit selected over KPH
+    uint32_t rpm_decimation = 10;         // RPM decimation factor
+    bool rpm_alarm_override = false;     // RPM alarm override from vehicle
     uint32_t rpm_alarm_threshold = 6000; // RPM value at which to trigger alarm
+    bool rpm_alarm_blink = false;        // Whether the alarm blinker is enabled
+    bool use_shift_indicator = false;    // Activation of the SHIFT alarm
+    uint32_t shift_mid_threshold = 5500; // Orange SHIFT RPM threshold
+    uint32_t shift_top_threshold = 6500; // Red SHIFT RPM threshold
     parsed_app_meta_t *app_metadata;     // App metadata
     Backlight *backLight;                // Pointer to backligh controller
     uint8_t darkBrightness = 100;        // Screen brightness in dark mode

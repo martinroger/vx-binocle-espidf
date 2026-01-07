@@ -119,7 +119,7 @@ void CAN_RX_Task(void *pvParameters)
 
             if (dispatchCANFrame(&rxMessage) != ESP_OK)
             {
-                ESP_LOGW(TAG, "Frame dispatcher returned an error");
+                ESP_LOGD(TAG, "Frame dispatcher returned an error");
             }
             break;
         }

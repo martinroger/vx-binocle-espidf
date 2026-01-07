@@ -36,6 +36,21 @@ extern "C" void action_reboot_factory(lv_event_t *e)
     }
 }
 
+/// @brief Erases the NVS for all keys. Triggers a restart if the button sequence cannot be completed
+/// @param e LV event is clicked
+extern "C" void action_reset_settings(lv_event_t *e)
+{
+    esp_err_t nvs_err = nvs_flash_erase();
+    if (nvs_err == ESP_OK)
+    {
+        nvs_err = nvs_flash_init();
+        if (nvs_err == ESP_OK)
+            return;
+        else
+            esp_restart();
+    }
+}
+
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
 
 /// @brief Test brightness at slider value when pressing
@@ -161,14 +176,14 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
         ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "mph_on", display_board_st.mph_selected) != ESP_OK)
+        if (nvs_set_u8(h, "mph_on", (uint8_t)(display_board_st.mph_selected)) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save mph selector status");
         nvs_commit(h);
         nvs_close(h);
     }
     if (lvgl_port_lock(-1))
     {
-        if (display_board_st.mph_selected == 0)
+        if (!(display_board_st.mph_selected))
         {
             lv_scale_set_range(objects.speed_scale, 0, 2400);
             lv_scale_set_total_tick_count(objects.speed_scale, 49);
@@ -177,7 +192,7 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
             lv_arc_set_range(objects.speed_arc, 0, 2400);
             lv_label_set_text(objects.speed_unit, "KPH");
         }
-        else if (display_board_st.mph_selected == 1)
+        else
         {
             lv_scale_set_range(objects.speed_scale, 0, 1600);
             lv_scale_set_total_tick_count(objects.speed_scale, 33);
@@ -206,76 +221,187 @@ extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
         ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "rpm_al_overr", display_board_st.rpm_alarm_override) != ESP_OK)
+        if (nvs_set_u8(h, "rpm_al_overr", (uint8_t)display_board_st.rpm_alarm_override) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save rpm alarm override switch status");
-    }
-    if (lvgl_port_lock(-1))
-    {
-        switch (display_board_st.rpm_alarm_override)
+        if (nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve RPM alarm threshold from NVS");
+        nvs_commit(h);
+        nvs_close(h);
+        if (lvgl_port_lock(-1))
         {
-        case 1:
-            lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, false);
-            lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, false);
-            lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, false);
-            lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, false);
-            if (nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
-                ESP_LOGW(__func__, "Could not retrieve RPM alarm threshold from NVS");
+            lv_obj_set_state(objects.override_alarm_sw, LV_STATE_CHECKED, (display_board_st.rpm_alarm_override));
+            lv_obj_set_state(objects.blink_alarm_sw, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
+            lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
+            lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
+            lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
+            lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
             lv_spinbox_set_value(objects.rpm_alarm_spinbox, (int32_t)display_board_st.rpm_alarm_threshold);
-            break;
-        case 0:
-            lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, true);
-            lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, true);
-            lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, true);
-            lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, true);
-            lv_spinbox_set_value(objects.rpm_alarm_spinbox, 0);
-            break;
-        default:
-            ESP_LOGE(__func__, "Unauthorized RPM alarm override state");
-            break;
+            lv_obj_set_state(objects.blink_alarm_sw, LV_STATE_CHECKED, display_board_st.rpm_alarm_blink);
+            lvgl_port_unlock();
         }
-        lvgl_port_unlock();
     }
-    nvs_commit(h);
-    nvs_close(h);
+}
+
+/// @brief Check switch to blink RPM reading when RPM is above threshold has been toggled
+/// @param e LV event VALUE_CHANGED
+extern "C" void action_blink_rpm_alarm_toggled(lv_event_t *e)
+{
+    display_board_st.rpm_alarm_blink = lv_obj_has_state(objects.blink_alarm_sw, LV_STATE_CHECKED);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u8(h, "rpm_al_blnk", (uint8_t)display_board_st.rpm_alarm_blink) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save rpm alarm blink switch status");
+        nvs_commit(h);
+        nvs_close(h);
+    }
 }
 
 /// @brief Increment button for the RPM threshold spinbox
 /// @param e
 extern "C" void action_inc_rpm_spinbox(lv_event_t *e)
 {
+    lv_obj_t *target_spinbox = NULL;
+    lv_obj_t *target_button = lv_event_get_target_obj(e);
+    if (target_button == objects.inc_rpm_alarm_btn)
+    {
+        target_spinbox = objects.rpm_alarm_spinbox;
+    }
+    if (target_button == objects.inc_shift_mid_btn)
+    {
+        target_spinbox = objects.shift_mid_spinbox;
+    }
+    if (target_button == objects.inc_shift_top_btn)
+    {
+        target_spinbox = objects.shift_top_spinbox;
+    }
+    // Need to do some logic on limits too
     if (lvgl_port_lock(-1))
     {
-        lv_spinbox_increment(objects.rpm_alarm_spinbox);
+        lv_spinbox_increment(target_spinbox);
+        if (target_spinbox != objects.rpm_alarm_spinbox)
+        {
+            display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
+            display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
+            lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
+            lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
+        }
+
         lvgl_port_unlock();
     }
 }
 
 /// @brief Decrement button for the RPM threshold spinbox
-/// @param e 
+/// @param e
 extern "C" void action_dec_rpm_spinbox(lv_event_t *e)
 {
+    lv_obj_t *target_spinbox = NULL;
+    lv_obj_t *target_button = lv_event_get_target_obj(e);
+    if (target_button == objects.dec_rpm_alarm_btn)
+    {
+        target_spinbox = objects.rpm_alarm_spinbox;
+    }
+    if (target_button == objects.dec_shift_mid_btn)
+    {
+        target_spinbox = objects.shift_mid_spinbox;
+    }
+    if (target_button == objects.dec_shift_top_btn)
+    {
+        target_spinbox = objects.shift_top_spinbox;
+    }
+
     if (lvgl_port_lock(-1))
     {
-        lv_spinbox_decrement(objects.rpm_alarm_spinbox);
+        lv_spinbox_decrement(target_spinbox);
+        if (target_spinbox != objects.rpm_alarm_spinbox)
+        {
+            display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
+            display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
+            lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
+            lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
+        }
         lvgl_port_unlock();
     }
 }
 
 /// @brief Save RPM threshold value after setting it
-/// @param e 
+/// @param e
 extern "C" void action_save_rpm_spinbox(lv_event_t *e)
 {
-    display_board_st.rpm_alarm_threshold = lv_spinbox_get_value(objects.rpm_alarm_spinbox);
+    lv_obj_t *target = lv_event_get_target_obj(e);
+
     nvs_handle_t h;
     if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
         ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
     else
     {
-        if (nvs_set_u32(h, "rpm_al_thr", display_board_st.rpm_alarm_threshold) != ESP_OK)
-            ESP_LOGE(__func__, "Cannot save rpm alarm override threshold");
+        if (target == objects.save_rpm_alarm_btn)
+        {
+            display_board_st.rpm_alarm_threshold = lv_spinbox_get_value(objects.rpm_alarm_spinbox);
+
+            if (nvs_set_u32(h, "rpm_al_thr", display_board_st.rpm_alarm_threshold) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot save rpm alarm override threshold");
+        }
+        if (target == objects.save_shift_ind_btn)
+        {
+            display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
+            display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
+
+            if (nvs_set_u32(h, "shft_mid", display_board_st.shift_mid_threshold) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot save shift light mid threshold");
+            if (nvs_set_u32(h, "shft_top", display_board_st.shift_top_threshold) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot save shift light top threshold");
+        }
         nvs_commit(h);
         nvs_close(h);
     }
+}
+
+/// @brief The "blinkfest" shift indicator has been checked or unchecked
+/// @param e LV event VALUE_CHANGED
+extern "C" void action_shift_indicator_toggled(lv_event_t *e)
+{
+    display_board_st.use_shift_indicator = lv_obj_has_state(objects.shift_ind_sw, LV_STATE_CHECKED);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u8(h, "shft_ind", (uint8_t)display_board_st.use_shift_indicator) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save shift indicator status");
+        // Following two gets are not really needed
+        if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
+        if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve shift top threshold from NVS");
+        nvs_commit(h);
+        nvs_close(h);
+    }
+}
+
+/// @brief Updates the 10-100 RPM decimation indicator
+/// @param e LV event VALUE CHANGED
+extern "C" void action_decimation_update(lv_event_t *e)
+{
+    if (lv_obj_has_state(objects.decimation_sw, LV_STATE_CHECKED))
+        display_board_st.rpm_decimation = 100;
+    else
+        display_board_st.rpm_decimation = 10;
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u32(h, "rpm_dec", display_board_st.rpm_decimation) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save RPM decimator status");
+        
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    p_rpm = 1000; // Force refresh indirectly
+    rpm = 0;
 }
 #endif
 #pragma endregion
@@ -367,12 +493,25 @@ extern "C" void app_main()
             ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
             nvs_set_i8(h, "lastPart", -1);
         }
-        if (nvs_get_u8(h, "mph_on", &(display_board_st.mph_selected)) != ESP_OK)
+
+        if (nvs_get_u8(h, "mph_on", (uint8_t *)&(display_board_st.mph_selected)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve MPH status from NVS");
-        if (nvs_get_u8(h, "rpm_al_overr", &(display_board_st.rpm_alarm_override)) != ESP_OK)
+
+        if (nvs_get_u8(h, "rpm_al_overr", (uint8_t *)&(display_board_st.rpm_alarm_override)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM alarm override.");
         if (nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the RPM alarm threshold value.");
+        if (nvs_get_u8(h, "rpm_al_blnk", (uint8_t *)&(display_board_st.rpm_alarm_blink)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve the RPM alarm blinker status from NVS");
+        if (nvs_get_u8(h, "shft_ind", (uint8_t *)&(display_board_st.use_shift_indicator)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve the shift indicator status from NVS");
+        if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
+        if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve shift top threshold from NVS");
+        if (nvs_get_u32(h, "rpm_dec", &(display_board_st.rpm_decimation)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve RPM decimation factor from NVS");
+
         if (nvs_get_u8(h, "dark_bg", &(display_board_st.darkBrightness)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the dark mode brightness value.");
         if (nvs_get_u8(h, "light_bg", &(display_board_st.lightBrightness)) != ESP_OK)
@@ -500,6 +639,8 @@ extern "C" void app_main()
 
         startup_anim();
     }
+    if (initBlinkTimer() != ESP_OK)
+        ESP_LOGW(__func__, "Blinking timer could not be started.");
 
 #pragma endregion
 
@@ -509,6 +650,41 @@ extern "C" void app_main()
         esp_ota_mark_app_valid_cancel_rollback();
         display_board_st.internal_ST = XDB_SM_ST_OK;
         ESP_LOGI(__func__, "App image is valid.");
+
+        if (firstBoot)
+        {
+#ifdef CONFIG_RIGHT_SIDE_DISPLAY
+            if (lvgl_port_lock(-1))
+            {
+                lv_obj_add_state(objects.speed, LV_STATE_CHECKED);
+                lv_label_set_text(objects.speed, "OTA OK");
+                lvgl_port_unlock();
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                if (lvgl_port_lock(-1))
+                {
+                    lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
+                    //lv_label_set_text(objects.speed, "000");
+                    updateLVGLObjects(true);
+                    lvgl_port_unlock();
+                }
+            }
+#elifdef CONFIG_LEFT_SIDE_DISPLAY
+            if (lvgl_port_lock(-1))
+            {
+                lv_obj_add_state(objects.rpm, LV_STATE_CHECKED);
+                lv_label_set_text(objects.rpm, "OTA OK");
+                lvgl_port_unlock();
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                if (lvgl_port_lock(-1))
+                {
+                    lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
+                    //lv_label_set_text(objects.rpm, "0000");
+                    updateLVGLObjects(true);
+                    lvgl_port_unlock();
+                }
+            }
+#endif
+        }
     }
     vTaskResume(CAN_RX_tsk_hdl);
 

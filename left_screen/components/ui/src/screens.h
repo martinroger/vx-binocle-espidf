@@ -28,11 +28,21 @@ typedef struct _objects_t {
     lv_obj_t *itf_state;
     lv_obj_t *interlock_state;
     lv_obj_t *settings_tab;
+    lv_obj_t *decimation_sw;
     lv_obj_t *override_alarm_sw;
     lv_obj_t *rpm_alarm_spinbox;
     lv_obj_t *inc_rpm_alarm_btn;
     lv_obj_t *dec_rpm_alarm_btn;
     lv_obj_t *save_rpm_alarm_btn;
+    lv_obj_t *blink_alarm_sw;
+    lv_obj_t *shift_ind_sw;
+    lv_obj_t *shift_mid_spinbox;
+    lv_obj_t *inc_shift_mid_btn;
+    lv_obj_t *dec_shift_mid_btn;
+    lv_obj_t *shift_top_spinbox;
+    lv_obj_t *inc_shift_top_btn;
+    lv_obj_t *dec_shift_top_btn;
+    lv_obj_t *save_shift_ind_btn;
     lv_obj_t *debug_tab;
     lv_obj_t *voltage_lvl;
     lv_obj_t *odometer;
@@ -47,6 +57,7 @@ typedef struct _objects_t {
     lv_obj_t *project_info;
     lv_obj_t *current_partition;
     lv_obj_t *reboot_factory;
+    lv_obj_t *reset_settings_btn;
 } objects_t;
 
 extern objects_t objects;
