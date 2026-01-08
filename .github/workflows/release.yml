@@ -135,7 +135,7 @@ jobs:
           cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "$APP_FILE"
           APP_SIZE=$(du -sh "$APP_FILE" | cut -f1)
           
-          # Prepare the table row
+          # Write the summary table row to a text file
           echo "| $PREFIX | $VERSION | $APP_SIZE |" > "summary_data/${PREFIX}.txt"
           
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
@@ -148,7 +148,7 @@ jobs:
         with:
           name: binaries-${{ strategy.job-index }}
           path: |
-            export_bins/*
+            export_bins/*.bin
             summary_data/*.txt
           retention-days: 7
 
@@ -166,15 +166,24 @@ jobs:
           merge-multiple: true
         continue-on-error: true
 
+      - name: Debug File Structure
+        run: |
+          echo "### Directory Structure of Downloaded Artifacts ###"
+          if [ -d "all-metadata" ]; then
+            find all-metadata -maxdepth 3
+          else
+            echo "Directory 'all-metadata' does not exist."
+          fi
+
       - name: Generate Build Summary
         run: |
           echo "## 🚀 ESP-IDF Build Dashboard" >> $GITHUB_STEP_SUMMARY
           echo "| Project | Version String | App Size |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           
-          # Safeguard: only cat if .txt files exist
-          if [ -d "all-metadata" ] && [ -n "$(find all-metadata -maxdepth 1 -name "*.txt" -print -quit)" ]; then
-            cat all-metadata/*.txt >> $GITHUB_STEP_SUMMARY
+          # Search recursively for any .txt files within the all-metadata directory
+          if [ -d "all-metadata" ] && [ -n "$(find all-metadata -name "*.txt" -print -quit)" ]; then
+            find all-metadata -name "*.txt" -exec cat {} + >> $GITHUB_STEP_SUMMARY
           else
             echo "| No projects were built | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
           fi
