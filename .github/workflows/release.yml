@@ -1,0 +1,68 @@
+name: Multi-Project ESP-IDF Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Define the paths to your different project folders here
+        project_path: ['projects/sensor_node', 'projects/gateway_node']
+        target: ['esp32s3']
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+
+      - name: Cache Build Folder
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ matrix.project_path }}/build
+            ~/.ccache
+          # Key includes project path and target so caches don't collide
+          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-
+
+      - name: Build ESP-IDF Project
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.1 # Or your preferred version
+          target: ${{ matrix.target }}
+          path: ${{ matrix.project_path }}
+
+      - name: Rename Binaries for Identification
+        run: |
+          # Rename the output so we know which project it belongs to in the release
+          PROJECT_NAME=$(basename ${{ matrix.project_path }})
+          mv ${{ matrix.project_path }}/build/project.bin ./${PROJECT_NAME}_${{ matrix.target }}.bin
+
+      - name: Upload Artifacts (Internal)
+        uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ strategy.job-index }}
+          path: ./*.bin
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all built binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: release-bins
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-bins/*.bin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
