@@ -1,4 +1,4 @@
-name: Build and release
+name: Build and attach on release
 
 on:
   push:
@@ -7,6 +7,8 @@ on:
   pull_request:
     branches:
       - main
+  release:
+    types: [published] # This triggers when you click "Publish Release" in GitHub
   workflow_dispatch:
 
 jobs:
@@ -92,7 +94,11 @@ jobs:
       - name: Check if build is needed
         id: check
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.ref }}" == refs/tags/* || "${{ needs.changes.outputs[matrix.change_key] }}" == "true" ]]; then
+          # Build if it's a manual run, a tag push, a PR with changes, OR a formal release
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || \
+                "${{ github.event_name }}" == "release" || \
+                "${{ github.ref }}" == refs/tags/* || \
+                "${{ needs.changes.outputs[matrix.change_key] }}" == "true" ]]; then
             echo "run_build=true" >> $GITHUB_OUTPUT
           else
             echo "run_build=false" >> $GITHUB_OUTPUT
@@ -131,15 +137,22 @@ jobs:
           PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
           VERSION=$(git describe --tags --always --dirty || echo "unknown")
           
-          APP_FILE="export_bins/${PREFIX}_app.bin"
-          cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "$APP_FILE"
-          APP_SIZE=$(du -sh "$APP_FILE" | cut -f1)
+          # App Binary Processing
+          APP_DEST="export_bins/${PREFIX}_app.bin"
+          cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "$APP_DEST"
+          APP_SIZE=$(du -sh "$APP_DEST" | cut -f1)
+          APP_MD5=$(md5sum "$APP_DEST" | awk '{ print $1 }')
           
-          # Write the summary table row to a text file
+          # Write summary row and checksum
           echo "| $PREFIX | $VERSION | $APP_SIZE |" > "summary_data/${PREFIX}.txt"
+          echo "$APP_MD5  ${PREFIX}_app.bin" >> "export_bins/checksums.md5"
           
+          # Extra Binary Processing
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
-            cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "export_bins/${PREFIX}_storage.bin"
+            EXTRA_DEST="export_bins/${PREFIX}_storage.bin"
+            cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "$EXTRA_DEST"
+            EXTRA_MD5=$(md5sum "$EXTRA_DEST" | awk '{ print $1 }')
+            echo "$EXTRA_MD5  ${PREFIX}_storage.bin" >> "export_bins/checksums.md5"
           fi
 
       - name: Upload Artifacts
@@ -148,7 +161,7 @@ jobs:
         with:
           name: binaries-${{ strategy.job-index }}
           path: |
-            export_bins/*.bin
+            export_bins/*
             summary_data/*.txt
           retention-days: 7
 
@@ -166,22 +179,12 @@ jobs:
           merge-multiple: true
         continue-on-error: true
 
-      - name: Debug File Structure
-        run: |
-          echo "### Directory Structure of Downloaded Artifacts ###"
-          if [ -d "all-metadata" ]; then
-            find all-metadata -maxdepth 3
-          else
-            echo "Directory 'all-metadata' does not exist."
-          fi
-
       - name: Generate Build Summary
         run: |
           echo "## 🚀 ESP-IDF Build Dashboard" >> $GITHUB_STEP_SUMMARY
           echo "| Project | Version String | App Size |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           
-          # Search recursively for any .txt files within the all-metadata directory
           if [ -d "all-metadata" ] && [ -n "$(find all-metadata -name "*.txt" -print -quit)" ]; then
             find all-metadata -name "*.txt" -exec cat {} + >> $GITHUB_STEP_SUMMARY
           else
@@ -197,9 +200,9 @@ jobs:
             exit 1
           fi
 
-  # STEP 4: Release
+  # STEP 4: Formal Release (Only triggered when a Release is PUBLISHED)
   release:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'release'
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -208,13 +211,24 @@ jobs:
       - name: Download all built binaries
         uses: actions/download-artifact@v4
         with:
+          pattern: binaries-*
           path: release-bins
           merge-multiple: true
 
-      - name: Create GitHub Release
+      - name: Consolidate Checksums
+        run: |
+          cd release-bins
+          if [ -f "checksums.md5" ]; then
+             sort checksums.md5 -o consolidated_checksums.md5
+          fi
+
+      - name: Attach Assets to Release
         uses: softprops/action-gh-release@v2
         with:
-          files: release-bins/*.bin
-          generate_release_notes: true
+          # Note: Since this is triggered by 'on: release', it automatically 
+          # knows which release to attach to.
+          files: |
+            release-bins/*.bin
+            release-bins/consolidated_checksums.md5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
