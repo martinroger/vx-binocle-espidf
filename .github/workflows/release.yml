@@ -1,4 +1,5 @@
 name: Build and attach on release
+
 on:
   push:
     tags:
@@ -80,13 +81,16 @@ jobs:
     steps:
       - name: Check if build is needed
         id: check
+        shell: bash
         run: |
-          # ALWAYS build if this is a formal Release or a Tag push or a Manual trigger.
-          # Only use 'changes' logic for Pull Requests.
-          if [[ "${{ github.event_name }}" == "release" || \
-                "${{ github.event_name }}" == "workflow_dispatch" || \
-                startsWith(github.ref, 'refs/tags/') || \
-                "${{ needs.changes.outputs[matrix.change_key] }}" == "true" ]]; then
+          EVENT_NAME="${{ github.event_name }}"
+          REF="${{ github.ref }}"
+          CHANGED="${{ needs.changes.outputs[matrix.change_key] }}"
+          
+          if [[ "$EVENT_NAME" == "release" || \
+                "$EVENT_NAME" == "workflow_dispatch" || \
+                "$REF" == refs/tags/* || \
+                "$CHANGED" == "true" ]]; then
             echo "run_build=true" >> $GITHUB_OUTPUT
           else
             echo "run_build=false" >> $GITHUB_OUTPUT
@@ -195,21 +199,16 @@ jobs:
           path: release-bins
           merge-multiple: true
 
-      - name: List files for debugging
-        run: ls -R release-bins/
-
       - name: Consolidate Checksums
         run: |
           cd release-bins
           if [ -n "$(find . -name 'checksums.md5')" ]; then
-             # Concatenate all MD5 files found in subdirectories or root
              find . -name 'checksums.md5' -exec cat {} + | sort -u > consolidated_checksums.md5
           fi
 
       - name: Attach Assets to Release
         uses: softprops/action-gh-release@v2
         with:
-          # Use a direct file list to avoid pattern errors
           files: |
             release-bins/*.bin
             release-bins/consolidated_checksums.md5
