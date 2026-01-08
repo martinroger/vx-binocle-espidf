@@ -5,12 +5,55 @@ on:
     tags:
       - 'v*'
   pull_request:
-      branches:
-          - main
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
+  # STEP 1: Detect changes and Apply Labels
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    outputs:
+      emulator_board: ${{ steps.filter.outputs.emulator_board }}
+      interface_board: ${{ steps.filter.outputs.interface_board }}
+      left_screen: ${{ steps.filter.outputs.left_screen }}
+      right_screen: ${{ steps.filter.outputs.right_screen }}
+      itf_factory: ${{ steps.filter.outputs.itf_factory }}
+      ldb_factory: ${{ steps.filter.outputs.ldb_factory }}
+      rdb_factory: ${{ steps.filter.outputs.rdb_factory }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          list-targets: 'all' 
+          filters: |
+            emulator_board: 'emulator-console/**'
+            interface_board: 'interface_board/**'
+            left_screen: 'left_screen/**'
+            right_screen: 'right_screen/**'
+            itf_factory: 'factory apps/ITF factory app/**'
+            ldb_factory: 'factory apps/left display factory app/**'
+            rdb_factory: 'factory apps/right display factory app/**'
+
+      - name: Add Labels to PR
+        if: github.event_name == 'pull_request' && steps.filter.outputs.changes != '[]'
+        run: |
+          gh pr edit ${{ github.event.pull_request.number }} --add-label "${{ steps.filter.outputs.changes_ml }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # STEP 2: Conditional Build Matrix
   build:
+    needs: changes
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      startsWith(github.ref, 'refs/tags/') || 
+      needs.changes.outputs[matrix.change_key] == 'true'
+    
     name: Build ${{ matrix.project_path }}
     runs-on: ubuntu-latest
     strategy:
@@ -20,27 +63,34 @@ jobs:
           - project_path: 'emulator-console'
             app_bin: 'emulator-console.bin'
             target: 'esp32s3'
+            change_key: 'emulator_board'
           - project_path: 'interface_board'
             app_bin: 'interface_board.bin'
             target: 'esp32s3'
+            change_key: 'interface_board'
           - project_path: 'left_screen'
             app_bin: 'left_screen.bin'
             target: 'esp32s3'
+            change_key: 'left_screen'
           - project_path: 'right_screen'
             app_bin: 'right_screen.bin'
             target: 'esp32s3'
+            change_key: 'right_screen'
           - project_path: 'factory apps/ITF factory app'
             app_bin: 'ITF_factory.bin'
             extra_bin: 'storage.bin'
             target: 'esp32s3'
+            change_key: 'itf_factory'
           - project_path: 'factory apps/left display factory app'
             app_bin: 'LDB_factory.bin'
             extra_bin: 'storage.bin'
             target: 'esp32s3'
+            change_key: 'ldb_factory'
           - project_path: 'factory apps/right display factory app'
             app_bin: 'RDB_factory.bin'
             extra_bin: 'storage.bin'
             target: 'esp32s3'
+            change_key: 'rdb_factory'
 
     steps:
       - name: Checkout Repository
@@ -69,9 +119,7 @@ jobs:
         run: |
           mkdir -p export_bins
           PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
-          
           cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "export_bins/${PREFIX}_app.bin"
-          
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
             cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "export_bins/${PREFIX}_storage.bin"
           fi
@@ -80,7 +128,6 @@ jobs:
         run: |
           echo "### Binary Size Report for ${{ matrix.project_path }} ###"
           du -sh export_bins/*
-          echo "#################################################"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -89,6 +136,21 @@ jobs:
           path: export_bins/*
           retention-days: 7
 
+  # STEP 3: The Gatekeeper
+  check-all-builds:
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify Builds
+        run: |
+          if [[ "${{ needs.build.result }}" == "failure" || "${{ needs.build.result }}" == "cancelled" ]]; then
+            echo "One or more builds failed."
+            exit 1
+          fi
+          echo "All necessary builds completed or were correctly skipped."
+
+  # STEP 4: Release (Only for Tags)
   release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
