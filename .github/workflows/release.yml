@@ -4,68 +4,201 @@ on:
   push:
     tags:
       - 'v*'
-  workflow_dispatch: # Allows manual trigger from the "Actions" tab
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
+  # STEP 1: Detect changes and Apply Labels
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    outputs:
+      emulator_board: ${{ steps.filter.outputs.emulator_board }}
+      interface_board: ${{ steps.filter.outputs.interface_board }}
+      left_screen: ${{ steps.filter.outputs.left_screen }}
+      right_screen: ${{ steps.filter.outputs.right_screen }}
+      itf_factory: ${{ steps.filter.outputs.itf_factory }}
+      ldb_factory: ${{ steps.filter.outputs.ldb_factory }}
+      rdb_factory: ${{ steps.filter.outputs.rdb_factory }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            emulator_board: 'emulator-console/**'
+            interface_board: 'interface_board/**'
+            left_screen: 'left_screen/**'
+            right_screen: 'right_screen/**'
+            itf_factory: 'factory apps/ITF factory app/**'
+            ldb_factory: 'factory apps/left display factory app/**'
+            rdb_factory: 'factory apps/right display factory app/**'
+
+      - name: Add Labels to PR
+        if: github.event_name == 'pull_request' && steps.filter.outputs.changes != '[]'
+        run: |
+          for label in $(echo '${{ steps.filter.outputs.changes }}' | jq -r '.[]'); do
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "$label"
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # STEP 2: Conditional Build Matrix
   build:
+    needs: changes
+    name: Build ${{ matrix.project_path }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        project_path: [
-          'emulator-console', 
-          'interface_board',
-          'left_screen',
-          'right_screen',
-          'factory apps/ITF factory app',
-          'factory apps/left display factory app',
-          'factory apps/right display factory app'
-        ]
-        target: ['esp32s3']
+        include:
+          - project_path: 'emulator-console'
+            app_bin: 'emulator-console.bin'
+            target: 'esp32s3'
+            change_key: 'emulator_board'
+          - project_path: 'interface_board'
+            app_bin: 'interface_board.bin'
+            target: 'esp32s3'
+            change_key: 'interface_board'
+          - project_path: 'left_screen'
+            app_bin: 'left_screen.bin'
+            target: 'esp32s3'
+            change_key: 'left_screen'
+          - project_path: 'right_screen'
+            app_bin: 'right_screen.bin'
+            target: 'esp32s3'
+            change_key: 'right_screen'
+          - project_path: 'factory apps/ITF factory app'
+            app_bin: 'ITF_factory.bin'
+            extra_bin: 'storage.bin'
+            target: 'esp32s3'
+            change_key: 'itf_factory'
+          - project_path: 'factory apps/left display factory app'
+            app_bin: 'LDB_factory.bin'
+            extra_bin: 'storage.bin'
+            target: 'esp32s3'
+            change_key: 'ldb_factory'
+          - project_path: 'factory apps/right display factory app'
+            app_bin: 'RDB_factory.bin'
+            extra_bin: 'storage.bin'
+            target: 'esp32s3'
+            change_key: 'rdb_factory'
 
     steps:
+      - name: Check if build is needed
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.ref }}" == refs/tags/* || "${{ needs.changes.outputs[matrix.change_key] }}" == "true" ]]; then
+            echo "run_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_build=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Checkout Repository
+        if: steps.check.outputs.run_build == 'true'
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
+          fetch-depth: 0
 
       - name: Cache Build Folder
+        if: steps.check.outputs.run_build == 'true'
         uses: actions/cache@v4
         with:
           path: |
             ${{ matrix.project_path }}/build
             ~/.ccache
-          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles('**/CMakeLists.txt') }}
+          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.project_path), format('{0}/main/CMakeLists.txt', matrix.project_path)) }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-
 
       - name: Build ESP-IDF Project
+        if: steps.check.outputs.run_build == 'true'
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.5.1
           target: ${{ matrix.target }}
           path: ${{ matrix.project_path }}
 
-      - name: Rename App Binary
+      - name: Collect Data and Rename
+        if: steps.check.outputs.run_build == 'true'
         run: |
-          # 1. Sanitize folder name for the filename
-          SAFE_NAME=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
+          mkdir -p export_bins summary_data
+          PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
+          VERSION=$(git describe --tags --always --dirty || echo "unknown")
           
-          # 2. ESP-IDF identifies the app bin in project_description.json
-          # But simpler: it's the only bin NOT named bootloader or partition-table
-          cd "${{ matrix.project_path }}/build"
-          APP_BIN=$(ls *.bin | grep -vE "bootloader|partition-table|ota_data_initial" | head -n 1)
+          APP_FILE="export_bins/${PREFIX}_app.bin"
+          cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "$APP_FILE"
+          APP_SIZE=$(du -sh "$APP_FILE" | cut -f1)
           
-          # 3. Move it to the root with the new name
-          cp "$APP_BIN" "../../${SAFE_NAME}_${{ matrix.target }}.bin"
+          # Write the summary table row to a text file
+          echo "| $PREFIX | $VERSION | $APP_SIZE |" > "summary_data/${PREFIX}.txt"
+          
+          if [ ! -z "${{ matrix.extra_bin }}" ]; then
+            cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "export_bins/${PREFIX}_storage.bin"
+          fi
 
       - name: Upload Artifacts
+        if: steps.check.outputs.run_build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ strategy.job-index }}
-          path: ./*.bin
+          path: |
+            export_bins/*.bin
+            summary_data/*.txt
+          retention-days: 7
 
+  # STEP 3: The Gatekeeper & Summary
+  check-all-builds:
+    needs: [changes, build]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download metadata
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          path: all-metadata
+          merge-multiple: true
+        continue-on-error: true
+
+      - name: Debug File Structure
+        run: |
+          echo "### Directory Structure of Downloaded Artifacts ###"
+          if [ -d "all-metadata" ]; then
+            find all-metadata -maxdepth 3
+          else
+            echo "Directory 'all-metadata' does not exist."
+          fi
+
+      - name: Generate Build Summary
+        run: |
+          echo "## 🚀 ESP-IDF Build Dashboard" >> $GITHUB_STEP_SUMMARY
+          echo "| Project | Version String | App Size |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          
+          # Search recursively for any .txt files within the all-metadata directory
+          if [ -d "all-metadata" ] && [ -n "$(find all-metadata -name "*.txt" -print -quit)" ]; then
+            find all-metadata -name "*.txt" -exec cat {} + >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| No projects were built | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo -e "\n**Overall Status:** ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Verify Builds
+        run: |
+          if [[ "${{ needs.build.result }}" == "failure" || "${{ needs.build.result }}" == "cancelled" ]]; then
+            echo "One or more builds failed."
+            exit 1
+          fi
+
+  # STEP 4: Release
   release:
-    # Only run release logic if a tag was actually pushed
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
     runs-on: ubuntu-latest
@@ -82,5 +215,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release-bins/*.bin
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
