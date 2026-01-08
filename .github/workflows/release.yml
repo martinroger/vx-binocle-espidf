@@ -10,7 +10,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  # STEP 1: Detect changes and Apply Labels
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -25,7 +24,6 @@ jobs:
       rdb_factory: ${{ steps.filter.outputs.rdb_factory }}
     steps:
       - uses: actions/checkout@v4
-      
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -46,14 +44,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # STEP 2: Conditional Build Matrix
   build:
     needs: changes
-    if: |
-      github.event_name == 'workflow_dispatch' || 
-      startsWith(github.ref, 'refs/tags/') || 
-      needs.changes.outputs[matrix.change_key] == 'true'
-    
     name: Build ${{ matrix.project_path }}
     runs-on: ubuntu-latest
     strategy:
@@ -93,12 +85,25 @@ jobs:
             change_key: 'rdb_factory'
 
     steps:
+      # This check replaces the failing job-level 'if'
+      - name: Check if build is needed
+        id: check
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" || "${{ github.ref }}" == refs/tags/* || "${{ needs.changes.outputs[matrix.change_key] }}" == "true" ]]; then
+            echo "run_build=true" >> $GITHUB_OUTPUT
+          else
+            echo "run_build=false" >> $GITHUB_OUTPUT
+            echo "Skipping build for ${{ matrix.project_path }} as no changes were detected."
+          fi
+
       - name: Checkout Repository
+        if: steps.check.outputs.run_build == 'true'
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
 
       - name: Cache Build Folder
+        if: steps.check.outputs.run_build == 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -109,6 +114,7 @@ jobs:
             ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-
 
       - name: Build ESP-IDF Project
+        if: steps.check.outputs.run_build == 'true'
         uses: espressif/esp-idf-ci-action@v1
         with:
           esp_idf_version: v5.5.1
@@ -116,6 +122,7 @@ jobs:
           path: ${{ matrix.project_path }}
 
       - name: Collect Specific Binaries
+        if: steps.check.outputs.run_build == 'true'
         run: |
           mkdir -p export_bins
           PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
@@ -125,18 +132,19 @@ jobs:
           fi
 
       - name: Check Binary Sizes
+        if: steps.check.outputs.run_build == 'true'
         run: |
           echo "### Binary Size Report for ${{ matrix.project_path }} ###"
           du -sh export_bins/*
 
       - name: Upload Artifacts
+        if: steps.check.outputs.run_build == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ strategy.job-index }}
           path: export_bins/*
           retention-days: 7
 
-  # STEP 3: The Gatekeeper
   check-all-builds:
     needs: [changes, build]
     if: always()
@@ -150,7 +158,6 @@ jobs:
           fi
           echo "All necessary builds completed or were correctly skipped."
 
-  # STEP 4: Release (Only for Tags)
   release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
