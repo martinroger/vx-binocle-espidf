@@ -41,8 +41,6 @@ jobs:
       - name: Add Labels to PR
         if: github.event_name == 'pull_request' && steps.filter.outputs.changes != '[]'
         run: |
-          # Use the built-in 'changes' output to add labels
-          # We parse the JSON array and add each as a label
           for label in $(echo '${{ steps.filter.outputs.changes }}' | jq -r '.[]'); do
             gh pr edit ${{ github.event.pull_request.number }} --add-label "$label"
           done
@@ -137,7 +135,7 @@ jobs:
           cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "$APP_FILE"
           APP_SIZE=$(du -sh "$APP_FILE" | cut -f1)
           
-          # Row for the summary table
+          # Prepare the table row
           echo "| $PREFIX | $VERSION | $APP_SIZE |" > "summary_data/${PREFIX}.txt"
           
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
@@ -151,7 +149,7 @@ jobs:
           name: binaries-${{ strategy.job-index }}
           path: |
             export_bins/*
-            summary_data/*
+            summary_data/*.txt
           retention-days: 7
 
   # STEP 3: The Gatekeeper & Summary
@@ -166,7 +164,7 @@ jobs:
           pattern: binaries-*
           path: all-metadata
           merge-multiple: true
-        continue-on-error: true # Prevents failure if no projects were built
+        continue-on-error: true
 
       - name: Generate Build Summary
         run: |
@@ -174,13 +172,14 @@ jobs:
           echo "| Project | Version String | App Size |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           
-          if [ -d "all-metadata" ] && [ "$(ls -A all-metadata/*.txt 2>/dev/null)" ]; then
+          # Safeguard: only cat if .txt files exist
+          if [ -d "all-metadata" ] && [ -n "$(find all-metadata -maxdepth 1 -name "*.txt" -print -quit)" ]; then
             cat all-metadata/*.txt >> $GITHUB_STEP_SUMMARY
           else
             echo "| No projects were built | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
           fi
           
-          echo -e "\n**Overall Matrix Status:** ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo -e "\n**Overall Status:** ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Verify Builds
         run: |
