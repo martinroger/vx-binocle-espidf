@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
 
 jobs:
+  # STEP 1: Detect changes and Apply Labels
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -24,10 +25,10 @@ jobs:
       rdb_factory: ${{ steps.filter.outputs.rdb_factory }}
     steps:
       - uses: actions/checkout@v4
+      
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          list-filters: 'json' 
           filters: |
             emulator_board: 'emulator-console/**'
             interface_board: 'interface_board/**'
@@ -40,10 +41,15 @@ jobs:
       - name: Add Labels to PR
         if: github.event_name == 'pull_request' && steps.filter.outputs.changes != '[]'
         run: |
-          gh pr edit ${{ github.event.pull_request.number }} --add-label "${{ steps.filter.outputs.changes_ml }}"
+          # Use the built-in 'changes' output to add labels
+          # We parse the JSON array and add each as a label
+          for label in $(echo '${{ steps.filter.outputs.changes }}' | jq -r '.[]'); do
+            gh pr edit ${{ github.event.pull_request.number }} --add-label "$label"
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # STEP 2: Conditional Build Matrix
   build:
     needs: changes
     name: Build ${{ matrix.project_path }}
@@ -99,7 +105,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-          fetch-depth: 0 # Needed for git describe to see tags
+          fetch-depth: 0
 
       - name: Cache Build Folder
         if: steps.check.outputs.run_build == 'true'
@@ -125,19 +131,15 @@ jobs:
         run: |
           mkdir -p export_bins summary_data
           PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
-          
-          # Versioning
           VERSION=$(git describe --tags --always --dirty || echo "unknown")
           
-          # Process App Bin
           APP_FILE="export_bins/${PREFIX}_app.bin"
           cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "$APP_FILE"
           APP_SIZE=$(du -sh "$APP_FILE" | cut -f1)
           
-          # Write summary info for this specific job
+          # Row for the summary table
           echo "| $PREFIX | $VERSION | $APP_SIZE |" > "summary_data/${PREFIX}.txt"
           
-          # Process Extra Bin if exists
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
             cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "export_bins/${PREFIX}_storage.bin"
           fi
@@ -152,6 +154,7 @@ jobs:
             summary_data/*
           retention-days: 7
 
+  # STEP 3: The Gatekeeper & Summary
   check-all-builds:
     needs: [changes, build]
     if: always()
@@ -163,6 +166,7 @@ jobs:
           pattern: binaries-*
           path: all-metadata
           merge-multiple: true
+        continue-on-error: true # Prevents failure if no projects were built
 
       - name: Generate Build Summary
         run: |
@@ -170,14 +174,13 @@ jobs:
           echo "| Project | Version String | App Size |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
           
-          # Combine all metadata files into the summary table
-          if [ -d "all-metadata" ]; then
+          if [ -d "all-metadata" ] && [ "$(ls -A all-metadata/*.txt 2>/dev/null)" ]; then
             cat all-metadata/*.txt >> $GITHUB_STEP_SUMMARY
           else
             echo "| No projects were built | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
           fi
           
-          echo -e "\n**Overall Status:** ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo -e "\n**Overall Matrix Status:** ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Verify Builds
         run: |
@@ -186,6 +189,7 @@ jobs:
             exit 1
           fi
 
+  # STEP 4: Release
   release:
     if: startsWith(github.ref, 'refs/tags/')
     needs: build
