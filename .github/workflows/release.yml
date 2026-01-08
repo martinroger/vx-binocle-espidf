@@ -1,4 +1,4 @@
-name: Multi-Project ESP-IDF Release
+name: Build and release
 
 on:
   push:
