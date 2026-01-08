@@ -27,7 +27,7 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
-          list-targets: 'all' 
+          list-filters: 'json' 
           filters: |
             emulator_board: 'emulator-console/**'
             interface_board: 'interface_board/**'
@@ -85,7 +85,6 @@ jobs:
             change_key: 'rdb_factory'
 
     steps:
-      # This check replaces the failing job-level 'if'
       - name: Check if build is needed
         id: check
         run: |
@@ -93,7 +92,6 @@ jobs:
             echo "run_build=true" >> $GITHUB_OUTPUT
           else
             echo "run_build=false" >> $GITHUB_OUTPUT
-            echo "Skipping build for ${{ matrix.project_path }} as no changes were detected."
           fi
 
       - name: Checkout Repository
@@ -150,13 +148,18 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Generate Build Summary
+        run: |
+          echo "## 🚀 ESP-IDF Build Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Overall Matrix Status | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "View individual logs in the Actions sidebar for details on skipped vs built projects." >> $GITHUB_STEP_SUMMARY
+
       - name: Verify Builds
         run: |
           if [[ "${{ needs.build.result }}" == "failure" || "${{ needs.build.result }}" == "cancelled" ]]; then
             echo "One or more builds failed."
             exit 1
           fi
-          echo "All necessary builds completed or were correctly skipped."
 
   release:
     if: startsWith(github.ref, 'refs/tags/')
