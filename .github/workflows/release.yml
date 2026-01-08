@@ -1,5 +1,4 @@
 name: Build and attach on release
-
 on:
   push:
     tags:
@@ -8,11 +7,10 @@ on:
     branches:
       - main
   release:
-    types: [published] # This triggers when you click "Publish Release" in GitHub
+    types: [published]
   workflow_dispatch:
 
 jobs:
-  # STEP 1: Detect changes and Apply Labels
   changes:
     runs-on: ubuntu-latest
     permissions:
@@ -27,7 +25,6 @@ jobs:
       rdb_factory: ${{ steps.filter.outputs.rdb_factory }}
     steps:
       - uses: actions/checkout@v4
-      
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -40,16 +37,6 @@ jobs:
             ldb_factory: 'factory apps/left display factory app/**'
             rdb_factory: 'factory apps/right display factory app/**'
 
-      - name: Add Labels to PR
-        if: github.event_name == 'pull_request' && steps.filter.outputs.changes != '[]'
-        run: |
-          for label in $(echo '${{ steps.filter.outputs.changes }}' | jq -r '.[]'); do
-            gh pr edit ${{ github.event.pull_request.number }} --add-label "$label"
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # STEP 2: Conditional Build Matrix
   build:
     needs: changes
     name: Build ${{ matrix.project_path }}
@@ -94,10 +81,11 @@ jobs:
       - name: Check if build is needed
         id: check
         run: |
-          # Build if it's a manual run, a tag push, a PR with changes, OR a formal release
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" || \
-                "${{ github.event_name }}" == "release" || \
-                "${{ github.ref }}" == refs/tags/* || \
+          # ALWAYS build if this is a formal Release or a Tag push or a Manual trigger.
+          # Only use 'changes' logic for Pull Requests.
+          if [[ "${{ github.event_name }}" == "release" || \
+                "${{ github.event_name }}" == "workflow_dispatch" || \
+                startsWith(github.ref, 'refs/tags/') || \
                 "${{ needs.changes.outputs[matrix.change_key] }}" == "true" ]]; then
             echo "run_build=true" >> $GITHUB_OUTPUT
           else
@@ -137,17 +125,14 @@ jobs:
           PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
           VERSION=$(git describe --tags --always --dirty || echo "unknown")
           
-          # App Binary Processing
           APP_DEST="export_bins/${PREFIX}_app.bin"
           cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "$APP_DEST"
           APP_SIZE=$(du -sh "$APP_DEST" | cut -f1)
           APP_MD5=$(md5sum "$APP_DEST" | awk '{ print $1 }')
           
-          # Write summary row and checksum
           echo "| $PREFIX | $VERSION | $APP_SIZE |" > "summary_data/${PREFIX}.txt"
           echo "$APP_MD5  ${PREFIX}_app.bin" >> "export_bins/checksums.md5"
           
-          # Extra Binary Processing
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
             EXTRA_DEST="export_bins/${PREFIX}_storage.bin"
             cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "$EXTRA_DEST"
@@ -165,7 +150,6 @@ jobs:
             summary_data/*.txt
           retention-days: 7
 
-  # STEP 3: The Gatekeeper & Summary
   check-all-builds:
     needs: [changes, build]
     if: always()
@@ -184,14 +168,11 @@ jobs:
           echo "## 🚀 ESP-IDF Build Dashboard" >> $GITHUB_STEP_SUMMARY
           echo "| Project | Version String | App Size |" >> $GITHUB_STEP_SUMMARY
           echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
-          
           if [ -d "all-metadata" ] && [ -n "$(find all-metadata -name "*.txt" -print -quit)" ]; then
             find all-metadata -name "*.txt" -exec cat {} + >> $GITHUB_STEP_SUMMARY
           else
             echo "| No projects were built | N/A | N/A |" >> $GITHUB_STEP_SUMMARY
           fi
-          
-          echo -e "\n**Overall Status:** ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
 
       - name: Verify Builds
         run: |
@@ -200,7 +181,6 @@ jobs:
             exit 1
           fi
 
-  # STEP 4: Formal Release (Only triggered when a Release is PUBLISHED)
   release:
     if: github.event_name == 'release'
     needs: build
@@ -215,18 +195,21 @@ jobs:
           path: release-bins
           merge-multiple: true
 
+      - name: List files for debugging
+        run: ls -R release-bins/
+
       - name: Consolidate Checksums
         run: |
           cd release-bins
-          if [ -f "checksums.md5" ]; then
-             sort checksums.md5 -o consolidated_checksums.md5
+          if [ -n "$(find . -name 'checksums.md5')" ]; then
+             # Concatenate all MD5 files found in subdirectories or root
+             find . -name 'checksums.md5' -exec cat {} + | sort -u > consolidated_checksums.md5
           fi
 
       - name: Attach Assets to Release
         uses: softprops/action-gh-release@v2
         with:
-          # Note: Since this is triggered by 'on: release', it automatically 
-          # knows which release to attach to.
+          # Use a direct file list to avoid pattern errors
           files: |
             release-bins/*.bin
             release-bins/consolidated_checksums.md5
