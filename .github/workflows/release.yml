@@ -1,5 +1,4 @@
-name: Build and attach on release
-
+name: Build and attach to release
 on:
   push:
     tags:
@@ -199,16 +198,24 @@ jobs:
           path: release-bins
           merge-multiple: true
 
-      - name: Consolidate Checksums
+      - name: Flatten and Consolidate
         run: |
           cd release-bins
+          # Find all binaries in subdirectories and move them to root
+          find . -mindepth 2 -name "*.bin" -exec mv -t . {} +
+          
+          # Consolidate MD5 files
           if [ -n "$(find . -name 'checksums.md5')" ]; then
              find . -name 'checksums.md5' -exec cat {} + | sort -u > consolidated_checksums.md5
           fi
+          
+          # Debug: Show exactly what is in the root now
+          ls -F
 
       - name: Attach Assets to Release
         uses: softprops/action-gh-release@v2
         with:
+          # Now files are in the root of release-bins
           files: |
             release-bins/*.bin
             release-bins/consolidated_checksums.md5
