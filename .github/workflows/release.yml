@@ -10,6 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false # Ensures one project's failure doesn't stop others
       matrix:
         include:
           - project_path: 'emulator-console'
@@ -43,7 +44,10 @@ jobs:
           path: |
             ${{ matrix.project_path }}/build
             ~/.ccache
-          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles('**/CMakeLists.txt') }}
+          # The key is unique to the project folder and the content of its CMake files
+          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.project_path), format('{0}/main/CMakeLists.txt', matrix.project_path)) }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-
 
       - name: Build ESP-IDF Project
         uses: espressif/esp-idf-ci-action@v1
@@ -54,18 +58,16 @@ jobs:
 
       - name: Collect Specific Binaries
         run: |
-          # 1. Create a clean export folder
           mkdir -p export_bins
-          
-          # 2. Sanitize folder name for the prefix
+          # Sanitize prefix (remove spaces and slashes)
           PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
           
-          # 3. Copy the primary app binary (using the name defined in matrix)
+          # Copy primary app bin
           cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "export_bins/${PREFIX}_app.bin"
           
-          # 4. Copy storage.bin if it exists for this matrix entry
+          # Copy extra bin if defined in matrix
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
-            cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "export_bins/${PREFIX}_extra.bin"
+            cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "export_bins/${PREFIX}_storage.bin"
           fi
 
       - name: Upload Artifacts
@@ -73,3 +75,25 @@ jobs:
         with:
           name: binaries-${{ strategy.job-index }}
           path: export_bins/*
+          retention-days: 7
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all built binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: release-bins
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-bins/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
