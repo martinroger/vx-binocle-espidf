@@ -8,29 +8,36 @@ on:
 
 jobs:
   build:
+    name: Build ${{ matrix.project_path }}
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false # Ensures one project's failure doesn't stop others
+      fail-fast: false
       matrix:
         include:
           - project_path: 'emulator-console'
             app_bin: 'emulator-console.bin'
+            target: 'esp32s3'
           - project_path: 'interface_board'
             app_bin: 'interface_board.bin'
+            target: 'esp32s3'
           - project_path: 'left_screen'
             app_bin: 'left_screen.bin'
+            target: 'esp32s3'
           - project_path: 'right_screen'
             app_bin: 'right_screen.bin'
+            target: 'esp32s3'
           - project_path: 'factory apps/ITF factory app'
             app_bin: 'ITF_factory.bin'
             extra_bin: 'storage.bin'
+            target: 'esp32s3'
           - project_path: 'factory apps/left display factory app'
             app_bin: 'LDB_factory.bin'
             extra_bin: 'storage.bin'
+            target: 'esp32s3'
           - project_path: 'factory apps/right display factory app'
             app_bin: 'RDB_factory.bin'
             extra_bin: 'storage.bin'
-        target: ['esp32s3']
+            target: 'esp32s3'
 
     steps:
       - name: Checkout Repository
@@ -44,7 +51,6 @@ jobs:
           path: |
             ${{ matrix.project_path }}/build
             ~/.ccache
-          # The key is unique to the project folder and the content of its CMake files
           key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.project_path), format('{0}/main/CMakeLists.txt', matrix.project_path)) }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-
@@ -59,16 +65,19 @@ jobs:
       - name: Collect Specific Binaries
         run: |
           mkdir -p export_bins
-          # Sanitize prefix (remove spaces and slashes)
           PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
           
-          # Copy primary app bin
           cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "export_bins/${PREFIX}_app.bin"
           
-          # Copy extra bin if defined in matrix
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
             cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "export_bins/${PREFIX}_storage.bin"
           fi
+
+      - name: Check Binary Sizes
+        run: |
+          echo "### Binary Size Report for ${{ matrix.project_path }} ###"
+          du -sh export_bins/*
+          echo "#################################################"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
