@@ -32,11 +32,13 @@
 #define TAG "MAIN"
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
-void print_system_stats() {
-    // 2KB is usually enough for ~20-25 tasks. 
+void print_system_stats()
+{
+    // 2KB is usually enough for ~20-25 tasks.
     // If you have a massive app, increase this.
-    char *stats_buffer = (char*)malloc(2048);
-    if (stats_buffer == NULL) {
+    char *stats_buffer = (char *)malloc(2048);
+    if (stats_buffer == NULL)
+    {
         printf("Failed to allocate memory for stats\n");
         return;
     }
@@ -44,8 +46,8 @@ void print_system_stats() {
     printf("\n======================================================\n");
     printf("Task Name       State   Pri     Stack    Num    Core\n");
     printf("------------------------------------------------------\n");
-    /* vTaskList shows: 
-       Name, State (R=Running, B=Blocked, S=Suspended, D=Deleted), 
+    /* vTaskList shows:
+       Name, State (R=Running, B=Blocked, S=Suspended, D=Deleted),
        Priority, Stack High Water Mark, Task Number, Core ID
     */
     vTaskList(stats_buffer);
@@ -54,8 +56,8 @@ void print_system_stats() {
     printf("\n------------------------------------------------------\n");
     printf("Task Name       Abs Time (ticks)        CPU %%\n");
     printf("------------------------------------------------------\n");
-    /* vTaskGetRunTimeStats shows the CPU time each task has consumed 
-    */
+    /* vTaskGetRunTimeStats shows the CPU time each task has consumed
+     */
     vTaskGetRunTimeStats(stats_buffer);
     printf("%s", stats_buffer);
     printf("======================================================\n");
@@ -144,7 +146,7 @@ static void button_isr_handler(void *arg)
 #pragma region 5V management
 
 /// @brief Initialiser for the control GPIOs of the 5V supplies
-/// @param  
+/// @param
 /// @return ESP_OK if all set up correctly. ESP_FAIL otherwise
 esp_err_t init_5V_ctrl(void)
 {
@@ -168,7 +170,7 @@ esp_err_t init_5V_ctrl(void)
 }
 
 /// @brief Enables (after initialisation) the main 5V power supply, necessary for CAN communication and RDB
-/// @param  
+/// @param
 /// @return ESP_OK if all started OK, ESP_FAIL otherwise.
 esp_err_t enable_5V(void)
 {
@@ -188,7 +190,7 @@ esp_err_t enable_5V(void)
 }
 
 /// @brief Enables (after initialisation) the auxiliary 5V power supply, necessary for LDB
-/// @param  
+/// @param
 /// @return ESP_OK if all started OK, ESP_FAIL otherwise.
 esp_err_t enable_5V_AUX(void)
 {
@@ -208,8 +210,8 @@ esp_err_t enable_5V_AUX(void)
 }
 
 /// @brief Disables the main 5V power supply. CAN and RDB will go off.
-/// @param  
-/// @return 
+/// @param
+/// @return
 esp_err_t disable_5V(void)
 {
     esp_err_t ret = ESP_FAIL;
@@ -228,8 +230,8 @@ esp_err_t disable_5V(void)
 }
 
 /// @brief Disables the auxiliary 5V power supply. LDB will go off.
-/// @param  
-/// @return 
+/// @param
+/// @return
 esp_err_t disable_5V_AUX(void)
 {
     esp_err_t ret = ESP_FAIL;
@@ -929,32 +931,32 @@ extern "C" void app_main(void)
     }
 
     // Set up the packaging and queuing tasks
-    if (xTaskCreatePinnedToCore(itf_board_st_PKG, "ITF_ST", 4096, NULL, 3, &itf_board_st_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_board_st_PKG, "ITF_ST", 4096, NULL, 3, &itf_board_st_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface state package task");
         attemptRollBack();
     }
-    if (xTaskCreatePinnedToCore(itf_active_hilo_PKG, "ITF_AHL", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_active_hilo_PKG, "ITF_AHL", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base ActHiLo package task");
         attemptRollBack();
     }
-    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096, NULL, 3, &itf_slow_metrics_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096, NULL, 3, &itf_slow_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base slow metrics package task");
         attemptRollBack();
     }
-    if (xTaskCreatePinnedToCore(itf_fast_metrics_PKG, "ITF_FST_M", 4096, NULL, 3, &itf_fast_metrics_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_fast_metrics_PKG, "ITF_FST_M", 4096, NULL, 3, &itf_fast_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
         attemptRollBack();
     }
-    if (xTaskCreatePinnedToCore(itf_odometer_PKG, "ITF_ODO", 4096, NULL, 3, &itf_odometer_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_odometer_PKG, "ITF_ODO", 4096, NULL, 3, &itf_odometer_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base odometer package task");
         attemptRollBack();
     }
-    if (xTaskCreatePinnedToCore(itf_board_version_PKG, "ITF_VER", 4096, NULL, 3, &itf_board_version_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_board_version_PKG, "ITF_VER", 4096, NULL, 3, &itf_board_version_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface board version package task");
         attemptRollBack();
@@ -1022,9 +1024,9 @@ extern "C" void app_main(void)
 
     while (1)
     {
-        #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
         print_system_stats();
-        #endif
+#endif
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }

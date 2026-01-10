@@ -47,6 +47,41 @@ T swap_endian(T u)
 	return dest.u;
 }
 
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+void print_system_stats()
+{
+	// 2KB is usually enough for ~20-25 tasks.
+	// If you have a massive app, increase this.
+	char *stats_buffer = (char *)malloc(2048);
+	if (stats_buffer == NULL)
+	{
+		printf("Failed to allocate memory for stats\n");
+		return;
+	}
+
+	printf("\n======================================================\n");
+	printf("Task Name       State   Pri     Stack    Num    Core\n");
+	printf("------------------------------------------------------\n");
+	/* vTaskList shows:
+	   Name, State (R=Running, B=Blocked, S=Suspended, D=Deleted),
+	   Priority, Stack High Water Mark, Task Number, Core ID
+	*/
+	vTaskList(stats_buffer);
+	printf("%s", stats_buffer);
+
+	printf("\n------------------------------------------------------\n");
+	printf("Task Name       Abs Time (ticks)        CPU %%\n");
+	printf("------------------------------------------------------\n");
+	/* vTaskGetRunTimeStats shows the CPU time each task has consumed
+	 */
+	vTaskGetRunTimeStats(stats_buffer);
+	printf("%s", stats_buffer);
+	printf("======================================================\n");
+
+	free(stats_buffer);
+}
+#endif
+
 #pragma region Global variables
 // Should be extended to more ?
 struct board_ST
@@ -1706,4 +1741,12 @@ extern "C" void app_main(void)
 	start_ap_mode();
 	start_mdns();
 	start_webserver();
+
+	while (1)
+	{
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+		print_system_stats();
+#endif
+		vTaskDelay(pdMS_TO_TICKS(10000));
+	}
 }

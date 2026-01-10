@@ -1,4 +1,4 @@
-menu "Interface board configuration"
+menu "ITF Factory configuration"
 
     menu "Runtime stats"
         config ENABLE_RUNTIME_STATS_OUTPUT
