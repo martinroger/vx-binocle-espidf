@@ -1,3 +1,5 @@
 *.lock
 *.DS_Store
 .clangd
+sdkconfig
+sdkconfig.old
