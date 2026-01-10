@@ -31,6 +31,39 @@
 #endif
 #define TAG "MAIN"
 
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+void print_system_stats() {
+    // 2KB is usually enough for ~20-25 tasks. 
+    // If you have a massive app, increase this.
+    char *stats_buffer = (char*)malloc(2048);
+    if (stats_buffer == NULL) {
+        printf("Failed to allocate memory for stats\n");
+        return;
+    }
+
+    printf("\n======================================================\n");
+    printf("Task Name       State   Pri     Stack    Num    Core\n");
+    printf("------------------------------------------------------\n");
+    /* vTaskList shows: 
+       Name, State (R=Running, B=Blocked, S=Suspended, D=Deleted), 
+       Priority, Stack High Water Mark, Task Number, Core ID
+    */
+    vTaskList(stats_buffer);
+    printf("%s", stats_buffer);
+
+    printf("\n------------------------------------------------------\n");
+    printf("Task Name       Abs Time (ticks)        CPU %%\n");
+    printf("------------------------------------------------------\n");
+    /* vTaskGetRunTimeStats shows the CPU time each task has consumed 
+    */
+    vTaskGetRunTimeStats(stats_buffer);
+    printf("%s", stats_buffer);
+    printf("======================================================\n");
+
+    free(stats_buffer);
+}
+#endif
+
 #pragma region Global variables
 
 struct board_ST
@@ -896,32 +929,32 @@ extern "C" void app_main(void)
     }
 
     // Set up the packaging and queuing tasks
-    if (xTaskCreate(itf_board_st_PKG, "ITF_ST", 4096, NULL, 3, &itf_board_st_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_board_st_PKG, "ITF_ST", 4096, NULL, 3, &itf_board_st_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface state package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_active_hilo_PKG, "ITF_AHL", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_active_hilo_PKG, "ITF_AHL", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base ActHiLo package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_slow_metrics_PKG, "ITF_SLO_M", 4096, NULL, 3, &itf_slow_metrics_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096, NULL, 3, &itf_slow_metrics_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base slow metrics package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_fast_metrics_PKG, "ITF_FST_M", 4096, NULL, 3, &itf_fast_metrics_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_fast_metrics_PKG, "ITF_FST_M", 4096, NULL, 3, &itf_fast_metrics_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_odometer_PKG, "ITF_ODO", 4096, NULL, 3, &itf_odometer_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_odometer_PKG, "ITF_ODO", 4096, NULL, 3, &itf_odometer_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base odometer package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_board_version_PKG, "ITF_VER", 4096, NULL, 3, &itf_board_version_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_board_version_PKG, "ITF_VER", 4096, NULL, 3, &itf_board_version_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface board version package task");
         attemptRollBack();
@@ -989,6 +1022,9 @@ extern "C" void app_main(void)
 
     while (1)
     {
+        #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+        print_system_stats();
+        #endif
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
