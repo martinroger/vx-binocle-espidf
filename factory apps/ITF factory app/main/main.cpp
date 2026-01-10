@@ -47,6 +47,10 @@ T swap_endian(T u)
 	return dest.u;
 }
 
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+#include "runtime_stats.hpp"
+#endif
+
 #pragma region Global variables
 // Should be extended to more ?
 struct board_ST
@@ -1706,4 +1710,9 @@ extern "C" void app_main(void)
 	start_ap_mode();
 	start_mdns();
 	start_webserver();
+
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+xTaskCreate(print_system_stats,"RUNSTATS",4096,NULL,1,&print_runtime_stats_Hdl);
+#endif
+
 }

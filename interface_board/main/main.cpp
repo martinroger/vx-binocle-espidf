@@ -31,6 +31,10 @@
 #endif
 #define TAG "MAIN"
 
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+#include "runtime_stats.hpp"
+#endif
+
 #pragma region Global variables
 
 struct board_ST
@@ -111,7 +115,7 @@ static void button_isr_handler(void *arg)
 #pragma region 5V management
 
 /// @brief Initialiser for the control GPIOs of the 5V supplies
-/// @param  
+/// @param
 /// @return ESP_OK if all set up correctly. ESP_FAIL otherwise
 esp_err_t init_5V_ctrl(void)
 {
@@ -135,7 +139,7 @@ esp_err_t init_5V_ctrl(void)
 }
 
 /// @brief Enables (after initialisation) the main 5V power supply, necessary for CAN communication and RDB
-/// @param  
+/// @param
 /// @return ESP_OK if all started OK, ESP_FAIL otherwise.
 esp_err_t enable_5V(void)
 {
@@ -155,7 +159,7 @@ esp_err_t enable_5V(void)
 }
 
 /// @brief Enables (after initialisation) the auxiliary 5V power supply, necessary for LDB
-/// @param  
+/// @param
 /// @return ESP_OK if all started OK, ESP_FAIL otherwise.
 esp_err_t enable_5V_AUX(void)
 {
@@ -175,8 +179,8 @@ esp_err_t enable_5V_AUX(void)
 }
 
 /// @brief Disables the main 5V power supply. CAN and RDB will go off.
-/// @param  
-/// @return 
+/// @param
+/// @return
 esp_err_t disable_5V(void)
 {
     esp_err_t ret = ESP_FAIL;
@@ -195,8 +199,8 @@ esp_err_t disable_5V(void)
 }
 
 /// @brief Disables the auxiliary 5V power supply. LDB will go off.
-/// @param  
-/// @return 
+/// @param
+/// @return
 esp_err_t disable_5V_AUX(void)
 {
     esp_err_t ret = ESP_FAIL;
@@ -896,32 +900,32 @@ extern "C" void app_main(void)
     }
 
     // Set up the packaging and queuing tasks
-    if (xTaskCreate(itf_board_st_PKG, "ITF_ST", 4096, NULL, 3, &itf_board_st_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_board_st_PKG, "ITF_ST", 4096, NULL, 3, &itf_board_st_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface state package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_active_hilo_PKG, "ITF_AHL", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_active_hilo_PKG, "ITF_AHL", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base ActHiLo package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_slow_metrics_PKG, "ITF_SLO_M", 4096, NULL, 3, &itf_slow_metrics_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096, NULL, 3, &itf_slow_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base slow metrics package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_fast_metrics_PKG, "ITF_FST_M", 4096, NULL, 3, &itf_fast_metrics_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_fast_metrics_PKG, "ITF_FST_M", 4096, NULL, 3, &itf_fast_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base fast metrics package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_odometer_PKG, "ITF_ODO", 4096, NULL, 3, &itf_odometer_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_odometer_PKG, "ITF_ODO", 4096, NULL, 3, &itf_odometer_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create base odometer package task");
         attemptRollBack();
     }
-    if (xTaskCreate(itf_board_version_PKG, "ITF_VER", 4096, NULL, 3, &itf_board_version_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_board_version_PKG, "ITF_VER", 4096, NULL, 3, &itf_board_version_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(TAG, "Could not create interface board version package task");
         attemptRollBack();
@@ -986,6 +990,10 @@ extern "C" void app_main(void)
     }
     else
         ESP_LOGW(__func__, "Exit startup in degraded mode.");
+
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+    xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
+#endif
 
     while (1)
     {

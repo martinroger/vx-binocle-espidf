@@ -1,5 +1,19 @@
 menu "Display Application"
     
+
+    config ENABLE_RUNTIME_STATS_OUTPUT
+        bool "Enable runtime stats serial output"
+        default false
+        select FREERTOS_USE_TRACE_FACILITY
+        select FREERTOS_USE_STATS_FORMATTING_FUNCTIONS
+        select FREERTOS_VTASKLIST_INCLUDE_COREID
+        select FREERTOS_GENERATE_RUN_TIME_STATS
+        select FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER
+        help
+            Enabling this will automatically configure FreeRTOS to support 
+            vTaskList and vTaskGetRunTimeStats with Core ID inclusion.
+
+
     choice DISPLAY_SIDE
         prompt "Select the side on which the display is mounted"
 

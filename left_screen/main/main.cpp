@@ -19,6 +19,10 @@ using namespace esp_panel::board;
 #endif
 #define TAG "Main"
 
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+#include "runtime_stats.hpp"
+#endif
+
 #pragma region ACTIONS
 
 /// @brief Reboot in factory app from debug screen (button)
@@ -396,7 +400,7 @@ extern "C" void action_decimation_update(lv_event_t *e)
     {
         if (nvs_set_u32(h, "rpm_dec", display_board_st.rpm_decimation) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save RPM decimator status");
-        
+
         nvs_commit(h);
         nvs_close(h);
     }
@@ -546,13 +550,13 @@ extern "C" void app_main()
         attemptRollBack();
     }
     // Set up and start CAN packagers
-    if (xTaskCreate(display_board_st_PKG, "XDB_ST", 4096, NULL, 3, &display_board_st_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(display_board_st_PKG, "XDB_ST", 4096, NULL, 3, &display_board_st_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create display state package task");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
     }
-    if (xTaskCreate(display_board_version_PKG, "XDB_VER", 4096, NULL, 3, &display_board_version_PKG_hdl) != pdPASS)
+    if (xTaskCreatePinnedToCore(display_board_version_PKG, "XDB_VER", 4096, NULL, 3, &display_board_version_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create display version package task");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
@@ -663,7 +667,7 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
-                    //lv_label_set_text(objects.speed, "000");
+                    // lv_label_set_text(objects.speed, "000");
                     updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
@@ -678,7 +682,7 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
-                    //lv_label_set_text(objects.rpm, "0000");
+                    // lv_label_set_text(objects.rpm, "0000");
                     updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
@@ -687,6 +691,10 @@ extern "C" void app_main()
         }
     }
     vTaskResume(CAN_RX_tsk_hdl);
+
+#ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
+xTaskCreate(print_system_stats,"RUNSTATS",4096,NULL,1,&print_runtime_stats_Hdl);
+#endif
 
 #pragma region Main Loop
     while (true)

@@ -71,7 +71,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
         return ESP_FAIL;
     }
 
-    BaseType_t twai_core_id = 0;
+    BaseType_t twai_core_id = CONFIG_CAN_CORE_AFFINITY;
     if (xTaskCreatePinnedToCore(CAN_RX_Task, "twai RX daemon", 4096, NULL, 5, &CAN_RX_tsk_hdl, twai_core_id) != pdPASS)
     {
         ESP_LOGE(TAG, "Failed to create TWAI RX task");

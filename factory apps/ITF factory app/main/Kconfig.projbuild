@@ -1,5 +1,19 @@
-menu "Interface board configuration"
+menu "ITF Factory configuration"
 
+    menu "Runtime stats"
+        config ENABLE_RUNTIME_STATS_OUTPUT
+            bool "Enable runtime stats serial output"
+            default false
+            select FREERTOS_USE_TRACE_FACILITY
+            select FREERTOS_USE_STATS_FORMATTING_FUNCTIONS
+            select FREERTOS_VTASKLIST_INCLUDE_COREID
+            select FREERTOS_GENERATE_RUN_TIME_STATS
+            select FREERTOS_RUN_TIME_STATS_USING_ESP_TIMER
+            help
+                Enabling this will automatically configure FreeRTOS to support 
+                vTaskList and vTaskGetRunTimeStats with Core ID inclusion.
+    endmenu
+    
     menu "Interrupt GPIOs"
         config BUTTON_IRQ_GPIO
             int "BUTTON interrupt GPIO"
@@ -143,27 +157,6 @@ menu "Interface board configuration"
         config MCPWM_CAP_TIMER_RESOLUTION
             int "Resolution in Hz applied to the capture timer"
             default 100000
-    endmenu
-
-    menu "CAN frames parameters"
-        config SLOW_METRICS_PKG_RATE_MS
-            int "Slow metrics package and queue rate in ms"
-            default 500
-            help
-                Default is 500ms.
-
-        config FAST_METRICS_PKG_RATE_MS
-            int "Fast metrics package and queue rate in ms"
-            default 100
-            help
-                Default is 100ms.
-
-        config ACTIVE_HILO_PKG_RATE_MS
-            int "Active high/low and telltales package and queue rate in ms"
-            default 200 
-            help
-                Default is 200ms
-
     endmenu
 
     menu "Display control"
