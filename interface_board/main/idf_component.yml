@@ -3,21 +3,9 @@ dependencies:
   ## Required IDF version
   idf:
     version: '>=4.1.0'
-  # # Put list of dependencies here
-  # # For components maintained by Espressif:
-  # component: "~1.0.0"
-  # # For 3rd party components:
-  # username/component: ">=1.0.0,<2.0.0"
-  # username2/component2:
-  #   version: "~1.0.0"
-  #   # For transient dependencies `public` flag can be set.
-  #   # `public` flag doesn't have an effect dependencies of the `main` component.
-  #   # All dependencies of `main` are public by default.
-  #   public: true
-  # espressif/esp32_io_expander: ^1.1.1
-  # esp32_io_expander:
-  #   git: https://github.com/esp-arduino-libs/ESP32_IO_Expander.git
-  #   version: 1486996859f6e134ea4f554e4ce25d8374e1d5e0
   esp-idf-lib/ads111x: ^1.1.12
-  # esp-idf-lib/pcf8574: ^1.0.6
   esp-idf-lib/tca95x5: ^1.0.7
+  twai_daemon:
+    path: "../../common/twai_daemon"
+  binocan:
+    path: "../../common/binocan"
