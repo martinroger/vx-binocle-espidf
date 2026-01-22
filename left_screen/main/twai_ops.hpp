@@ -370,6 +370,8 @@ TimerHandle_t itf_board_st_TO_hdl;              // ITF board status timeout time
 TimerHandle_t itf_board_version_TO_hdl;         // ITF board version timeout timer handle
 
 // Timeout callbacks
+// Bit ugly ...
+esp_err_t OTAHandler(twai_message_t *rxMsg);
 
 inline void OTA_TO_cb(TimerHandle_t xTimer)
 {
@@ -795,6 +797,8 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             image_size = 0;
             blockCounter = 0x00;
             sequenceNumber = 0x01;
+            if(xTimerIsTimerActive(OTA_TO_hdl))
+                xTimerStop(OTA_TO_hdl,pdMS_TO_TICKS(10));
             ota_err = esp_ota_end(ota_handle);
             if (ota_err != ESP_OK)
             {
@@ -1266,8 +1270,8 @@ inline esp_err_t TO_timers_init()
 inline esp_err_t TO_timers_start()
 {
     esp_err_t ret = ESP_FAIL;
-    ret = (xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
-    ret &= (xTimerReset(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
+
+    ret = (xTimerReset(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
     ret &= (xTimerReset(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
     ret &= (xTimerReset(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
     ret &= (xTimerReset(itf_odometer_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
@@ -1275,6 +1279,7 @@ inline esp_err_t TO_timers_start()
     ret &= (xTimerReset(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
     ret &= (xTimerReset(itf_board_st_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
     ret &= (xTimerReset(itf_board_version_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
+    // ret &= (xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(10)) == pdPASS);
     return ret;
 }
 
