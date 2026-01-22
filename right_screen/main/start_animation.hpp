@@ -74,7 +74,8 @@ inline void startup_anim()
     }
 #endif
 
-    vTaskSuspend(CAN_RX_tsk_hdl);
+    vTaskSuspend(CAN_RX_tsk_hdl); // Ignore new inputs
+    TO_timers_stop(); // Stop the watchdogs
     // Prepare values for the starting/check sequence
     p_screen_interlock_OK = !screen_interlock_OK;
     lv_obj_set_style_opa(objects.interlock_state, LV_OPA_COVER, LV_STATE_DEFAULT);
