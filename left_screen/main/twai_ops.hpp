@@ -375,7 +375,7 @@ esp_err_t OTAHandler(twai_message_t *rxMsg);
 
 inline void OTA_TO_cb(TimerHandle_t xTimer)
 {
-    ESP_LOGW(__func__,"OTA Timeout");
+    ESP_LOGW(__func__, "OTA Timeout");
     OTAHandler(NULL);
 }
 
@@ -798,8 +798,8 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             image_size = 0;
             blockCounter = 0x00;
             sequenceNumber = 0x01;
-            if(xTimerIsTimerActive(OTA_TO_hdl))
-                xTimerStop(OTA_TO_hdl,pdMS_TO_TICKS(1));
+            if (xTimerIsTimerActive(OTA_TO_hdl))
+                xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1));
             ota_err = esp_ota_end(ota_handle);
             if (ota_err != ESP_OK)
             {
@@ -1272,17 +1272,47 @@ inline esp_err_t TO_timers_init()
 /// @return ESP_OK if all timers started successfully, ESP_FAIL otherwise
 inline esp_err_t TO_timers_start()
 {
-    esp_err_t ret = ESP_FAIL;
-
-    ret = (xTimerReset(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerReset(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerReset(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerReset(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerReset(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerReset(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerReset(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerReset(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    // ret &= (xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    esp_err_t ret = ESP_OK;
+    if (itf_active_hi_lo_TO_hdl)
+        ret |= (xTimerReset(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_active_hi_lo_TO_hdl is NULL, cannot start timer.");
+    if (itf_slow_metrics_TO_hdl)
+        ret |= (xTimerReset(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_slow_metrics_TO_hdl is NULL, cannot start timer.");
+    if (itf_fast_metrics_TO_hdl)
+        ret |= (xTimerReset(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_fast_metrics_TO_hdl is NULL, cannot start timer.");
+    if (itf_odometer_TO_hdl)
+        ret |= (xTimerReset(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_odometer_TO_hdl is NULL, cannot start timer.");
+    if (ext_oil_metrics_TO_hdl)
+        ret |= (xTimerReset(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "ext_oil_metrics_TO_hdl is NULL, cannot start timer.");
+    if (ext_chargecooling_metrics_TO_hdl)
+        ret |= (xTimerReset(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "ext_chargecooling_metrics_TO_hdl is NULL, cannot start timer.");
+    if (itf_board_st_TO_hdl)
+        ret |= (xTimerReset(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_board_st_TO_hdl is NULL, cannot start timer.");
+    if (itf_board_version_TO_hdl)
+        ret |= (xTimerReset(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_board_version_TO_hdl is NULL, cannot start timer.");
+    if (alt_display_st_TO_hdl)
+        ret |= (xTimerReset(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "alt_display_st_TO_hdl is NULL, cannot start timer.");
+    // if (OTA_TO_hdl)
+    //     ret |= (xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    // else
+    //     ESP_LOGW(__func__, "OTA_TO_hdl is NULL, cannot start timer.");
     return ret;
 }
 
@@ -1290,16 +1320,47 @@ inline esp_err_t TO_timers_start()
 /// @return ESP_OK if all timers stopped successfully, ESP_FAIL otherwise
 inline esp_err_t TO_timers_stop()
 {
-    esp_err_t ret = ESP_FAIL;
-    ret = (xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerStop(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerStop(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerStop(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerStop(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerStop(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerStop(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerStop(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    ret &= (xTimerStop(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    esp_err_t ret = ESP_OK;
+    if (OTA_TO_hdl)
+        ret |= (xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "OTA_TO_hdl is NULL, cannot stop timer.");
+    if (alt_display_st_TO_hdl)
+        ret |= (xTimerStop(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "alt_display_st_TO_hdl is NULL, cannot stop timer.");
+    if (itf_active_hi_lo_TO_hdl)
+        ret |= (xTimerStop(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_active_hi_lo_TO_hdl is NULL, cannot stop timer.");
+    if (itf_slow_metrics_TO_hdl)
+        ret |= (xTimerStop(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_slow_metrics_TO_hdl is NULL, cannot stop timer.");
+    if (itf_fast_metrics_TO_hdl)
+        ret |= (xTimerStop(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_fast_metrics_TO_hdl is NULL, cannot stop timer.");
+    if (itf_odometer_TO_hdl)
+        ret |= (xTimerStop(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_odometer_TO_hdl is NULL, cannot stop timer.");
+    if (ext_oil_metrics_TO_hdl)
+        ret |= (xTimerStop(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "ext_oil_metrics_TO_hdl is NULL, cannot stop timer.");
+    if (ext_chargecooling_metrics_TO_hdl)
+        ret |= (xTimerStop(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "ext_chargecooling_metrics_TO_hdl is NULL, cannot stop timer.");
+    if (itf_board_st_TO_hdl)
+        ret |= (xTimerStop(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_board_st_TO_hdl is NULL, cannot stop timer.");
+    if (itf_board_version_TO_hdl)
+        ret |= (xTimerStop(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_board_version_TO_hdl is NULL, cannot stop timer.");
     return ret;
 }
 
