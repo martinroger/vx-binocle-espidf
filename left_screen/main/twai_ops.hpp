@@ -651,7 +651,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         }
         else
         {
-            ESP_LOGI(__func__, "Flow Control Frame sent.");
+            ESP_LOGD(__func__, "Flow Control Frame sent.");
         }
         FC_sent = true;
         return ESP_OK; // Successful break
@@ -867,7 +867,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             }
             else
             {
-                ESP_LOGI(__func__, "Flow Control Frame sent.");
+                ESP_LOGD(__func__, "Flow Control Frame sent.");
             }
             FC_sent = true;
             sequenceNumber = 0x01;

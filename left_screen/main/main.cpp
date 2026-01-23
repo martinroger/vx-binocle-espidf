@@ -546,8 +546,8 @@ extern "C" void app_main()
     if (TO_timers_init() != ESP_OK)
     {
         ESP_LOGW(__func__,"Impossible to init CAN timeout watchdog timers");
-        // display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        // attemptRollBack();
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+        attemptRollBack();
     }
     // CAN communications
     ESP_LOGI(__func__, "Starting TWAI port and daemon");
@@ -675,7 +675,7 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
-                    // lv_label_set_text(objects.speed, "000");
+                    lv_label_set_text(objects.speed, "000");
                     updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
@@ -690,7 +690,7 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
-                    // lv_label_set_text(objects.rpm, "0000");
+                    lv_label_set_text(objects.rpm, "0000");
                     updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }

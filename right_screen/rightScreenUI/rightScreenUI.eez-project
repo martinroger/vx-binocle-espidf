@@ -409,6 +409,7 @@
                       "clickableFlagType": "literal",
                       "flagScrollbarMode": "",
                       "flagScrollDirection": "",
+                      "checkedState": false,
                       "checkedStateType": "literal",
                       "disabledStateType": "literal",
                       "states": "",
