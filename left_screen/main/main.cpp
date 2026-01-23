@@ -546,8 +546,8 @@ extern "C" void app_main()
     if (TO_timers_init() != ESP_OK)
     {
         ESP_LOGW(__func__,"Impossible to init CAN timeout watchdog timers");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        // display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+        // attemptRollBack();
     }
     // CAN communications
     ESP_LOGI(__func__, "Starting TWAI port and daemon");

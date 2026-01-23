@@ -375,6 +375,7 @@ esp_err_t OTAHandler(twai_message_t *rxMsg);
 
 inline void OTA_TO_cb(TimerHandle_t xTimer)
 {
+    ESP_LOGW(__func__,"OTA Timeout");
     OTAHandler(NULL);
 }
 
@@ -497,7 +498,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         return ESP_ERR_TIMEOUT; // Error break
     }
     else
-        xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(100));
+        xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(1));
 
     // Get target partition
     if (update_partition == NULL) // Only first time
@@ -1239,7 +1240,7 @@ inline esp_err_t itf_board_version_Handler(twai_message_t *rxMsg)
 inline esp_err_t TO_timers_init()
 {
     esp_err_t ret = ESP_FAIL;
-    OTA_TO_hdl = xTimerCreate("OTA_TO", pdMS_TO_TICKS(2000), pdFALSE, NULL, OTA_TO_cb);
+    OTA_TO_hdl = xTimerCreate("OTA_TO", pdMS_TO_TICKS(5000), pdFALSE, NULL, OTA_TO_cb);
     itf_active_hi_lo_TO_hdl = xTimerCreate("act_hi_lo_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS), pdFALSE, NULL, itf_active_hi_lo_TO_cb);
     itf_slow_metrics_TO_hdl = xTimerCreate("slow_m_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, itf_slow_metrics_TO_cb);
     itf_fast_metrics_TO_hdl = xTimerCreate("fast_m_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, itf_fast_metrics_TO_cb);
