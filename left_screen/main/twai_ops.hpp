@@ -1241,6 +1241,7 @@ inline esp_err_t TO_timers_init()
 {
     esp_err_t ret = ESP_FAIL;
     OTA_TO_hdl = xTimerCreate("OTA_TO", pdMS_TO_TICKS(5000), pdFALSE, NULL, OTA_TO_cb);
+    alt_display_st_TO_hdl = xTimerCreate("alt_st_TO", pdMS_TO_TICKS(5000), pdFALSE, NULL, alt_display_st_TO_cb);
     itf_active_hi_lo_TO_hdl = xTimerCreate("act_hi_lo_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS), pdFALSE, NULL, itf_active_hi_lo_TO_cb);
     itf_slow_metrics_TO_hdl = xTimerCreate("slow_m_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, itf_slow_metrics_TO_cb);
     itf_fast_metrics_TO_hdl = xTimerCreate("fast_m_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, itf_fast_metrics_TO_cb);
@@ -1252,6 +1253,7 @@ inline esp_err_t TO_timers_init()
 
     // Check all timers created successfully
     if (OTA_TO_hdl != NULL &&
+        alt_display_st_TO_hdl != NULL &&
         itf_active_hi_lo_TO_hdl != NULL &&
         itf_slow_metrics_TO_hdl != NULL &&
         itf_fast_metrics_TO_hdl != NULL &&
