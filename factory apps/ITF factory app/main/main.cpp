@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/timers.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
 #include "esp_event.h"
@@ -957,6 +958,13 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+// Dummy timer callback for the OTA over CAN timer
+static void ota_TO_timer_cb(TimerHandle_t xTimer)
+{
+	// Nothing to do here, just a dummy to trigger the timer
+}
+
+
 /// @brief Handler for the ECU update over CAN (brutal)
 /// @param req POST /flash?targetECU=
 /// @return
@@ -1107,6 +1115,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	int bytesRetrieved = 0;						 // Actual number of retrieved bytes waiting to be sent (max 4096)
 	uint8_t txMsgCursor = 1;					 // Current writeable position in the txMsg data buffer
 	uint32_t bufCursor = 0;						 // Current unprocessed byte in the buf
+	static TimerHandle_t OTA_TO_timer;			 // Response timeout timer handle
 	// Flags for the multi part transfer
 	bool daemonSuspended = false; // Indicates if the daemon tasks have been suspended
 	bool FF_sent = false;		  // Indicates if the FF has been sent
@@ -1119,6 +1128,16 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	esp_err_t tx_err;
 	esp_err_t rx_err;
 	char out[256]; // Char buffer for special output to results field
+
+	// Create the OTA timeout timer if it does not exist yet
+	if (OTA_TO_timer == NULL)
+	{
+		OTA_TO_timer = xTimerCreate("OTA_TO_timer", pdMS_TO_TICKS(CONFIG_OTA_RESP_TIMEOUT_MS), pdFALSE, (void *)0, ota_TO_timer_cb);
+		if (OTA_TO_timer == NULL)
+		{
+			ESP_LOGE(__func__, "Could not create OTA response timeout timer");
+		}
+	}
 
 	// Data shipping loop
 	while (sentBytes < file_size) // As long as there is data to send
@@ -1225,6 +1244,11 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			FF_sent = true;
 			FC_wait = true;
 		}
+		// Start or restart the timer if FC_wait is true
+		if (OTA_TO_timer != NULL && FC_wait)
+		{
+			xTimerReset(OTA_TO_timer, pdMS_TO_TICKS(1));
+		}
 
 		// Then check for FC_wait, either timeouts/errors. Hard exit if nothing is received.
 		int otherFrames = 0; // This should ideally be replaced by a timer
@@ -1296,7 +1320,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			}
 			}
 			// Eject on last loop at 500 messages
-			if (otherFrames == 500 && FC_wait)
+			if (otherFrames >= 500 && FC_wait)
 			{
 				ESP_LOGE(__func__, "No FC frame received 500 frames");
 				free(buf);
@@ -1309,6 +1333,33 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
+			}
+			// Eject if timer is expired while FC_wait remains true
+			if (OTA_TO_timer != NULL)
+			{
+				if (xTimerIsTimerActive(OTA_TO_timer) == pdFALSE && FC_wait)
+				{
+					ESP_LOGE(__func__, "No FC frame received within OTA timer expiry");
+					free(buf);
+					drain_remaining_body(req);
+					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within timeout.");
+					if (daemonSuspended)
+					{
+						vTaskResume(CAN_RX_tsk_hdl);
+						vTaskResume(CAN_TX_tsk_hdl);
+						daemonSuspended = false;
+					}
+					return ESP_FAIL;
+				}
+			}
+		}
+
+		// Stop the timer if it is still running
+		if (OTA_TO_timer != NULL)
+		{
+			if (xTimerIsTimerActive(OTA_TO_timer) == pdTRUE)
+			{
+				xTimerStop(OTA_TO_timer, pdMS_TO_TICKS(1));
 			}
 		}
 
@@ -1405,6 +1456,10 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	uint8_t OTA_status = 0xFF;
 	int otherFrames = 0; // This should ideally be replaced by a timer
 	bool statusReceived = false;
+	// Use the timer again
+	if (OTA_TO_timer != NULL)
+		xTimerReset(OTA_TO_timer, pdMS_TO_TICKS(1));
+
 	while (otherFrames < 500 && !statusReceived)
 	{
 		rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
@@ -1413,7 +1468,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		case ESP_ERR_TIMEOUT: // Return on RX timed out
 		{
 			ESP_LOGW(__func__, "No Status frame received during timeout");
-			free(buf);
 			break;
 		}
 		case ESP_OK: // Something valid was received, set conditions for loop exit if valid FC CTS
@@ -1433,10 +1487,27 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			break;
 		}
 		}
-		// Eject on last loop at 500 messages
-		if (otherFrames == 500)
+		// Eject on last loop at 500 messages if no status received
+		if (otherFrames == 500 && !statusReceived)
 		{
 			ESP_LOGW(__func__, "No status frame received 500 frames");
+			break;
+		}
+		if (OTA_TO_timer != NULL)
+		{
+			if (xTimerIsTimerActive(OTA_TO_timer) == pdFALSE && !statusReceived)
+			{
+				ESP_LOGW(__func__, "No status frame received within OTA timer expiry");
+				break;
+			}
+		}
+	}
+	// Stop the timer if it is still running
+	if (OTA_TO_timer != NULL)
+	{
+		if (xTimerIsTimerActive(OTA_TO_timer) == pdTRUE)
+		{
+			xTimerStop(OTA_TO_timer, pdMS_TO_TICKS(1));
 		}
 	}
 
@@ -1712,7 +1783,6 @@ extern "C" void app_main(void)
 	start_webserver();
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
-xTaskCreate(print_system_stats,"RUNSTATS",4096,NULL,1,&print_runtime_stats_Hdl);
+	xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
-
 }

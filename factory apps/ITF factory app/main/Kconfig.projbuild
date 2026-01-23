@@ -1,5 +1,9 @@
 menu "ITF Factory configuration"
 
+    config OTA_RESP_TIMEOUT_MS
+        int "Maximum waiting time for an UDS response during OTA over CAN"
+        default 8000
+    
     menu "Runtime stats"
         config ENABLE_RUNTIME_STATS_OUTPUT
             bool "Enable runtime stats serial output"
