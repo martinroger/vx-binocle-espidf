@@ -5,7 +5,10 @@
 
 extern const lv_font_t ui_font_white_rabbit_14px;
 extern const lv_font_t ui_font_white_rabbit_16px;
+extern const lv_font_t ui_font_white_rabbit_20px;
 extern const lv_font_t ui_font_white_rabbit_24px;
+extern const lv_font_t ui_font_white_rabbit_28px;
+extern const lv_font_t ui_font_white_rabbit_32px;
 extern const lv_font_t ui_font_white_rabbit_60px;
 extern const lv_font_t ui_font_white_rabbit_70px;
 extern const lv_font_t ui_font_white_rabbit_96px;

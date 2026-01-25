@@ -13,9 +13,8 @@
 #include "theme.hpp"
 #include "twai_daemon.h"
 
-#define SLOW_BLINK_PERIOD 200000
-#define FAST_BLINK_PERIOD 100000
-
+#define SLOW_BLINK_PERIOD CONFIG_SLOW_BLINK_INTERVAL_MS * 1000
+#define FAST_BLINK_PERIOD CONFIG_FAST_BLINK_INTERVAL_MS * 1000
 bool p_blinkOn, blinkOn = false; // Whether the blinker is sending a valid value or not
 
 /// @brief Blink variable inverter
@@ -63,7 +62,7 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         if (lround(speed_kph) != lround(p_speed_kph))
-            lv_label_set_text_fmt(objects.speed, "%03ld", lround(speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)));
+            lv_label_set_text_fmt(objects.speed, "%ld", lround(speed_kph / ((display_board_st.mph_selected) ? COEFF_MPH_TO_KPH : 1)));
         p_speed_kph = speed_kph;
         updatedElements++;
     }
@@ -99,7 +98,7 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
         if (((lround(p_rpm / (float)(display_board_st.rpm_decimation)) != lround(rpm / (float)(display_board_st.rpm_decimation)))) || forceRefresh)
-            lv_label_set_text_fmt(objects.rpm, "%04ld", (display_board_st.rpm_decimation * lround(((float)rpm) / (display_board_st.rpm_decimation))));
+            lv_label_set_text_fmt(objects.rpm, "%ld", (display_board_st.rpm_decimation * lround(((float)rpm) / (display_board_st.rpm_decimation))));
         // lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) && (blinkOn || !(display_board_st.rpm_alarm_blink)) : alarmOn);
         if (rpm >= display_board_st.shift_mid_threshold)
         {
@@ -195,20 +194,20 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     if (p_fuelLevel_pc != fuelLevel_pc || forceRefresh) // Fuel level percentage
     {
         // lv_bar_set_value(objects.fuel_bar, fuelLevel_pc, LV_ANIM_OFF);
-        lv_label_set_text_fmt(objects.fuel_level, "%03d", fuelLevel_pc);
+        lv_label_set_text_fmt(objects.fuel_level, "%d", fuelLevel_pc);
         p_fuelLevel_pc = fuelLevel_pc;
         updatedElements++;
     }
     if (p_coolant_degC != coolant_degC || forceRefresh) // Coolant temperature
     {
         // lv_bar_set_value(objects.coolant_bar, coolant_degC, LV_ANIM_OFF);
-        lv_label_set_text_fmt(objects.coolant, "%03d", coolant_degC);
+        lv_label_set_text_fmt(objects.coolant, "%d", coolant_degC);
         p_coolant_degC = coolant_degC;
         updatedElements++;
     }
     if (p_lvVoltage_v != lvVoltage_v || forceRefresh) // 12V Voltage value
     {
-        lv_label_set_text_fmt(objects.voltage_lvl, "%04.1fV", lvVoltage_v);
+        lv_label_set_text_fmt(objects.voltage_lvl, "%4.1fV", lvVoltage_v);
         p_lvVoltage_v = lvVoltage_v;
         updatedElements++;
     }
@@ -279,13 +278,13 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     }
     if (p_odometer_km != odometer_km || forceRefresh) // Odometer. Might need comparison at the uint level
     {
-        lv_label_set_text_fmt(objects.odometer, "%06.0f", odometer_km / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1));
+        lv_label_set_text_fmt(objects.odometer, "%.0f", odometer_km / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1));
         p_odometer_km = odometer_km;
         updatedElements++;
     }
     if (p_trip_km != trip_km || forceRefresh) // Trip, might need comparison at the uint level
     {
-        lv_label_set_text_fmt(objects.trip, "%05.1f", trip_km / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1));
+        lv_label_set_text_fmt(objects.trip, "%.1f", trip_km / ((display_board_st.mph_selected == 1) ? COEFF_MPH_TO_KPH : 1));
         p_trip_km = trip_km;
         updatedElements++;
     }

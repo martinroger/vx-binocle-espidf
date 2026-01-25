@@ -40,4 +40,14 @@ menu "Display Application"
         int "0-255 ms separation time between CAN frames."
         default 1
         range 0 255
+
+    config SLOW_BLINK_INTERVAL_MS
+        int "Milliseconds for slow blink interval"
+        default 300
+        range 300 1000
+    
+    config FAST_BLINK_INTERVAL_MS
+        int "Milliseconds for fast blink interval"
+        default 100
+        range 100 300
 endmenu

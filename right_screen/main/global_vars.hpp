@@ -112,6 +112,6 @@ float trip_km, p_trip_km = 0.0;
 static const char *speed_kph_scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
 static const char *speed_mph_scale_labels[10] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", NULL};
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
-static const char *rpm_scale_labels[10] = {"0", "1000", "2000", "3000", "4000", "5000", "6000", "7000", "8000", NULL};
+static const char *rpm_scale_labels[10] = {"0", "10", "20", "30", "40", "50", "60", "70", "80", NULL};
 #endif
 #pragma endregion
