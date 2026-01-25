@@ -19,7 +19,7 @@
 inline void startup_anim()
 {
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
-    lv_obj_set_style_pad_radial(objects.rpm_scale, 20, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
+    lv_obj_set_style_pad_radial(objects.rpm_scale, 10, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
 
     // Settings screen alarm section
@@ -40,7 +40,7 @@ inline void startup_anim()
     lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
 
     // RPM decimation selector
-    lv_obj_set_state(objects.decimation_sw,LV_STATE_CHECKED,(display_board_st.rpm_decimation>10));
+    lv_obj_set_state(objects.decimation_sw, LV_STATE_CHECKED, (display_board_st.rpm_decimation > 10));
 
 #elifdef CONFIG_RIGHT_SIDE_DISPLAY
     lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);
@@ -75,7 +75,7 @@ inline void startup_anim()
 #endif
 
     vTaskSuspend(CAN_RX_tsk_hdl); // Ignore new inputs
-    TO_timers_stop(); // Stop the watchdogs
+    TO_timers_stop();             // Stop the watchdogs
     // Prepare values for the starting/check sequence
     p_screen_interlock_OK = !screen_interlock_OK;
     lv_obj_set_style_opa(objects.interlock_state, LV_OPA_COVER, LV_STATE_DEFAULT);

@@ -542,10 +542,10 @@ extern "C" void app_main()
 
 #pragma region CAN START
     // Pre-empt the CAN TO timers
-    ESP_LOGI(__func__,"Starting CAN message timeout watchdogs");
+    ESP_LOGI(__func__, "Starting CAN message timeout watchdogs");
     if (TO_timers_init() != ESP_OK)
     {
-        ESP_LOGW(__func__,"Impossible to init CAN timeout watchdog timers");
+        ESP_LOGW(__func__, "Impossible to init CAN timeout watchdog timers");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
     }
@@ -558,13 +558,13 @@ extern "C" void app_main()
         attemptRollBack();
     }
     // Set up and start CAN packagers
-    if (xTaskCreatePinnedToCore(display_board_st_PKG, "XDB_ST", 4096, NULL, 3, &display_board_st_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(display_board_st_PKG, "XDB_ST", 4096, NULL, 3, &display_board_st_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create display state package task");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
     }
-    if (xTaskCreatePinnedToCore(display_board_version_PKG, "XDB_VER", 4096, NULL, 3, &display_board_version_PKG_hdl,CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(display_board_version_PKG, "XDB_VER", 4096, NULL, 3, &display_board_version_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create display version package task");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
@@ -675,7 +675,7 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
-                    lv_label_set_text(objects.speed, "000");
+                    lv_label_set_text(objects.speed, "0");
                     updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
@@ -690,7 +690,7 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
-                    lv_label_set_text(objects.rpm, "0000");
+                    lv_label_set_text(objects.rpm, "0");
                     updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
@@ -702,7 +702,7 @@ extern "C" void app_main()
     TO_timers_start();
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
-xTaskCreate(print_system_stats,"RUNSTATS",4096,NULL,1,&print_runtime_stats_Hdl);
+    xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
 
 #pragma region Main Loop
