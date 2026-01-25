@@ -15,6 +15,17 @@
 #include "twai_daemon.h"
 #include "binocan.h"
 
+TimerHandle_t alt_display_st_TO_hdl; // Alternative display timeout timer handle
+
+/// @brief Callback for alternate display status timeout
+/// @param xTimer
+inline void alt_display_st_TO_cb(TimerHandle_t xTimer)
+{
+    // Only set the screen interlock as NOK
+    screen_interlock_OK = false;
+    // Assumes this is a one-shot timer so it's stopped.
+}
+
 #pragma region SPECIFIC
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
 #define UDS_RESP_FRAME_ID BINOCAN_RDB_UDS_RESP_FRAME_ID
@@ -31,6 +42,8 @@ inline esp_err_t alt_display_st_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+    if (xTimerReset(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
     // General state message check
     if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
     {
@@ -129,6 +142,8 @@ inline esp_err_t alt_display_st_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+    if (xTimerReset(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
     if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
     {
         screen_interlock_OK = ((uint8_t)binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
@@ -332,8 +347,103 @@ inline void display_board_version_PKG(void *pvParameters)
 
 #pragma region COMMON
 
+/*
+Maybe this could be standardized as a struct or class...
+Ideally something linking :
+- a twai_message_t handler
+- a FreeRTOS time-out timer
+- the timer callback
+- a basic initiator (for the timer)
+*/
+// FreeRTOS objects
 TaskHandle_t display_board_st_PKG_hdl;
 TaskHandle_t display_board_version_PKG_hdl;
+
+TimerHandle_t OTA_TO_hdl;                       // OTA message timeout timer handle
+TimerHandle_t itf_active_hi_lo_TO_hdl;          // ITF active highs and lows timeout timer handle
+TimerHandle_t itf_slow_metrics_TO_hdl;          // ITF slow metrics timeout timer handle
+TimerHandle_t itf_fast_metrics_TO_hdl;          // ITF fast metrics timeout timer handle
+TimerHandle_t itf_odometer_TO_hdl;              // ITF odometer timeout timer handle
+TimerHandle_t ext_oil_metrics_TO_hdl;           // EXT oil metrics timeout timer handle
+TimerHandle_t ext_chargecooling_metrics_TO_hdl; // EXT chargecooling metrics timeout timer handle
+TimerHandle_t itf_board_st_TO_hdl;              // ITF board status timeout timer handle
+TimerHandle_t itf_board_version_TO_hdl;         // ITF board version timeout timer handle
+
+// Timeout callbacks
+// Bit ugly ...
+esp_err_t OTAHandler(twai_message_t *rxMsg);
+
+inline void OTA_TO_cb(TimerHandle_t xTimer)
+{
+    ESP_LOGW(__func__, "OTA Timeout");
+    OTAHandler(NULL);
+}
+
+inline void itf_active_hi_lo_TO_cb(TimerHandle_t xTimer)
+{
+    absOn = true;
+    airbagOn = true;
+    milOn = true;
+    highBeamOn = true;
+    brakesOn = true;
+    lowCoolantOn = true;
+    lowFuelOn = true;
+    lowOilOn = true;
+    batteryOn = true;
+    overTemperatureOn = true;
+    parkingBrakeOn = true;
+    indicatorsOn = true;
+    leftTurnOn = true;
+    rightTurnOn = true;
+    alarmOn = true;
+    headlightsOn = true;
+    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
+}
+
+inline void itf_slow_metrics_TO_cb(TimerHandle_t xTimer)
+{
+    coolant_degC = UINT8_MAX;
+    fuelLevel_pc = 0;
+    lvVoltage_v = 0;
+    batteryOn = true;
+    overTemperatureOn = true;
+    lowFuelOn = true;
+    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+}
+
+inline void itf_fast_metrics_TO_cb(TimerHandle_t xTimer)
+{
+    rpm = 0;
+    speed_kph = 0;
+    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
+}
+
+inline void itf_odometer_TO_cb(TimerHandle_t xTimer)
+{
+    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+}
+
+inline void ext_oil_metrics_TO_cb(TimerHandle_t xTimer)
+{
+    // Do nothing
+}
+
+inline void ext_chargecooling_metrics_TO_cb(TimerHandle_t xTimer)
+{
+    // Do nothing
+}
+
+inline void itf_board_st_TO_cb(TimerHandle_t xTimer)
+{
+    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
+}
+
+inline void itf_board_version_TO_cb(TimerHandle_t xTimer)
+{
+    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+}
+
+// Actual TWAI message handlers
 
 inline esp_err_t OTAHandler(twai_message_t *rxMsg)
 {
@@ -355,9 +465,46 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         .data_length_code = 8};
     UDS_RESP_MSG.ss = 0;
     esp_err_t ota_err;
+
+    // External reset of the OTA, such as on timeout
+    if (rxMsg == NULL)
+    {
+        ESP_LOGW(__func__, "NULL message passed to OTA, resetting status");
+        if (OTA_started)
+        {
+            esp_ota_abort(ota_handle);
+            FC_sent = false;
+            FF_received = false;
+            OTA_started = false;
+            receivedBytes = 0;
+            transferComplete = false;
+            image_size = 0;
+            blockCounter = 0x00;
+            sequenceNumber = 0x01;
+            ESP_LOGW(__func__, "OTA was in progress, aborted.");
+        }
+        // Send the Error Frame
+        UDS_RESP_MSG.extd = false;
+        UDS_RESP_MSG.data[0] = 0x40;
+        UDS_RESP_MSG.data[1] = 0xFF; // General error
+        for (size_t i = 2; i < 8; i++)
+        {
+            UDS_RESP_MSG.data[i] = 0xAA;
+        }
+        if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            ESP_LOGE(__func__, "Could not queue internal state message in queue");
+        else
+            ESP_LOGI(__func__, "Error frame sent");
+        return ESP_ERR_TIMEOUT; // Error break
+    }
+    else
+        xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(1));
+
+    // Get target partition
     if (update_partition == NULL) // Only first time
         update_partition = esp_ota_get_next_update_partition(NULL);
     UDS_FRAME_OBJ
+    // Attempt unpack, filter malformed frames
     if (UDS_FRAME_UNPACK)
     {
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
@@ -391,7 +538,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
     // Check if this is a correct first frame
     if ((rxMsg->data[0] & 0xF0) == 0x10)
     {
-        if (OTA_started || FF_received) // Break case
+        if (OTA_started || FF_received) // Early exit error case
         {
             ESP_LOGE(__func__, "New FF received while OTA in progress, aborting.");
             esp_ota_abort(ota_handle);
@@ -504,7 +651,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         }
         else
         {
-            ESP_LOGI(__func__, "Flow Control Frame sent.");
+            ESP_LOGD(__func__, "Flow Control Frame sent.");
         }
         FC_sent = true;
         return ESP_OK; // Successful break
@@ -651,6 +798,8 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             image_size = 0;
             blockCounter = 0x00;
             sequenceNumber = 0x01;
+            if (xTimerIsTimerActive(OTA_TO_hdl))
+                xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1));
             ota_err = esp_ota_end(ota_handle);
             if (ota_err != ESP_OK)
             {
@@ -685,7 +834,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
                     ESP_LOGE(__func__, "Could not queue internal state message in queue");
                 else
                     ESP_LOGI(__func__, "Status frame sent");
-                vTaskDelay(pdMS_TO_TICKS(100));
+                vTaskDelay(pdMS_TO_TICKS(1));
                 esp_restart();
                 return ESP_OK;
             }
@@ -718,7 +867,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             }
             else
             {
-                ESP_LOGI(__func__, "Flow Control Frame sent.");
+                ESP_LOGD(__func__, "Flow Control Frame sent.");
             }
             FC_sent = true;
             sequenceNumber = 0x01;
@@ -741,6 +890,9 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+    if (xTimerReset(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
+
     if (binocan_itf_active_hi_lo_itf_abs_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_abs_al_tt))
     {
         absOn = !(binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_ON_CHOICE);
@@ -908,7 +1060,8 @@ inline esp_err_t itf_slow_metrics_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
-
+    if (xTimerReset(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
     if (binocan_itf_slow_metrics_itf_coolant_temp_is_in_range(binocan_itf_slow_metrics_msg.itf_coolant_temp))
     {
         coolant_degC = (uint8_t)round(binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp));
@@ -955,6 +1108,8 @@ inline esp_err_t itf_fast_metrics_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+    if (xTimerReset(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
     if (binocan_itf_fast_metrics_itf_rpm_is_in_range(binocan_itf_fast_metrics_msg.itf_rpm))
     {
         rpm = (uint32_t)lround(binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm));
@@ -988,6 +1143,9 @@ inline esp_err_t itf_odometer_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+    if (xTimerReset(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
+
     if (binocan_itf_odometer_itf_odometer_km_is_in_range(binocan_itf_odometer_msg.itf_odometer_km) && binocan_itf_odometer_itf_odo_rem_m_is_in_range(binocan_itf_odometer_msg.itf_odo_rem_m))
     {
         odometer_km = binocan_itf_odometer_itf_odometer_km_decode(binocan_itf_odometer_msg.itf_odometer_km) + binocan_itf_odometer_itf_odo_rem_m_decode(binocan_itf_odometer_msg.itf_odo_rem_m) / 1000.0;
@@ -1020,6 +1178,8 @@ inline esp_err_t ext_oil_metrics_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+    if (xTimerReset(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
     return ESP_OK;
 }
 
@@ -1031,6 +1191,8 @@ inline esp_err_t ext_chargecooling_metrics_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+    if (xTimerReset(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
     return ESP_OK;
 }
 
@@ -1042,6 +1204,10 @@ inline esp_err_t itf_board_st_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+
+    if (xTimerReset(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
+
     if (binocan_itf_board_st_itf_sm_st_is_in_range(binocan_itf_board_st_msg.itf_sm_st))
     {
         itf_board_st = (uint8_t)binocan_itf_board_st_itf_sm_st_decode(binocan_itf_board_st_msg.itf_sm_st);
@@ -1062,7 +1228,140 @@ inline esp_err_t itf_board_version_Handler(twai_message_t *rxMsg)
         ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
         return ESP_FAIL;
     }
+    if (xTimerReset(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+        ESP_LOGE(__func__, "Could not reset timeout timer.");
     return ESP_OK;
+}
+
+// GP functions
+
+/// @brief Initializer for all the timeout timers
+/// @return ESP_OK if all timers created successfully, ESP_FAIL otherwise
+inline esp_err_t TO_timers_init()
+{
+    esp_err_t ret = ESP_FAIL;
+    OTA_TO_hdl = xTimerCreate("OTA_TO", pdMS_TO_TICKS(5000), pdFALSE, NULL, OTA_TO_cb);
+    alt_display_st_TO_hdl = xTimerCreate("alt_st_TO", pdMS_TO_TICKS(5000), pdFALSE, NULL, alt_display_st_TO_cb);
+    itf_active_hi_lo_TO_hdl = xTimerCreate("act_hi_lo_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS), pdFALSE, NULL, itf_active_hi_lo_TO_cb);
+    itf_slow_metrics_TO_hdl = xTimerCreate("slow_m_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, itf_slow_metrics_TO_cb);
+    itf_fast_metrics_TO_hdl = xTimerCreate("fast_m_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, itf_fast_metrics_TO_cb);
+    itf_odometer_TO_hdl = xTimerCreate("odom_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_ODOMETER_CYCLE_TIME_MS), pdFALSE, NULL, itf_odometer_TO_cb);
+    ext_oil_metrics_TO_hdl = xTimerCreate("oil_m_TO", pdMS_TO_TICKS(5 * BINOCAN_EXT_OIL_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, ext_oil_metrics_TO_cb);
+    ext_chargecooling_metrics_TO_hdl = xTimerCreate("chg_m_TO", pdMS_TO_TICKS(5 * BINOCAN_EXT_CHARGECOOLING_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, ext_chargecooling_metrics_TO_cb);
+    itf_board_st_TO_hdl = xTimerCreate("ibs_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_BOARD_ST_CYCLE_TIME_MS), pdFALSE, NULL, itf_board_st_TO_cb);
+    itf_board_version_TO_hdl = xTimerCreate("ibv_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_BOARD_VERSION_CYCLE_TIME_MS), pdFALSE, NULL, itf_board_version_TO_cb);
+
+    // Check all timers created successfully
+    if (OTA_TO_hdl != NULL &&
+        alt_display_st_TO_hdl != NULL &&
+        itf_active_hi_lo_TO_hdl != NULL &&
+        itf_slow_metrics_TO_hdl != NULL &&
+        itf_fast_metrics_TO_hdl != NULL &&
+        itf_odometer_TO_hdl != NULL &&
+        ext_oil_metrics_TO_hdl != NULL &&
+        ext_chargecooling_metrics_TO_hdl != NULL &&
+        itf_board_st_TO_hdl != NULL &&
+        itf_board_version_TO_hdl != NULL)
+    {
+        ret = ESP_OK;
+    }
+    return ret;
+}
+
+/// @brief Starts the timeout timers
+/// @return ESP_OK if all timers started successfully, ESP_FAIL otherwise
+inline esp_err_t TO_timers_start()
+{
+    esp_err_t ret = ESP_OK;
+    if (itf_active_hi_lo_TO_hdl)
+        ret |= (xTimerReset(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_active_hi_lo_TO_hdl is NULL, cannot start timer.");
+    if (itf_slow_metrics_TO_hdl)
+        ret |= (xTimerReset(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_slow_metrics_TO_hdl is NULL, cannot start timer.");
+    if (itf_fast_metrics_TO_hdl)
+        ret |= (xTimerReset(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_fast_metrics_TO_hdl is NULL, cannot start timer.");
+    if (itf_odometer_TO_hdl)
+        ret |= (xTimerReset(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_odometer_TO_hdl is NULL, cannot start timer.");
+    if (ext_oil_metrics_TO_hdl)
+        ret |= (xTimerReset(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "ext_oil_metrics_TO_hdl is NULL, cannot start timer.");
+    if (ext_chargecooling_metrics_TO_hdl)
+        ret |= (xTimerReset(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "ext_chargecooling_metrics_TO_hdl is NULL, cannot start timer.");
+    if (itf_board_st_TO_hdl)
+        ret |= (xTimerReset(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_board_st_TO_hdl is NULL, cannot start timer.");
+    if (itf_board_version_TO_hdl)
+        ret |= (xTimerReset(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_board_version_TO_hdl is NULL, cannot start timer.");
+    if (alt_display_st_TO_hdl)
+        ret |= (xTimerReset(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "alt_display_st_TO_hdl is NULL, cannot start timer.");
+    // if (OTA_TO_hdl)
+    //     ret |= (xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    // else
+    //     ESP_LOGW(__func__, "OTA_TO_hdl is NULL, cannot start timer.");
+    return ret;
+}
+
+/// @brief Stops the timeout timers
+/// @return ESP_OK if all timers stopped successfully, ESP_FAIL otherwise
+inline esp_err_t TO_timers_stop()
+{
+    esp_err_t ret = ESP_OK;
+    if (OTA_TO_hdl)
+        ret |= (xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "OTA_TO_hdl is NULL, cannot stop timer.");
+    if (alt_display_st_TO_hdl)
+        ret |= (xTimerStop(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "alt_display_st_TO_hdl is NULL, cannot stop timer.");
+    if (itf_active_hi_lo_TO_hdl)
+        ret |= (xTimerStop(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_active_hi_lo_TO_hdl is NULL, cannot stop timer.");
+    if (itf_slow_metrics_TO_hdl)
+        ret |= (xTimerStop(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_slow_metrics_TO_hdl is NULL, cannot stop timer.");
+    if (itf_fast_metrics_TO_hdl)
+        ret |= (xTimerStop(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_fast_metrics_TO_hdl is NULL, cannot stop timer.");
+    if (itf_odometer_TO_hdl)
+        ret |= (xTimerStop(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_odometer_TO_hdl is NULL, cannot stop timer.");
+    if (ext_oil_metrics_TO_hdl)
+        ret |= (xTimerStop(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "ext_oil_metrics_TO_hdl is NULL, cannot stop timer.");
+    if (ext_chargecooling_metrics_TO_hdl)
+        ret |= (xTimerStop(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "ext_chargecooling_metrics_TO_hdl is NULL, cannot stop timer.");
+    if (itf_board_st_TO_hdl)
+        ret |= (xTimerStop(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_board_st_TO_hdl is NULL, cannot stop timer.");
+    if (itf_board_version_TO_hdl)
+        ret |= (xTimerStop(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
+    else
+        ESP_LOGW(__func__, "itf_board_version_TO_hdl is NULL, cannot stop timer.");
+    return ret;
 }
 
 /// @brief Dispatcher linked to the TWAI daemon. Parses received CAN frames

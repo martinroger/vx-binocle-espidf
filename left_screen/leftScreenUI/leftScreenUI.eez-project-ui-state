@@ -166,8 +166,7 @@
                       "enableClose": false,
                       "icon": "svg:hierarchy"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -238,7 +237,8 @@
                       "enableClose": false,
                       "icon": "svg:properties"
                     }
-                  ]
+                  ],
+                  "active": true
                 },
                 {
                   "type": "tabset",
@@ -1002,7 +1002,9 @@
           "0": {
             "0": {
               "1": {},
-              "2": {}
+              "2": {
+                "$selected": true
+              }
             },
             "1": {
               "5": {},
@@ -1100,7 +1102,7 @@
   "logsPanelFilter": "all",
   "selectedStylePropertyName": "",
   "lvglPart": "MAIN",
-  "lvglState": "DEFAULT",
+  "lvglState": "CHECKED",
   "lvglExpandedPropertiesGroup": [
     "MISCELLANEOUS",
     "TEXT"

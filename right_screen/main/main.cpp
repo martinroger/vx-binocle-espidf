@@ -541,6 +541,14 @@ extern "C" void app_main()
 #pragma endregion
 
 #pragma region CAN START
+    // Pre-empt the CAN TO timers
+    ESP_LOGI(__func__,"Starting CAN message timeout watchdogs");
+    if (TO_timers_init() != ESP_OK)
+    {
+        ESP_LOGW(__func__,"Impossible to init CAN timeout watchdog timers");
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+        attemptRollBack();
+    }
     // CAN communications
     ESP_LOGI(__func__, "Starting TWAI port and daemon");
     if (initCAN(&dispatchFrame) != ESP_OK)
@@ -667,7 +675,7 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
-                    // lv_label_set_text(objects.speed, "000");
+                    lv_label_set_text(objects.speed, "000");
                     updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
@@ -682,7 +690,7 @@ extern "C" void app_main()
                 if (lvgl_port_lock(-1))
                 {
                     lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
-                    // lv_label_set_text(objects.rpm, "0000");
+                    lv_label_set_text(objects.rpm, "0000");
                     updateLVGLObjects(true);
                     lvgl_port_unlock();
                 }
@@ -691,6 +699,7 @@ extern "C" void app_main()
         }
     }
     vTaskResume(CAN_RX_tsk_hdl);
+    TO_timers_start();
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
 xTaskCreate(print_system_stats,"RUNSTATS",4096,NULL,1,&print_runtime_stats_Hdl);
