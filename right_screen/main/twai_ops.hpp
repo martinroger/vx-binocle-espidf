@@ -895,7 +895,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_abs_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_abs_al_tt))
     {
-        absOn = !(binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_ON_CHOICE);
+        absOn = !(binocan_itf_active_hi_lo_itf_abs_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_abs_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ABS_AL_TT_HI_CHOICE);
     }
     else
     {
@@ -905,7 +905,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_airbag_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt))
     {
-        airbagOn = !(binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_ON_CHOICE);
+        airbagOn = !(binocan_itf_active_hi_lo_itf_airbag_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_airbag_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_AIRBAG_AL_TT_HI_CHOICE);
     }
     else
     {
@@ -915,7 +915,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_cel_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_cel_al_tt))
     {
-        milOn = !(binocan_itf_active_hi_lo_itf_cel_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_cel_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_CEL_AL_TT_ON_CHOICE);
+        milOn = !(binocan_itf_active_hi_lo_itf_cel_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_cel_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_CEL_AL_TT_HI_CHOICE);
     }
     else
     {
@@ -925,7 +925,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt))
     {
-        highBeamOn = (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_HI_BEAMS_AH_TT_ON_CHOICE);
+        highBeamOn = (binocan_itf_active_hi_lo_itf_hi_beams_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_hi_beams_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_HI_BEAMS_AH_TT_HI_CHOICE);
     }
     else
     {
@@ -935,7 +935,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_brake_low_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt))
     {
-        brakesOn = !(binocan_itf_active_hi_lo_itf_brake_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BRAKE_LOW_AL_TT_ON_CHOICE);
+        brakesOn = !(binocan_itf_active_hi_lo_itf_brake_low_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_brake_low_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BRAKE_LOW_AL_TT_HI_CHOICE);
     }
     else
     {
@@ -945,7 +945,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt))
     {
-        lowCoolantOn = (binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AH_TT_ON_CHOICE);
+        lowCoolantOn = (binocan_itf_active_hi_lo_itf_coolant_low_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_coolant_low_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_COOLANT_LOW_AH_TT_HI_CHOICE);
     }
     else
     {
@@ -965,7 +965,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt))
     {
-        lowOilOn = !(binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OIL_PRESSURE_AL_TT_ON_CHOICE);
+        lowOilOn = !(binocan_itf_active_hi_lo_itf_oil_pressure_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_oil_pressure_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_OIL_PRESSURE_AL_TT_HI_CHOICE);
     }
     else
     {
@@ -975,7 +975,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_alternator_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt))
     {
-        batteryOn = !(binocan_itf_active_hi_lo_itf_alternator_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALTERNATOR_AL_TT_ON_CHOICE);
+        batteryOn = !(binocan_itf_active_hi_lo_itf_alternator_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_alternator_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALTERNATOR_AL_TT_HI_CHOICE);
     }
     else
     {
@@ -995,7 +995,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_parking_brake_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt))
     {
-        parkingBrakeOn = !(binocan_itf_active_hi_lo_itf_parking_brake_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_PARKING_BRAKE_AL_TT_ON_CHOICE);
+        parkingBrakeOn = !(binocan_itf_active_hi_lo_itf_parking_brake_al_tt_decode(binocan_itf_active_hi_lo_msg.itf_parking_brake_al_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_PARKING_BRAKE_AL_TT_HI_CHOICE);
     }
     else
     {
@@ -1005,10 +1005,10 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) && binocan_itf_active_hi_lo_itf_right_turn_ah_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt))
     {
-        indicatorsOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE) ||
-                       (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
-        leftTurnOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_ON_CHOICE);
-        rightTurnOn = (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_ON_CHOICE);
+        indicatorsOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_HI_CHOICE) ||
+                       (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_HI_CHOICE);
+        leftTurnOn = (binocan_itf_active_hi_lo_itf_left_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_left_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_LEFT_TURN_AH_TT_HI_CHOICE);
+        rightTurnOn = (binocan_itf_active_hi_lo_itf_right_turn_ah_tt_decode(binocan_itf_active_hi_lo_msg.itf_right_turn_ah_tt) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_RIGHT_TURN_AH_TT_HI_CHOICE);
     }
     else
     {
@@ -1020,7 +1020,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_ignition_ah_st_is_in_range(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st))
     {
-        ignitionST = (binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_ON_CHOICE);
+        ignitionST = (binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_HI_CHOICE);
     }
     else
     {
@@ -1029,7 +1029,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
     }
     if (binocan_itf_active_hi_lo_itf_alarm_ah_is_in_range(binocan_itf_active_hi_lo_msg.itf_alarm_ah))
     {
-        alarmOn = (binocan_itf_active_hi_lo_itf_alarm_ah_decode(binocan_itf_active_hi_lo_msg.itf_alarm_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALARM_AH_ON_CHOICE);
+        alarmOn = (binocan_itf_active_hi_lo_itf_alarm_ah_decode(binocan_itf_active_hi_lo_msg.itf_alarm_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_ALARM_AH_HI_CHOICE);
     }
     else
     {
@@ -1038,7 +1038,7 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
     }
     if (binocan_itf_active_hi_lo_itf_backlight_ah_is_in_range(binocan_itf_active_hi_lo_msg.itf_backlight_ah))
     {
-        headlightsOn = (binocan_itf_active_hi_lo_itf_backlight_ah_decode(binocan_itf_active_hi_lo_msg.itf_backlight_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BACKLIGHT_AH_ON_CHOICE);
+        headlightsOn = (binocan_itf_active_hi_lo_itf_backlight_ah_decode(binocan_itf_active_hi_lo_msg.itf_backlight_ah) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_BACKLIGHT_AH_HI_CHOICE);
     }
     else
     {
