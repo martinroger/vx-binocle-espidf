@@ -182,6 +182,14 @@
       "localVariables": [],
       "userProperties": [],
       "name": "decimation_update"
+    },
+    {
+      "objID": "77d616b7-7d93-44d0-84e5-694ea328b60e",
+      "components": [],
+      "connectionLines": [],
+      "localVariables": [],
+      "userProperties": [],
+      "name": "buzz_overtemp_toggled"
     }
   ],
   "userPages": [
@@ -2942,10 +2950,117 @@
                       "groupIndex": 0
                     },
                     {
+                      "objID": "4541b9bb-9116-4eb2-c4cc-87b40d3beff5",
+                      "type": "LVGLSwitchWidget",
+                      "left": -93,
+                      "top": 223,
+                      "width": 50,
+                      "height": 25,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "5a27107a-0f28-4caf-cd34-133655192347",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "timeline": [],
+                      "eventHandlers": [
+                        {
+                          "objID": "760718be-ad5f-4aa0-b88a-f6e51e74ed93",
+                          "eventName": "VALUE_CHANGED",
+                          "handlerType": "action",
+                          "action": "buzz_overtemp_toggled",
+                          "userData": 0
+                        }
+                      ],
+                      "identifier": "buzz_overtemp_sw",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "px",
+                      "heightUnit": "px",
+                      "children": [],
+                      "widgetFlags": "CHECKABLE|CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_ON_FOCUS|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlag": true,
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledState": false,
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "56b04814-03b4-4032-cd2b-b96cbd776451",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "align": "CENTER"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0
+                    },
+                    {
+                      "objID": "d732f983-42e9-402b-89d4-668fda41fce4",
+                      "type": "LVGLLabelWidget",
+                      "left": 28,
+                      "top": 223,
+                      "width": 154,
+                      "height": 19,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "d0fdfb9c-08b4-4c72-f184-e3baa1a47203",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "content",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "CLICK_FOCUSABLE|GESTURE_BUBBLE|PRESS_LOCK|SCROLLABLE|SCROLL_CHAIN_HOR|SCROLL_CHAIN_VER|SCROLL_ELASTIC|SCROLL_MOMENTUM|SCROLL_WITH_ARROW|SNAPPABLE",
+                      "hiddenFlagType": "literal",
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "scrollSnapX": "",
+                      "scrollSnapY": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "a6a9841c-f799-4ae2-b2c5-5a9f585ec9c9",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "align": "CENTER",
+                              "text_font": "whiteRabbit_24px",
+                              "text_align": "LEFT"
+                            }
+                          }
+                        }
+                      },
+                      "group": "",
+                      "groupIndex": 0,
+                      "text": "Buzz on hot",
+                      "textType": "literal",
+                      "longMode": "WRAP",
+                      "recolor": false
+                    },
+                    {
                       "objID": "38046b01-50bf-4e4d-bbc5-f0e4459f00a7",
                       "type": "LVGLContainerWidget",
                       "left": 0,
-                      "top": 421,
+                      "top": 464,
                       "width": 100,
                       "height": 30,
                       "customInputs": [],

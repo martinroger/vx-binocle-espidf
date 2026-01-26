@@ -42,6 +42,9 @@ inline void startup_anim()
     // RPM decimation selector
     lv_obj_set_state(objects.decimation_sw, LV_STATE_CHECKED, (display_board_st.rpm_decimation > 10));
 
+    // Buzz on hot selector
+    lv_obj_set_state(objects.buzz_overtemp_sw, LV_STATE_CHECKED, display_board_st.overTemp_buzz);
+
 #elifdef CONFIG_RIGHT_SIDE_DISPLAY
     lv_slider_set_value(objects.dark_slider, display_board_st.darkBrightness, LV_ANIM_OFF);
     lv_slider_set_value(objects.light_slider, display_board_st.lightBrightness, LV_ANIM_OFF);

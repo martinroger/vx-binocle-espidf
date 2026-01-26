@@ -43,6 +43,7 @@ typedef struct _objects_t {
     lv_obj_t *inc_shift_top_btn;
     lv_obj_t *dec_shift_top_btn;
     lv_obj_t *save_shift_ind_btn;
+    lv_obj_t *buzz_overtemp_sw;
     lv_obj_t *debug_tab;
     lv_obj_t *voltage_lvl;
     lv_obj_t *odometer;
