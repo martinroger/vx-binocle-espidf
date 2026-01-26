@@ -705,6 +705,8 @@ static esp_err_t reboot_post_handler(httpd_req_t *req)
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
 
 	httpd_resp_sendstr(req, "Rebooting");
+	disable_5V();
+	disable_5V_AUX();
 	vTaskDelay(pdMS_TO_TICKS(200));
 	esp_restart();
 	return ESP_OK;
@@ -979,10 +981,10 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	// Declare as static to ensure persistent memory addresses for twai_transmit pointers
 	static twai_message_t txMsg;
 	static twai_message_t rxMsg;
-	
+
 	// Debug: Log the memory addresses
-	ESP_LOGD(__func__, "txMsg address: %p, rxMsg address: %p", (void*)&txMsg, (void*)&rxMsg);
-	
+	ESP_LOGD(__func__, "txMsg address: %p, rxMsg address: %p", (void *)&txMsg, (void *)&rxMsg);
+
 	txMsg.extd = false;
 	txMsg.ss = false;
 	txMsg.data_length_code = 8;
@@ -1249,17 +1251,17 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			txMsg.data[7] = buf[bufCursor + 1];
 			bufCursor += 2; // Next byte to process
 			sentBytes += 2;
-			
+
 			// Debug log: Print the FF frame data before transmission
 			ESP_LOGD(__func__, "FF Frame about to send - data[0..7]: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X",
-					 txMsg.data[0], txMsg.data[1], txMsg.data[2], txMsg.data[3], 
+					 txMsg.data[0], txMsg.data[1], txMsg.data[2], txMsg.data[3],
 					 txMsg.data[4], txMsg.data[5], txMsg.data[6], txMsg.data[7]);
-			
+
 			// Disable interrupts during critical FF transmission
 			// portDISABLE_INTERRUPTS();
 			tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(1000));
 			// portENABLE_INTERRUPTS();
-			
+
 			if (tx_err != ESP_OK) // FF is not transmitted for some hard reason
 			{
 				ESP_LOGE(__func__, "Could not transmit FF");
@@ -1324,8 +1326,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				// Debug log: Print received message
 				ESP_LOGD(__func__, "Received CAN frame - ID: 0x%X, data[0..7]: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X, rxMsg addr: %p",
 						 rxMsg.identifier, rxMsg.data[0], rxMsg.data[1], rxMsg.data[2], rxMsg.data[3],
-						 rxMsg.data[4], rxMsg.data[5], rxMsg.data[6], rxMsg.data[7], (void*)&rxMsg);
-				
+						 rxMsg.data[4], rxMsg.data[5], rxMsg.data[6], rxMsg.data[7], (void *)&rxMsg);
+
 				if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x30))
 				{
 					CANBlockSize = rxMsg.data[1];
@@ -1439,14 +1441,14 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			// If message is full, or this is the last message for the whole file
 			if (txMsgCursor == 8 || sentBytes == file_size)
 			{
-				vTaskDelay(pdMS_TO_TICKS(STmin_MS));			  // Implement separation time
-				
+				vTaskDelay(pdMS_TO_TICKS(STmin_MS)); // Implement separation time
+
 				// Disable interrupts during critical CF transmission
 				// portDISABLE_INTERRUPTS();
 				tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(5)); // Actually ship the message
 				// portENABLE_INTERRUPTS();
-				
-				if (tx_err != ESP_OK)							  // Escape case for TX errors
+
+				if (tx_err != ESP_OK) // Escape case for TX errors
 				{
 					ESP_LOGE(__func__, "Could not transmit CF frame : %s", esp_err_to_name(tx_err));
 					free(buf);
@@ -1652,6 +1654,8 @@ static esp_err_t set_boot_post_handler(httpd_req_t *req)
 		return ESP_FAIL;
 	}
 	httpd_resp_sendstr(req, "Boot partition set. Rebooting...");
+	disable_5V();
+	disable_5V_AUX();
 	vTaskDelay(pdMS_TO_TICKS(500));
 	esp_restart();
 	return ESP_OK;
