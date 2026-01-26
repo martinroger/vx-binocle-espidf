@@ -614,8 +614,26 @@ void create_screen_main_scr() {
                             }
                         }
                         {
+                            // buzz_overtemp_sw
+                            lv_obj_t *obj = lv_switch_create(parent_obj);
+                            objects.buzz_overtemp_sw = obj;
+                            lv_obj_set_pos(obj, -93, 223);
+                            lv_obj_set_size(obj, 50, 25);
+                            lv_obj_add_event_cb(obj, action_buzz_overtemp_toggled, LV_EVENT_VALUE_CHANGED, (void *)0);
+                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                        }
+                        {
+                            lv_obj_t *obj = lv_label_create(parent_obj);
+                            lv_obj_set_pos(obj, 28, 223);
+                            lv_obj_set_size(obj, LV_SIZE_CONTENT, LV_SIZE_CONTENT);
+                            lv_obj_set_style_align(obj, LV_ALIGN_CENTER, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_font(obj, &ui_font_white_rabbit_24px, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_LEFT, LV_PART_MAIN | LV_STATE_DEFAULT);
+                            lv_label_set_text(obj, "Buzz on hot");
+                        }
+                        {
                             lv_obj_t *obj = lv_obj_create(parent_obj);
-                            lv_obj_set_pos(obj, 0, 421);
+                            lv_obj_set_pos(obj, 0, 464);
                             lv_obj_set_size(obj, LV_PCT(100), LV_PCT(30));
                             lv_obj_set_style_pad_left(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);
                             lv_obj_set_style_pad_top(obj, 0, LV_PART_MAIN | LV_STATE_DEFAULT);

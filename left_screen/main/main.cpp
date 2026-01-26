@@ -407,6 +407,40 @@ extern "C" void action_decimation_update(lv_event_t *e)
     p_rpm = 1000; // Force refresh indirectly
     rpm = 0;
 }
+
+/// @brief Updates the overtemperature buzzer enabled status
+/// @param e LV even VALUE CHANGED
+extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
+{
+    display_board_st.overTemp_buzz = lv_obj_has_state(objects.buzz_overtemp_sw, LV_STATE_CHECKED);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u8(h, "overt_bzz", (uint8_t)display_board_st.overTemp_buzz) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save overtemp buzzer status");
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    if (!display_board_st.overTemp_buzz)
+    {
+        // Ensure buzzer is off
+        if (display_board_st.ioExpander)
+        {
+            display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+        }
+    }
+    else if (overTemperatureOn)
+    {
+        // Enable buzzer if needed
+        if (display_board_st.ioExpander)
+        {
+            display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
+        }
+    }
+}
+
 #endif
 #pragma endregion
 
@@ -516,6 +550,9 @@ extern "C" void app_main()
         if (nvs_get_u32(h, "rpm_dec", &(display_board_st.rpm_decimation)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM decimation factor from NVS");
 
+        if (nvs_get_u8(h, "overt_bzz", (uint8_t *)&(display_board_st.overTemp_buzz)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve overtemp buzzer status from NVS");
+
         if (nvs_get_u8(h, "dark_bg", &(display_board_st.darkBrightness)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the dark mode brightness value.");
         if (nvs_get_u8(h, "light_bg", &(display_board_st.lightBrightness)) != ESP_OK)
@@ -617,6 +654,7 @@ extern "C" void app_main()
         }
         else
         {
+            // Get pointer to the Backlight class
             display_board_st.backLight = board->getBacklight();
             if (display_board_st.lightMode)
             {
@@ -625,6 +663,17 @@ extern "C" void app_main()
             else
             {
                 display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+            }
+            // Get pointer to the IO Expander class
+            display_board_st.ioExpander = board->getIO_Expander();
+            display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
+            if (!display_board_st.overTemp_buzz && overTemperatureOn)
+            {
+                display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
+            }
+            else
+            {
+                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
             }
         }
     }
