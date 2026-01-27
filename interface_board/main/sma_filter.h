@@ -19,6 +19,7 @@ extern "C"
     typedef struct
     {
         int16_t *buffer;         // Pointer to the data buffer
+        int16_t latest;          // Latest added value
         uint8_t size;            // Size of the buffer
         uint8_t head;            // Index to add the next element
         int32_t sum;             // Running sum of the elements

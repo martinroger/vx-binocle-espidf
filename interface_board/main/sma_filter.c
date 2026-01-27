@@ -37,6 +37,7 @@ sma_handle_t *sma_init_full(uint8_t size, int16_t startValue)
     {
         sma->buffer[i] = startValue;
     }
+    sma->latest = startValue;
     sma->size = size;
     sma->head = 0; // Current cursor is at position 0
     sma->sum = startValue * size;
@@ -74,6 +75,9 @@ void sma_add(sma_handle_t *sma, int16_t value)
     sma->buffer[sma->head] = value;
     sma->sum += value;
 
+    // Store the latest value
+    sma->latest = value;
+
     // Move head to the next position
     sma->head = (sma->head + 1) % sma->size;
 
@@ -86,6 +90,30 @@ void sma_add(sma_handle_t *sma, int16_t value)
     // Release the write Semaphore
     xSemaphoreGive(sma->mutex);
 }
+
+// int16_t sma_get_latest(sma_handle_t *sma)
+// {
+//     // Sanity checks the SMA exists
+//     if (sma == NULL)
+//     {
+//         ESP_LOGW(TAG, "Invalid SMA handle");
+//         return 0;
+//     }
+//     // Calculate the index of the latest added element
+//     uint8_t latest_index = (sma->head -1) % sma->size; // Strategy is to let it overrun and limit it with modulo
+    
+//     if (sma->count < sma->size && sma->count > 0) // Special case when SMA is not full but has at least one element)
+//     {
+//         latest_index = (sma->count -1) % sma->size;
+//     }
+//     else
+//     {
+//         ESP_LOGW(TAG, "SMA buffer is empty, returning 0");
+//         return 0;
+//     }
+
+//     return sma->buffer[latest_index];
+// }
 
 float sma_get_avg(sma_handle_t *sma)
 {
