@@ -101,7 +101,7 @@ void sma_add(sma_handle_t *sma, int16_t value)
 //     }
 //     // Calculate the index of the latest added element
 //     uint8_t latest_index = (sma->head -1) % sma->size; // Strategy is to let it overrun and limit it with modulo
-    
+
 //     if (sma->count < sma->size && sma->count > 0) // Special case when SMA is not full but has at least one element)
 //     {
 //         latest_index = (sma->count -1) % sma->size;
