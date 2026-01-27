@@ -238,6 +238,114 @@ TaskHandle_t itf_odometer_PKG_hdl;
 TaskHandle_t itf_board_st_PKG_hdl;
 TaskHandle_t itf_board_version_PKG_hdl;
 
+// Handles for the debug message packaging tasks
+#ifdef CONFIG_DBG_SPEED_MSG
+TaskHandle_t dbg_itf_speed_PKG_hdl;
+
+/// @brief Packaging task for debug speed message
+/// @param pvParameters
+void dbg_itf_speed_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_speed_t binocan_dbg_itf_speed;
+    binocan_dbg_itf_speed_init(&binocan_dbg_itf_speed);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_SPEED_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_SPEED_LENGTH};
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_SPEED_CYCLE_TIME_MS));
+        binocan_dbg_itf_speed.dbg_speed_freq = binocan_dbg_itf_speed_dbg_speed_freq_encode(pwm_cap_speed.frequency);
+        binocan_dbg_itf_speed.dbg_speed_duty = binocan_dbg_itf_speed_dbg_speed_duty_encode(pwm_cap_speed.duty_cycle * 100.0);
+        binocan_dbg_itf_speed_pack(tx_msg.data, &binocan_dbg_itf_speed, BINOCAN_DBG_ITF_SPEED_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(TAG, "Could not queue debug speed message in queue");
+        }
+    }
+}
+#endif
+#ifdef CONFIG_DBG_RPM_MSG
+TaskHandle_t dbg_itf_rpm_PKG_hdl;
+
+/// @brief Packaging task for debug rpm message
+/// @param pvParameters
+void dbg_itf_rpm_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_rpm_t binocan_dbg_itf_rpm;
+    binocan_dbg_itf_rpm_init(&binocan_dbg_itf_rpm);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_RPM_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_RPM_LENGTH};
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_RPM_CYCLE_TIME_MS));
+        binocan_dbg_itf_rpm.dbg_rpm_freq = binocan_dbg_itf_rpm_dbg_rpm_freq_encode(pwm_cap_rpm.frequency);
+        binocan_dbg_itf_rpm.dbg_rpm_duty = binocan_dbg_itf_rpm_dbg_rpm_duty_encode(pwm_cap_rpm.duty_cycle * 100.0);
+        binocan_dbg_itf_rpm_pack(tx_msg.data, &binocan_dbg_itf_rpm, BINOCAN_DBG_ITF_RPM_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(TAG, "Could not queue debug rpm message in queue");
+        }
+    }
+}
+#endif
+#ifdef CONFIG_DBG_COOL_MSG
+TaskHandle_t dbg_itf_coolant_PKG_hdl;
+
+/// @brief Packaging task for debug coolant message
+/// @param pvParameters
+void dbg_itf_coolant_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_coolant_t binocan_dbg_itf_coolant;
+    binocan_dbg_itf_coolant_init(&binocan_dbg_itf_coolant);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_COOLANT_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_COOLANT_LENGTH};
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_COOLANT_CYCLE_TIME_MS));
+        binocan_dbg_itf_coolant.dbg_coolant_freq = binocan_dbg_itf_coolant_dbg_coolant_freq_encode(pwm_cap_coolant.frequency);
+        binocan_dbg_itf_coolant.dbg_coolant_duty = binocan_dbg_itf_coolant_dbg_coolant_duty_encode(pwm_cap_coolant.duty_cycle * 100.0);
+        binocan_dbg_itf_coolant_pack(tx_msg.data, &binocan_dbg_itf_coolant, BINOCAN_DBG_ITF_COOLANT_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(TAG, "Could not queue debug coolant message in queue");
+        }
+    }
+}
+
+#endif
+#ifdef CONFIG_DBG_ADC_MSG
+TaskHandle_t dbg_itf_adc_raw_PKG_hdl;
+
+/// @brief Packaging task for debug ADC raw message
+/// @param pvParameters
+void dbg_itf_adc_raw_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_adc_raw_t binocan_dbg_itf_adc_raw;
+    binocan_dbg_itf_adc_raw_init(&binocan_dbg_itf_adc_raw);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_ADC_RAW_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_ADC_RAW_LENGTH};
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_ADC_RAW_CYCLE_TIME_MS));
+        float fuel_raw_v = adc_channels[0].sma->latest * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float lv_raw_v = adc_channels[1].sma->latest * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        binocan_dbg_itf_adc_raw.dbg_fuel_raw_v = binocan_dbg_itf_adc_raw_dbg_fuel_raw_v_encode(fuel_raw_v);
+        binocan_dbg_itf_adc_raw.dbg_12_v_raw_v = binocan_dbg_itf_adc_raw_dbg_12_v_raw_v_encode(lv_raw_v);
+        binocan_dbg_itf_adc_raw_pack(tx_msg.data, &binocan_dbg_itf_adc_raw, BINOCAN_DBG_ITF_ADC_RAW_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(TAG, "Could not queue debug ADC raw message in queue");
+        }
+    }
+}
+#endif
+
 /// @brief Packaging task for base_slow_metrics
 /// @param pvParameters
 void itf_slow_metrics_PKG(void *pvParameters)
@@ -571,6 +679,7 @@ void itf_board_version_PKG(void *pvParameters)
         }
     }
 }
+
 #pragma endregion
 
 #pragma region Main App
@@ -932,6 +1041,39 @@ extern "C" void app_main(void)
         ESP_LOGE(TAG, "Could not create interface board version package task");
         attemptRollBack();
     }
+
+// Debug message packaging and queuing tasks
+#ifdef CONFIG_DBG_SPEED_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_speed_PKG, "DBG_ITF_SPD", 4096, NULL, 3, &dbg_itf_speed_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Could not create debug speed package task");
+        // attemptRollBack();
+    }
+#endif
+
+#ifdef CONFIG_DBG_RPM_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_rpm_PKG, "DBG_ITF_RPM", 4096, NULL, 3, &dbg_itf_rpm_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Could not create debug RPM package task");
+        // attemptRollBack();
+    }
+#endif
+
+#ifdef CONFIG_DBG_COOL_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_coolant_PKG, "DBG_ITF_COOL", 4096, NULL, 3, &dbg_itf_coolant_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Could not create debug coolant package task");
+        // attemptRollBack();
+    }
+#endif
+
+#ifdef CONFIG_DBG_ADC_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_adc_raw_PKG, "DBG_ITF_ADC", 4096, NULL, 3, &dbg_itf_adc_raw_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(TAG, "Could not create debug ADC package task");
+        // attemptRollBack();
+    }
+#endif
 
 #pragma region Register Button ISR and timer
     // Create the trip reset debounce/confirmation timer (one-shot 500 ms)

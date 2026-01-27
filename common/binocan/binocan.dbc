@@ -33,7 +33,7 @@ NS_ :
 
 BS_:
 
-BU_: EXT ITF RDB LDB
+BU_: external EXT ITF RDB LDB
 VAL_TABLE_ GearPosition_ST 14 "Uncertain" 15 "Reverse" 6 "Sixth" 5 "Fifth" 4 "Fourth" 3 "Third" 2 "Second" 1 "First" 0 "Neutral" ;
 VAL_TABLE_ version_MUX 1 "Commit ID" 0 "Base version tag and dirty flag" ;
 VAL_TABLE_ Controller_ST 7 "Factory" 5 "OTA" 4 "Fault" 3 "Degraded" 2 "OK" 1 "Init" 0 "OFF" ;
@@ -41,21 +41,37 @@ VAL_TABLE_ ActHiLo_ST 1 "HI" 0 "LO" ;
 VAL_TABLE_ Binary_ST 1 "ON" 0 "OFF" ;
 
 
+BO_ 771 DBG_ITF_ADC_raw: 8 ITF
+ SG_ DBG_12V_raw_v : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "V"  external
+ SG_ DBG_fuel_raw_v : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "V"  external
+
+BO_ 770 DBG_ITF_coolant: 8 ITF
+ SG_ DBG_coolant_duty : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "pc"  external
+ SG_ DBG_coolant_freq : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "Hz"  external
+
+BO_ 769 DBG_ITF_RPM: 8 ITF
+ SG_ DBG_RPM_freq : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "Hz"  external
+ SG_ DBG_RPM_duty : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "pc"  external
+
+BO_ 768 DBG_ITF_speed: 8 ITF
+ SG_ DBG_speed_freq : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "Hz"  external
+ SG_ DBG_speed_duty : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "pc"  external
+
 BO_ 306 RDB_board_version: 8 RDB
- SG_ RDB_version_patch m0 : 24|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ RDB_version_MUX M : 0|2@1+ (1,0) [0|3] "" Vector__XXX
- SG_ RDB_version_minor m0 : 16|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ RDB_version_major m0 : 8|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ RDB_version_dirty m0 : 2|1@1+ (1,0) [0|1] "" Vector__XXX
- SG_ RDB_version_commit m1 : 8|56@1+ (1,0) [0|7.20575940379279E+016] "" Vector__XXX
+ SG_ RDB_version_patch m0 : 24|8@1+ (1,0) [0|255] ""  external
+ SG_ RDB_version_MUX M : 0|2@1+ (1,0) [0|3] ""  external
+ SG_ RDB_version_minor m0 : 16|8@1+ (1,0) [0|255] ""  external
+ SG_ RDB_version_major m0 : 8|8@1+ (1,0) [0|255] ""  external
+ SG_ RDB_version_dirty m0 : 2|1@1+ (1,0) [0|1] ""  external
+ SG_ RDB_version_commit m1 : 8|56@1+ (1,0) [0|7.20575940379279E+016] ""  external
 
 BO_ 305 LDB_board_version: 8 LDB
- SG_ LDB_version_patch m0 : 24|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ LDB_version_minor m0 : 16|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ LDB_version_commit m1 : 8|56@1+ (1,0) [0|7.20575940379279E+016] "" Vector__XXX
- SG_ LDB_version_major m0 : 8|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ LDB_version_dirty m0 : 2|1@1+ (1,0) [0|1] "" Vector__XXX
- SG_ LDB_version_MUX M : 0|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ LDB_version_patch m0 : 24|8@1+ (1,0) [0|255] ""  external
+ SG_ LDB_version_minor m0 : 16|8@1+ (1,0) [0|255] ""  external
+ SG_ LDB_version_commit m1 : 8|56@1+ (1,0) [0|7.20575940379279E+016] ""  external
+ SG_ LDB_version_major m0 : 8|8@1+ (1,0) [0|255] ""  external
+ SG_ LDB_version_dirty m0 : 2|1@1+ (1,0) [0|1] ""  external
+ SG_ LDB_version_MUX M : 0|2@1+ (1,0) [0|3] ""  external
 
 BO_ 1927 EXT_UDS_RESP: 8 EXT
  SG_ EXT_uds_resp : 0|64@1+ (1,0) [0|1.84467440737096E+019] ""  ITF
@@ -76,18 +92,18 @@ BO_ 1922 LDB_UDS_REQ: 8 ITF
  SG_ LDB_uds_req : 0|64@1+ (1,0) [0|1.84467440737096E+019] ""  LDB
 
 BO_ 1921 ITF_UDS_RESP: 8 ITF
- SG_ ITF_uds_resp : 0|64@1+ (1,0) [0|1.84467440737096E+019] "" Vector__XXX
+ SG_ ITF_uds_resp : 0|64@1+ (1,0) [0|1.84467440737096E+019] ""  external
 
-BO_ 1920 ITF_UDS_REQ: 8 Vector__XXX
+BO_ 1920 ITF_UDS_REQ: 8 external
  SG_ ITF_uds_req : 0|64@1+ (1,0) [0|1.84467440737096E+019] ""  ITF
 
 BO_ 304 ITF_board_version: 8 ITF
- SG_ ITF_version_patch m0 : 24|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ ITF_version_minor m0 : 16|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ ITF_version_major m0 : 8|8@1+ (1,0) [0|255] "" Vector__XXX
- SG_ ITF_version_dirty m0 : 2|1@1+ (1,0) [0|1] "" Vector__XXX
- SG_ ITF_version_commit m1 : 8|56@1+ (1,0) [0|7.20575940379279E+016] "" Vector__XXX
- SG_ ITF_version_MUX M : 0|2@1+ (1,0) [0|3] "" Vector__XXX
+ SG_ ITF_version_patch m0 : 24|8@1+ (1,0) [0|255] ""  external
+ SG_ ITF_version_minor m0 : 16|8@1+ (1,0) [0|255] ""  external
+ SG_ ITF_version_major m0 : 8|8@1+ (1,0) [0|255] ""  external
+ SG_ ITF_version_dirty m0 : 2|1@1+ (1,0) [0|1] ""  external
+ SG_ ITF_version_commit m1 : 8|56@1+ (1,0) [0|7.20575940379279E+016] ""  external
+ SG_ ITF_version_MUX M : 0|2@1+ (1,0) [0|3] ""  external
 
 BO_ 290 RDB_ST: 8 RDB
  SG_ XDB_light_brightness : 16|7@1+ (1,0) [10|100] "" Vector__XXX
@@ -265,8 +281,8 @@ BA_ "GenMsgCycleTime" BO_ 290 200;
 BA_ "GenMsgCycleTime" BO_ 289 200;
 BA_ "GenMsgCycleTime" BO_ 288 200;
 BA_ "GenMsgCycleTime" BO_ 273 250;
-BA_ "GenMsgSendType" BO_ 257 4;
 BA_ "GenMsgCycleTime" BO_ 257 200;
+BA_ "GenMsgSendType" BO_ 257 4;
 BA_ "GenMsgCycleTime" BO_ 272 500;
 VAL_ 306 RDB_version_MUX 1 "Commit ID" 0 "Base version tag and dirty flag" ;
 VAL_ 305 LDB_version_MUX 1 "Commit ID" 0 "Base version tag and dirty flag" ;
@@ -304,4 +320,12 @@ VAL_ 257 ITF_CEL_AL_TT 1 "HI" 0 "LO" ;
 VAL_ 257 ITF_airbag_AL_TT 1 "HI" 0 "LO" ;
 VAL_ 257 ITF_abs_AL_TT 1 "HI" 0 "LO" ;
 VAL_ 256 ITF_gear_position_ST 14 "Uncertain" 15 "Reverse" 6 "Sixth" 5 "Fifth" 4 "Fourth" 3 "Third" 2 "Second" 1 "First" 0 "Neutral" ;
+SIG_VALTYPE_ 771 DBG_12V_raw_v : 1;
+SIG_VALTYPE_ 771 DBG_fuel_raw_v : 1;
+SIG_VALTYPE_ 770 DBG_coolant_duty : 1;
+SIG_VALTYPE_ 770 DBG_coolant_freq : 1;
+SIG_VALTYPE_ 769 DBG_RPM_freq : 1;
+SIG_VALTYPE_ 769 DBG_RPM_duty : 1;
+SIG_VALTYPE_ 768 DBG_speed_freq : 1;
+SIG_VALTYPE_ 768 DBG_speed_duty : 1;
 

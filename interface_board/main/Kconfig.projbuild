@@ -106,6 +106,42 @@ menu "Interface board configuration"
                 Multiply it by polling rate to get time window. E.g. 200ms at 100 elements -> 20s filtering.
     endmenu
 
+    menu "Debug messages"
+        config ENABLE_DEBUG_MSG
+            bool "Enable debug messages"
+            default false
+            help
+                Enables debug message output. When disabled, all debug message types are also disabled.
+
+        config DBG_SPEED_MSG
+            bool "Enable speed debug messages"
+            depends on ENABLE_DEBUG_MSG
+            default false
+            help
+                Enables debug output for speed-related messages.
+
+        config DBG_RPM_MSG
+            bool "Enable RPM debug messages"
+            depends on ENABLE_DEBUG_MSG
+            default false
+            help
+                Enables debug output for RPM-related messages.
+
+        config DBG_COOL_MSG
+            bool "Enable coolant debug messages"
+            depends on ENABLE_DEBUG_MSG
+            default false
+            help
+                Enables debug output for coolant-related messages.
+
+        config DBG_ADC_MSG
+            bool "Enable ADC debug messages"
+            depends on ENABLE_DEBUG_MSG
+            default false
+            help
+                Enables debug output for ADC-related messages.
+    endmenu
+
     menu "IO Expander configuration"
 
         config EXP_INT_PIN
