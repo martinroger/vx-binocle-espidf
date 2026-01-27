@@ -256,7 +256,12 @@ void dbg_itf_speed_PKG(void *pvParameters)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_SPEED_CYCLE_TIME_MS));
         binocan_dbg_itf_speed.dbg_speed_freq = binocan_dbg_itf_speed_dbg_speed_freq_encode(pwm_cap_speed.frequency);
-        binocan_dbg_itf_speed.dbg_speed_duty = binocan_dbg_itf_speed_dbg_speed_duty_encode(pwm_cap_speed.duty_cycle * 100.0);
+        float duty_cycle = pwm_cap_speed.duty_cycle * 100.0;
+        if (duty_cycle > 100.0)
+            duty_cycle = 100.0;
+        else if (duty_cycle < 0.0)
+            duty_cycle = 0.0;
+        binocan_dbg_itf_speed.dbg_speed_duty = binocan_dbg_itf_speed_dbg_speed_duty_encode(duty_cycle);
         binocan_dbg_itf_speed_pack(tx_msg.data, &binocan_dbg_itf_speed, BINOCAN_DBG_ITF_SPEED_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
@@ -282,6 +287,11 @@ void dbg_itf_rpm_PKG(void *pvParameters)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_RPM_CYCLE_TIME_MS));
         binocan_dbg_itf_rpm.dbg_rpm_freq = binocan_dbg_itf_rpm_dbg_rpm_freq_encode(pwm_cap_rpm.frequency);
+        float duty_cycle = pwm_cap_rpm.duty_cycle * 100.0;
+        if (duty_cycle>100.0)
+            duty_cycle = 100.0;
+        else if (duty_cycle<0.0)
+            duty_cycle = 0.0;
         binocan_dbg_itf_rpm.dbg_rpm_duty = binocan_dbg_itf_rpm_dbg_rpm_duty_encode(pwm_cap_rpm.duty_cycle * 100.0);
         binocan_dbg_itf_rpm_pack(tx_msg.data, &binocan_dbg_itf_rpm, BINOCAN_DBG_ITF_RPM_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
@@ -307,6 +317,11 @@ void dbg_itf_coolant_PKG(void *pvParameters)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_COOLANT_CYCLE_TIME_MS));
         binocan_dbg_itf_coolant.dbg_coolant_freq = binocan_dbg_itf_coolant_dbg_coolant_freq_encode(pwm_cap_coolant.frequency);
+        float duty_cycle = pwm_cap_coolant.duty_cycle * 100.0;
+        if (duty_cycle > 100.0)
+            duty_cycle = 100.0;
+        else if (duty_cycle < 0.0)
+            duty_cycle = 0.0;
         binocan_dbg_itf_coolant.dbg_coolant_duty = binocan_dbg_itf_coolant_dbg_coolant_duty_encode(pwm_cap_coolant.duty_cycle * 100.0);
         binocan_dbg_itf_coolant_pack(tx_msg.data, &binocan_dbg_itf_coolant, BINOCAN_DBG_ITF_COOLANT_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
