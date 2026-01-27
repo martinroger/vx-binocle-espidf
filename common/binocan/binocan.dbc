@@ -41,7 +41,7 @@ VAL_TABLE_ ActHiLo_ST 1 "HI" 0 "LO" ;
 VAL_TABLE_ Binary_ST 1 "ON" 0 "OFF" ;
 
 
-BO_ 771 DBG_ADC_raw: 8 ITF
+BO_ 771 DBG_ITF_ADC_raw: 8 ITF
  SG_ DBG_12V_raw_v : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "V"  external
  SG_ DBG_fuel_raw_v : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "V"  external
 
