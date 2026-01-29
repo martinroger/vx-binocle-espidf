@@ -42,20 +42,20 @@ VAL_TABLE_ Binary_ST 1 "ON" 0 "OFF" ;
 
 
 BO_ 771 DBG_ITF_ADC_raw: 8 ITF
- SG_ DBG_12V_raw_v : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "V"  external
- SG_ DBG_fuel_raw_v : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "V"  external
+ SG_ DBG_12V_raw_v : 32|32@1- (1,0) [0|4] "V"  external
+ SG_ DBG_fuel_raw_v : 0|32@1- (1,0) [0|4] "V"  external
 
 BO_ 770 DBG_ITF_coolant: 8 ITF
- SG_ DBG_coolant_duty : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "pc"  external
- SG_ DBG_coolant_freq : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "Hz"  external
+ SG_ DBG_coolant_duty : 32|32@1- (1,0) [-1.0|101.0] "pc"  external
+ SG_ DBG_coolant_freq : 0|32@1- (1,0) [-1|1100] "Hz"  external
 
 BO_ 769 DBG_ITF_RPM: 8 ITF
- SG_ DBG_RPM_freq : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "Hz"  external
- SG_ DBG_RPM_duty : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "pc"  external
+ SG_ DBG_RPM_freq : 0|32@1- (1,0) [-1|1100] "Hz"  external
+ SG_ DBG_RPM_duty : 32|32@1- (1,0) [-1|101] "pc"  external
 
 BO_ 768 DBG_ITF_speed: 8 ITF
- SG_ DBG_speed_freq : 0|32@1- (1,0) [-3.4E+038|3.4E+038] "Hz"  external
- SG_ DBG_speed_duty : 32|32@1- (1,0) [-3.4E+038|3.4E+038] "pc"  external
+ SG_ DBG_speed_freq : 0|32@1- (1,0) [-1|1100] "Hz"  external
+ SG_ DBG_speed_duty : 32|32@1- (1,0) [-1|101] "pc"  external
 
 BO_ 306 RDB_board_version: 8 RDB
  SG_ RDB_version_patch m0 : 24|8@1+ (1,0) [0|255] ""  external
@@ -169,7 +169,7 @@ BO_ 512 EXT_oil_metrics: 8 EXT
 BO_ 272 ITF_slow_metrics: 8 ITF
  SG_ ITF_lv_voltage_v : 16|8@1+ (0.1,0) [0|20] "V"  RDB,LDB
  SG_ ITF_fuel_level_pc : 8|8@1+ (0.5,0) [0|101] "pc"  RDB,LDB
- SG_ ITF_coolant_temp : 0|8@1+ (0.4,70) [70|150] "degC"  RDB,LDB
+ SG_ ITF_coolant_temp : 0|8@1+ (0.25,70) [70|130] "degC"  RDB,LDB
 
 BO_ 256 ITF_fast_metrics: 8 ITF
  SG_ ITF_gear_position_ST : 32|4@1+ (1,0) [0|15] "" Vector__XXX
