@@ -12,6 +12,7 @@
 #include "version_parser.h"
 #include "mcpwm_capture_helpers.h"
 #include "coefficients.h"
+#include <math.h>
 
 #include "esp_partition.h"
 #include "esp_ota_ops.h"
@@ -384,7 +385,7 @@ void itf_slow_metrics_PKG(void *pvParameters)
         compute_err = compute_freq_dut(&pwm_cap_coolant);
         // if (compute_err != ESP_OK)
         //     ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
-        float coolant_degC = 100.0 * pwm_cap_coolant.duty_cycle * COEFF_DUTY_TO_COOLANT_DEGC_M + COEFF_DUTY_TO_COOLANT_DEGC_P;
+        float coolant_degC = lround((100.0 * pwm_cap_coolant.duty_cycle * COEFF_DUTY_TO_COOLANT_DEGC_M + COEFF_DUTY_TO_COOLANT_DEGC_P)*10.0)/10.0;
         if (coolant_degC < 70)
             coolant_degC = 70;
         if (coolant_degC > 130)
@@ -395,7 +396,7 @@ void itf_slow_metrics_PKG(void *pvParameters)
 
         float fuel_level_raw = sma_get_avg(adc_channels[0].sma);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        float fuel_level_pc = (float)(fuel_lvl_comp_factor / 1000.0) * COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P;
+        float fuel_level_pc = lround(((float)(fuel_lvl_comp_factor / 1000.0) * COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P)*10.0)/10.0;
         if (fuel_level_pc > 100.0)
             fuel_level_pc = 100;
         if (fuel_level_pc < 0)
@@ -404,7 +405,7 @@ void itf_slow_metrics_PKG(void *pvParameters)
 
         float lv_raw = sma_get_avg(adc_channels[1].sma);
         float lv_raw_v = lv_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        float lv_v = lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P;
+        float lv_v = lround((lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P)*10.0)/10.0;
 
         // Comment in for debug
         ESP_LOGD(TAG, "Fuel : %.2f - %.3fV/%.3f - %.2fR- %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, COEFF_FUEL_FULL_V, 1000.0 * fuel_level_v / COEFF_LOW_CALIBER_CURRENT, fuel_level_pc, lv_raw, lv_raw_v, lv_v);

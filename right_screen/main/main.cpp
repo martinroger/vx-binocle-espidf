@@ -667,7 +667,7 @@ extern "C" void app_main()
             // Get pointer to the IO Expander class
             display_board_st.ioExpander = board->getIO_Expander();
             display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
-            if (!display_board_st.overTemp_buzz && overTemperatureOn)
+            if (display_board_st.overTemp_buzz && overTemperatureOn)
             {
                 display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
             }
