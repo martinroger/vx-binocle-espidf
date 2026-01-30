@@ -1,5 +1,4 @@
 #include "odometer.h"
-#include "nvs_storage.h"
 #include "esp_log.h"
 
 #define TAG "ODOM"

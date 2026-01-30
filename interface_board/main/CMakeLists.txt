@@ -1,3 +1,3 @@
-idf_component_register(SRCS "nvs_storage.c" "odometer.c" "sma_filter.c" "main.cpp" 
+idf_component_register(SRCS "main.cpp" 
                     INCLUDE_DIRS "." "../../common"
-                    REQUIRES nvs_flash driver esp_timer twai_daemon binocan esp_app_format esp_driver_tsens app_update esp_partition)
+                    REQUIRES nvs_flash nvs_storage odometer driver esp_timer twai_daemon binocan esp_app_format esp_driver_tsens app_update esp_partition sma_filter)
