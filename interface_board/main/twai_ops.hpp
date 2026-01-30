@@ -337,7 +337,7 @@ inline void itf_odometer_PKG(void *pvParameters)
         .identifier = BINOCAN_ITF_ODOMETER_FRAME_ID,
         .data_length_code = BINOCAN_ITF_ODOMETER_LENGTH};
 
-    uint32_t pulse_m = 0;
+    float pulse_m = 0;
 
     while (true)
     {
@@ -345,11 +345,11 @@ inline void itf_odometer_PKG(void *pvParameters)
         // Check if number of pulses exceed 100m, if yes update trip_m and odometer_m to their new values, and propagate to NVS and CAN, if not just repeat values over CAN and do nothing on NVS side
         pulse_m = COEFF_PULSES_TO_METER * pwm_cap_speed.pulse_counter;
 
-        if (pulse_m > 100)
+        if (pulse_m >= 100.0)
         {
             pwm_cap_speed.pulse_counter = 0;
-            odometer_m += pulse_m;
-            trip_m += pulse_m;
+            odometer_m += lround(pulse_m);
+            trip_m += lround(pulse_m);
             if (odometer_set(odometer_m) != ESP_OK)
             {
                 ESP_LOGW(TAG, "Could not set odometer_m in NVS");
