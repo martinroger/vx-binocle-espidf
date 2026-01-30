@@ -13,12 +13,16 @@
 
 #include <math.h>
 
+// Filters section
+#include "sma_filter.h"
+
 // #include "esp_ota_ops.h"
 
 #include "global_vars.hpp"
 #include "twai_daemon.h"
 #include "binocan.h"
 #include "active_hi_low_processor.h"
+#include "adc_processor.h"
 
 #pragma region FreeRTOS tasks for CAN packaging
 // FreeRTOS handles
@@ -55,7 +59,7 @@ inline void dbg_itf_speed_PKG(void *pvParameters)
         binocan_dbg_itf_speed_pack(tx_msg.data, &binocan_dbg_itf_speed, BINOCAN_DBG_ITF_SPEED_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue debug speed message in queue");
+            ESP_LOGW(__func__, "Could not queue debug speed message in queue");
         }
     }
 }
@@ -86,7 +90,7 @@ inline void dbg_itf_rpm_PKG(void *pvParameters)
         binocan_dbg_itf_rpm_pack(tx_msg.data, &binocan_dbg_itf_rpm, BINOCAN_DBG_ITF_RPM_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue debug rpm message in queue");
+            ESP_LOGW(__func__, "Could not queue debug rpm message in queue");
         }
     }
 }
@@ -116,7 +120,7 @@ inline void dbg_itf_coolant_PKG(void *pvParameters)
         binocan_dbg_itf_coolant_pack(tx_msg.data, &binocan_dbg_itf_coolant, BINOCAN_DBG_ITF_COOLANT_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue debug coolant message in queue");
+            ESP_LOGW(__func__, "Could not queue debug coolant message in queue");
         }
     }
 }
@@ -138,14 +142,14 @@ inline void dbg_itf_adc_raw_PKG(void *pvParameters)
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_ADC_RAW_CYCLE_TIME_MS));
-        float fuel_raw_v = adc_channels[0].sma->latest * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        float lv_raw_v = adc_channels[1].sma->latest * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float fuel_raw_v = adc_raw_buffer[0] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float lv_raw_v = adc_raw_buffer[1] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         binocan_dbg_itf_adc_raw.dbg_fuel_raw_v = binocan_dbg_itf_adc_raw_dbg_fuel_raw_v_encode(fuel_raw_v);
         binocan_dbg_itf_adc_raw.dbg_12_v_raw_v = binocan_dbg_itf_adc_raw_dbg_12_v_raw_v_encode(lv_raw_v);
         binocan_dbg_itf_adc_raw_pack(tx_msg.data, &binocan_dbg_itf_adc_raw, BINOCAN_DBG_ITF_ADC_RAW_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue debug ADC raw message in queue");
+            ESP_LOGW(__func__, "Could not queue debug ADC raw message in queue");
         }
     }
 }
@@ -158,7 +162,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
     // SMA-ed slower metrics :
     // coolant_temp
     // fuel_level_pc
-    // lv_voltage_v
+    // lv_vol__func__e_v
 
     binocan_itf_slow_metrics_t binocan_itf_slow_metrics;
     binocan_itf_slow_metrics_init(&binocan_itf_slow_metrics);
@@ -166,6 +170,9 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         .identifier = BINOCAN_ITF_SLOW_METRICS_FRAME_ID,
         .data_length_code = BINOCAN_ITF_SLOW_METRICS_LENGTH};
     esp_err_t compute_err;
+
+    sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
+    sma_handle_t *lv_vol__func__e_SMA = sma_init_full(CONFIG_LV_SMA_SIZE, adc_raw_buffer[1]);
 
     while (true)
     {
@@ -181,9 +188,14 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
             coolant_degC = 130;
         interface_board_st.overTemp = (coolant_degC >= coolant_overtemp_threshold_degC ? true : false);
         // Comment in for debug
-        ESP_LOGD(TAG, "Coolant: %.2f - %.2f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0, coolant_degC);
+        ESP_LOGD(__func__, "Coolant: %.2f - %.2f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0, coolant_degC);
 
-        float fuel_level_raw = sma_get_avg(adc_channels[0].sma);
+        // Collect the SMA values
+        sma_add(fuel_level_SMA, adc_raw_buffer[0]);
+        sma_add(lv_vol__func__e_SMA, adc_raw_buffer[1]);
+
+
+        float fuel_level_raw = sma_get_avg(fuel_level_SMA);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float fuel_level_pc = lround(((float)(fuel_lvl_comp_factor / 1000.0) * COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P) * 10.0) / 10.0;
         if (fuel_level_pc > 100.0)
@@ -192,12 +204,12 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
             fuel_level_pc = 0;
         interface_board_st.lowFuel = (fuel_level_pc < fuel_low_level_threshold_pc ? true : false);
 
-        float lv_raw = sma_get_avg(adc_channels[1].sma);
+        float lv_raw = sma_get_avg(lv_vol__func__e_SMA);
         float lv_raw_v = lv_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float lv_v = lround((lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P) * 10.0) / 10.0;
 
         // Comment in for debug
-        ESP_LOGD(TAG, "Fuel : %.2f - %.3fV/%.3f - %.2fR- %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, COEFF_FUEL_FULL_V, 1000.0 * fuel_level_v / COEFF_LOW_CALIBER_CURRENT, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
+        ESP_LOGD(__func__, "Fuel : %.2f - %.3fV/%.3f - %.2fR- %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, COEFF_FUEL_FULL_V, 1000.0 * fuel_level_v / COEFF_LOW_CALIBER_CURRENT, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
 
         binocan_itf_slow_metrics.itf_coolant_temp = binocan_itf_slow_metrics_itf_coolant_temp_encode(coolant_degC);
         binocan_itf_slow_metrics.itf_fuel_level_pc = binocan_itf_slow_metrics_itf_fuel_level_pc_encode(fuel_level_pc);
@@ -205,7 +217,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         binocan_itf_slow_metrics_pack(tx_msg.data, &binocan_itf_slow_metrics, BINOCAN_ITF_SLOW_METRICS_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue slow metrics message in queue");
+            ESP_LOGW(__func__, "Could not queue slow metrics message in queue");
         }
     }
 }
@@ -236,7 +248,7 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
         //     ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
         float rpm = COEFF_FREQ_TO_RPM_M * pwm_cap_rpm.frequency + COEFF_FREQ_TO_RPM_P;
         float speed = COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P;
-        ESP_LOGD(TAG, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
+        ESP_LOGD(__func__, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
 
         binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
         binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
@@ -245,7 +257,7 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
         binocan_itf_fast_metrics_pack(tx_msg.data, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue fast metrics message in queue");
+            ESP_LOGW(__func__, "Could not queue fast metrics message in queue");
         }
     }
 }
@@ -269,7 +281,7 @@ inline void itf_active_hilo_PKG(void *pvParameters)
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS));
         if (tca95x5_port_read(&tca_slave, &raw) != ESP_OK)
         {
-            ESP_LOGE(TAG, "Impossible to fetch register from expander");
+            ESP_LOGE(__func__, "Impossible to fetch register from expander");
             interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
             ESP_LOGW(__func__, "Entering degraded mode at line %lu", __LINE__);
             interface_board_st.expander_ST = false;
@@ -319,7 +331,7 @@ inline void itf_active_hilo_PKG(void *pvParameters)
 
                 if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
                 {
-                    ESP_LOGW(TAG, "Could not queue active hi/lo message in queue");
+                    ESP_LOGW(__func__, "Could not queue active hi/lo message in queue");
                 }
                 xSemaphoreGive(exp_act_hilo_semaphore);
             }
@@ -352,13 +364,13 @@ inline void itf_odometer_PKG(void *pvParameters)
             trip_m += lround(pulse_m);
             if (odometer_set(odometer_m) != ESP_OK)
             {
-                ESP_LOGW(TAG, "Could not set odometer_m in NVS");
+                ESP_LOGW(__func__, "Could not set odometer_m in NVS");
                 interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
                 ESP_LOGW(__func__, "Entering degraded mode at line %lu", __LINE__);
             }
             if (trip_set(trip_m) != ESP_OK)
             {
-                ESP_LOGW(TAG, "Could not set trip_m in NVS");
+                ESP_LOGW(__func__, "Could not set trip_m in NVS");
                 interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
                 ESP_LOGW(__func__, "Entering degraded mode at line %lu", __LINE__);
             }
@@ -370,7 +382,7 @@ inline void itf_odometer_PKG(void *pvParameters)
         binocan_itf_odometer_pack(tx_msg.data, &binocan_itf_odometer, BINOCAN_ITF_ODOMETER_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue odometer message in queue");
+            ESP_LOGW(__func__, "Could not queue odometer message in queue");
         }
     }
 }
@@ -430,7 +442,7 @@ void itf_board_st_PKG(void *pvParameters)
 
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue internal state message in queue");
+            ESP_LOGW(__func__, "Could not queue internal state message in queue");
         }
     }
 }
@@ -454,7 +466,7 @@ inline void itf_board_version_PKG(void *pvParameters)
     // This avoids memcpy into a numeric field and is lightweight.
     if (interface_board_st.app_metadata && interface_board_st.app_metadata->commitID)
     {
-        // ESP_LOGI(TAG,"Commit is valid");
+        // ESP_LOGI(__func__,"Commit is valid");
         uint64_t commit_val = 0;
         size_t src_len = interface_board_st.app_metadata->commit_len;
         if (src_len > 8)
@@ -467,7 +479,7 @@ inline void itf_board_version_PKG(void *pvParameters)
     }
     else
     {
-        // ESP_LOGI(TAG,"Commit will be 0");
+        // ESP_LOGI(__func__,"Commit will be 0");
         binocan_itf_board_version.itf_version_commit = binocan_itf_board_version_itf_version_commit_encode(0ULL);
     }
 
@@ -480,7 +492,7 @@ inline void itf_board_version_PKG(void *pvParameters)
         binocan_itf_board_version_pack(tx_msg.data, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(TAG, "Could not queue internal state message in queue");
+            ESP_LOGW(__func__, "Could not queue internal state message in queue");
         }
     }
 }
@@ -498,32 +510,32 @@ inline esp_err_t twai_ops_init()
     // Set up the packaging and queuing tasks
     if (xTaskCreatePinnedToCore(itf_board_st_PKG, "ITF_ST", 4096, NULL, 3, &itf_board_st_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create interface state package task");
+        ESP_LOGE(__func__, "Could not create interface state package task");
         ret = ESP_FAIL;
     }
     if (xTaskCreatePinnedToCore(itf_active_hilo_PKG, "ITF_AHL", 4096, NULL, 3, &exp_act_hilo_proc_task_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create base ActHiLo package task");
+        ESP_LOGE(__func__, "Could not create base ActHiLo package task");
         ret = ESP_FAIL;
     }
-    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096, NULL, 3, &itf_slow_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096+2048, NULL, 3, &itf_slow_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create base slow metrics package task");
+        ESP_LOGE(__func__, "Could not create base slow metrics package task");
         ret = ESP_FAIL;
     }
     if (xTaskCreatePinnedToCore(itf_fast_metrics_PKG, "ITF_FST_M", 4096, NULL, 3, &itf_fast_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create base fast metrics package task");
+        ESP_LOGE(__func__, "Could not create base fast metrics package task");
         ret = ESP_FAIL;
     }
     if (xTaskCreatePinnedToCore(itf_odometer_PKG, "ITF_ODO", 4096, NULL, 3, &itf_odometer_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create base odometer package task");
+        ESP_LOGE(__func__, "Could not create base odometer package task");
         ret = ESP_FAIL;
     }
     if (xTaskCreatePinnedToCore(itf_board_version_PKG, "ITF_VER", 4096, NULL, 3, &itf_board_version_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create interface board version package task");
+        ESP_LOGE(__func__, "Could not create interface board version package task");
         ret = ESP_FAIL;
     }
 
@@ -531,28 +543,28 @@ inline esp_err_t twai_ops_init()
 #ifdef CONFIG_DBG_SPEED_MSG
     if (xTaskCreatePinnedToCore(dbg_itf_speed_PKG, "DBG_ITF_SPD", 4096, NULL, 3, &dbg_itf_speed_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create debug speed package task");
+        ESP_LOGE(__func__, "Could not create debug speed package task");
     }
 #endif
 
 #ifdef CONFIG_DBG_RPM_MSG
     if (xTaskCreatePinnedToCore(dbg_itf_rpm_PKG, "DBG_ITF_RPM", 4096, NULL, 3, &dbg_itf_rpm_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create debug RPM package task");
+        ESP_LOGE(__func__, "Could not create debug RPM package task");
     }
 #endif
 
 #ifdef CONFIG_DBG_COOL_MSG
     if (xTaskCreatePinnedToCore(dbg_itf_coolant_PKG, "DBG_ITF_COOL", 4096, NULL, 3, &dbg_itf_coolant_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create debug coolant package task");
+        ESP_LOGE(__func__, "Could not create debug coolant package task");
     }
 #endif
 
 #ifdef CONFIG_DBG_ADC_MSG
     if (xTaskCreatePinnedToCore(dbg_itf_adc_raw_PKG, "DBG_ITF_ADC", 4096, NULL, 3, &dbg_itf_adc_raw_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(TAG, "Could not create debug ADC package task");
+        ESP_LOGE(__func__, "Could not create debug ADC package task");
     }
 #endif
 
