@@ -4,7 +4,9 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "version_parser.h" // For parsed app metadata struct
+#include "version_parser.h"        // For parsed app metadata struct
+#include "odometer.h"              //For odometer and trip variables
+#include "mcpwm_capture_helpers.h" // For pwm_info_t struct and capture handles
 
 struct board_ST
 {
@@ -29,3 +31,13 @@ bool firstBoot;        // Is this the first boot after OTA ?
 uint16_t fuel_lvl_comp_factor = 1000; // Is divided by 1000.0 later
 uint16_t fuel_low_level_threshold_pc = 20;
 uint16_t coolant_overtemp_threshold_degC = 106;
+
+#pragma region MCPWM declarations
+// PWM stats structures for coolant, rpm and speed captures
+static volatile pwm_info_t pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed = {.pos_edge_ts = 0, .prev_pos_edge_ts = 0, .period_ticks = 0, .neg_edge_ts = 0, .deltaT = 0};
+
+// Capture channels
+mcpwm_cap_channel_handle_t cap_chan_coolant = NULL;
+mcpwm_cap_channel_handle_t cap_chan_rpm = NULL;
+mcpwm_cap_channel_handle_t cap_chan_speed = NULL;
+#pragma endregion
