@@ -1289,17 +1289,17 @@ static int pwm(int argc, char **argv)
         target_temperature = 130.0;
 
     double target_duty = (double)((target_temperature)*COEFF_COOLANT_DEGC_TO_DUTY_M + COEFF_COOLANT_DEGC_TO_DUTY_P);
-    if (target_duty>100 || target_duty <0)
+    if (target_duty > 100 || target_duty < 0)
         return 1;
-    
+
     if (active_timers[(int)cool_channel] == false)
     {
         ledc_timer_resume(LEDC_LOW_SPEED_MODE, (ledc_timer_t)cool_channel);
         active_timers[(int)cool_channel] = true;
     }
-    if (change_duty_cycle(cool_channel,target_duty)!= ESP_OK)
+    if (change_duty_cycle(cool_channel, target_duty) != ESP_OK)
         return 1;
-    if (change_frequency(cool_channel,coolant_freq)!= ESP_OK)
+    if (change_frequency(cool_channel, coolant_freq) != ESP_OK)
         return 1;
 
     // Speed in KPH
@@ -1308,13 +1308,13 @@ static int pwm(int argc, char **argv)
         target_speed = MAX_SPEED_KPH;
     if (target_speed < 0)
         return 1;
-    
+
     uint32_t target_speed_f = (uint32_t)(target_speed * COEFF_SPEED_KPH_TO_FREQ_M + COEFF_SPEED_KPH_TO_FREQ_P);
     if (target_speed_f < 3)
     {
         current_speed_kph = 0;
         current_speed_mph = 0;
-        ledc_timer_pause(LEDC_LOW_SPEED_MODE,LEDC_TIMER_2);
+        ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_2);
         active_timers[2] = false;
     }
     else
@@ -1324,19 +1324,19 @@ static int pwm(int argc, char **argv)
             ledc_timer_resume(LEDC_LOW_SPEED_MODE, (ledc_timer_t)speed_channel);
             active_timers[(int)speed_channel] = true;
         }
-        if (change_frequency(speed_channel,target_speed_f) != ESP_OK)
+        if (change_frequency(speed_channel, target_speed_f) != ESP_OK)
             return 1;
-        if (change_duty_cycle(speed_channel,speed_duty)!= ESP_OK)
+        if (change_duty_cycle(speed_channel, speed_duty) != ESP_OK)
             return 1;
         uint32_t actual_speed_f = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)speed_channel);
-        double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M* (double)actual_speed_f + COEFF_FREQ_TO_SPEED_KPH_P);
+        double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M * (double)actual_speed_f + COEFF_FREQ_TO_SPEED_KPH_P);
         current_speed_kph = actual_speed;
         current_speed_mph = actual_speed / 1.60934;
     }
 
     // RPM
     uint32_t target_rpm = (uint32_t)(pwm_args.rpm->ival[0]);
-    if (target_rpm<250 && target_rpm !=0)
+    if (target_rpm < 250 && target_rpm != 0)
         target_rpm = 250;
     else if (target_rpm > 9000)
         target_rpm = 9000;
@@ -1345,7 +1345,7 @@ static int pwm(int argc, char **argv)
     if (target_rpm_f < 3)
     {
         current_rpm = 0;
-        ledc_timer_pause(LEDC_LOW_SPEED_MODE,LEDC_TIMER_1);
+        ledc_timer_pause(LEDC_LOW_SPEED_MODE, LEDC_TIMER_1);
         active_timers[(int)rpm_channel] = false;
     }
     else
@@ -1357,9 +1357,9 @@ static int pwm(int argc, char **argv)
         }
         if (change_frequency(rpm_channel, target_rpm_f) != ESP_OK)
             return 1;
-        if (change_duty_cycle(rpm_channel,rpm_duty) != ESP_OK)
+        if (change_duty_cycle(rpm_channel, rpm_duty) != ESP_OK)
             return 1;
-        uint32_t actual_rpm_f = ledc_get_freq(LEDC_LOW_SPEED_MODE,(ledc_timer_t)rpm_channel);
+        uint32_t actual_rpm_f = ledc_get_freq(LEDC_LOW_SPEED_MODE, (ledc_timer_t)rpm_channel);
         uint32_t actual_rpm = (uint32_t)(COEFF_FREQ_TO_RPM_M * actual_rpm_f + COEFF_FREQ_TO_RPM_P);
         current_rpm = actual_rpm;
     }
@@ -1369,17 +1369,16 @@ static int pwm(int argc, char **argv)
 
 static void register_pwm(void)
 {
-    pwm_args.speed = arg_dbl1(NULL,NULL,"<speed>","Speed in kph");
-    pwm_args.rpm = arg_int1(NULL,NULL,"<rpm>","RPM (integer)");
-    pwm_args.temperature = arg_dbl1(NULL,NULL,"<temperature>","Coolant temperature in °C");
+    pwm_args.speed = arg_dbl1(NULL, NULL, "<speed>", "Speed in kph");
+    pwm_args.rpm = arg_int1(NULL, NULL, "<rpm>", "RPM (integer)");
+    pwm_args.temperature = arg_dbl1(NULL, NULL, "<temperature>", "Coolant temperature in °C");
     pwm_args.end = arg_end(5);
-    
+
     const esp_console_cmd_t cmd = {
         .command = "pwm",
         .help = "Set PWM values",
         .hint = NULL,
         .func = &pwm,
-        .argtable = &pwm_args
-    };
+        .argtable = &pwm_args};
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
 }
