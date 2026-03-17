@@ -7056,8 +7056,8 @@
         "name": "Play file",
         "label": "Play drivecycle",
         "order": 8,
-        "width": 0,
-        "height": 0,
+        "width": "2",
+        "height": "1",
         "emulateClick": false,
         "tooltip": "",
         "color": "",
@@ -7111,7 +7111,7 @@
         "id": "f91399f151ba9720",
         "type": "delay",
         "z": "236d17f0ee9c01ae",
-        "name": "",
+        "name": "Rate limiter",
         "pauseType": "rate",
         "timeout": "5",
         "timeoutUnits": "seconds",
@@ -7124,7 +7124,7 @@
         "drop": false,
         "allowrate": false,
         "outputs": 1,
-        "x": 2340,
+        "x": 2330,
         "y": 2440,
         "wires": [
             [
@@ -7265,7 +7265,7 @@
         "z": "236d17f0ee9c01ae",
         "group": "8dd109e7a0890030",
         "name": "",
-        "order": 0,
+        "order": 10,
         "width": 0,
         "height": 0,
         "topic": "topic",
@@ -7275,8 +7275,8 @@
         "allowMultiple": false,
         "accept": "",
         "className": "",
-        "x": 1590,
-        "y": 2600,
+        "x": 2130,
+        "y": 2640,
         "wires": [
             [
                 "4577ff55a54c1254",
@@ -7297,8 +7297,8 @@
         "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1880,
-        "y": 2600,
+        "x": 2420,
+        "y": 2640,
         "wires": []
     },
     {
@@ -7312,8 +7312,8 @@
         "createDir": false,
         "overwriteFile": "true",
         "encoding": "none",
-        "x": 2130,
-        "y": 2660,
+        "x": 2670,
+        "y": 2700,
         "wires": [
             []
         ]
@@ -7330,11 +7330,140 @@
         "initialize": "",
         "finalize": "",
         "libs": [],
-        "x": 1890,
-        "y": 2660,
+        "x": 2430,
+        "y": 2700,
         "wires": [
             [
                 "8b8f010a68259393"
+            ]
+        ]
+    },
+    {
+        "id": "cc44f6c33145c9b6",
+        "type": "ui-button",
+        "z": "236d17f0ee9c01ae",
+        "group": "8dd109e7a0890030",
+        "name": "Stop",
+        "label": "Stop",
+        "order": 9,
+        "width": "1",
+        "height": "1",
+        "emulateClick": false,
+        "tooltip": "",
+        "color": "",
+        "bgcolor": "",
+        "className": "",
+        "icon": "stop",
+        "iconPosition": "left",
+        "payload": "true",
+        "payloadType": "bool",
+        "topic": "topic",
+        "topicType": "msg",
+        "buttonColor": "",
+        "textColor": "",
+        "iconColor": "",
+        "enableClick": true,
+        "enablePointerdown": false,
+        "pointerdownPayload": "",
+        "pointerdownPayloadType": "str",
+        "enablePointerup": false,
+        "pointerupPayload": "",
+        "pointerupPayloadType": "str",
+        "x": 1950,
+        "y": 2520,
+        "wires": [
+            [
+                "b970563bb735a60d"
+            ]
+        ]
+    },
+    {
+        "id": "b970563bb735a60d",
+        "type": "change",
+        "z": "236d17f0ee9c01ae",
+        "name": "",
+        "rules": [
+            {
+                "t": "move",
+                "p": "payload",
+                "pt": "msg",
+                "to": "reset",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 2130,
+        "y": 2520,
+        "wires": [
+            [
+                "f91399f151ba9720"
+            ]
+        ]
+    },
+    {
+        "id": "e56fccfbd989f3c0",
+        "type": "status",
+        "z": "236d17f0ee9c01ae",
+        "name": "",
+        "scope": [
+            "f91399f151ba9720"
+        ],
+        "x": 1540,
+        "y": 2620,
+        "wires": [
+            [
+                "840ae8c1da8192e3"
+            ]
+        ]
+    },
+    {
+        "id": "840ae8c1da8192e3",
+        "type": "change",
+        "z": "236d17f0ee9c01ae",
+        "name": "",
+        "rules": [
+            {
+                "t": "set",
+                "p": "ui_update.label",
+                "pt": "msg",
+                "to": "status.text",
+                "tot": "msg"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 1590,
+        "y": 2560,
+        "wires": [
+            [
+                "46a3151059398da3"
+            ]
+        ]
+    },
+    {
+        "id": "46a3151059398da3",
+        "type": "function",
+        "z": "236d17f0ee9c01ae",
+        "name": "Reset UI label",
+        "func": "if (msg.ui_update.label == \"0\")\n    msg.ui_update.label = \"Play drivecycle\";\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1560,
+        "y": 2500,
+        "wires": [
+            [
+                "7ef62683ec4dabe0"
             ]
         ]
     },
@@ -7504,7 +7633,7 @@
         }
     },
     {
-        "id": "e8962e1c4e54f7b5",
+        "id": "39f9769c2a177f18",
         "type": "global-config",
         "env": [],
         "modules": {
