@@ -155,6 +155,32 @@ inline void dbg_itf_adc_raw_PKG(void *pvParameters)
 }
 #endif
 
+#ifdef CONFIG_DBG_GEAR_POS_MSG
+TaskHandle_t dbg_itf_gear_position_PKG_hdl;
+
+inline void dbg_itf_gear_position_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_gear_position_t binocan_dbg_itf_gear_position;
+    binocan_dbg_itf_gear_position_init(&binocan_dbg_itf_gear_position);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_GEAR_POSITION_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_GEAR_POSITION_LENGTH
+    };
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(BINOCAN_DBG_ITF_GEAR_POSITION_CYCLE_TIME_MS));
+        binocan_dbg_itf_gear_position.dbg_gear_ratio_raw = binocan_dbg_itf_gear_position_dbg_gear_ratio_raw_encode(gear_ratio_raw);
+        binocan_dbg_itf_gear_position.dbg_gear_ratio_filtered = binocan_dbg_itf_gear_position_dbg_gear_ratio_filtered_encode(gear_ratio_filtered);
+        binocan_dbg_itf_gear_position_pack(tx_msg.data, &binocan_dbg_itf_gear_position, BINOCAN_DBG_ITF_GEAR_POSITION_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(__func__,"Could not queue debug gear position message in queue.");
+        }
+    }
+}
+#endif
+
 /// @brief Packaging task for base_slow_metrics
 /// @param pvParameters
 inline void itf_slow_metrics_PKG(void *pvParameters)
@@ -565,6 +591,13 @@ inline esp_err_t twai_ops_init()
     if (xTaskCreatePinnedToCore(dbg_itf_adc_raw_PKG, "DBG_ITF_ADC", 4096, NULL, 3, &dbg_itf_adc_raw_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create debug ADC package task");
+    }
+#endif
+
+#ifdef CONFIG_DBG_GEAR_POS_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_gear_position_PKG, "DBG_ITF_GP", 4096, NULL, 3 &dbg_itf_gear_position_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(__func__,"Could not create debug gear position package task");
     }
 #endif
 

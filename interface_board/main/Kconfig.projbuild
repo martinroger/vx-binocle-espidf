@@ -123,6 +123,14 @@ menu "Interface board configuration"
             default false
             help
                 Enables debug output for ADC-related messages.
+        
+        config DBG_GEAR_POS_MSG
+            bool "Enable gear position debug messages"
+            depends on ENABLE_DEBUG_MSG
+            default false
+            help
+                Enables debug output for gear position estimator messages.
+                
     endmenu
 
     menu "IO Expander configuration"

@@ -43,6 +43,10 @@ float gear_ratio_R = 10.0;
 float gear_ema_alpha = 0.05;
 float gear_stability_tolerance = 3;
 
+// Gear position estimator variables
+float gear_ratio_raw = 0.0;
+float gear_ratio_filtered = 0.0;
+
 #pragma region MCPWM declarations
 // PWM stats structures for coolant, rpm and speed captures
 static volatile pwm_info_t pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed = {.pos_edge_ts = 0, .prev_pos_edge_ts = 0, .period_ticks = 0, .neg_edge_ts = 0, .deltaT = 0};
