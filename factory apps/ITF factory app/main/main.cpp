@@ -73,6 +73,15 @@ struct board_ST
 uint16_t fuel_lvl_comp_factor = 1000; // Is divided by 1000.0 later
 uint16_t fuel_low_level_threshold_pc = 20;
 uint16_t coolant_overtemp_threshold_degC = 106;
+size_t float_size = sizeof(float);
+float gear_ratio_1 = 1.0;
+float gear_ratio_2 = 1.83;
+float gear_ratio_3 = 2.73;
+float gear_ratio_4 = 3.73;
+float gear_ratio_5 = 4.5;
+float gear_ratio_R = 10.0;
+float gear_ema_alpha = 0.05;
+float gear_stability_tolerance = 0.03;
 
 #pragma endregion
 
@@ -586,9 +595,42 @@ static esp_err_t calibration_get_handler(httpd_req_t *req)
 		ESP_LOGW(__func__, "Could not find the coolant overtemperature threshold in nvs.");
 		coolant_overtemp_threshold_degC = 103;
 	}
+	if (nvs_get_blob(h, "gr_1", &gear_ratio_1, &float_size) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the 1st gear ratio in nvs.");
+	}
+	if (nvs_get_blob(h, "gr_2", &gear_ratio_2, &float_size) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the 2nd gear ratio in nvs.");
+	}
+	if (nvs_get_blob(h, "gr_3", &gear_ratio_3, &float_size) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the 3rd gear ratio in nvs.");
+	}
+	if (nvs_get_blob(h, "gr_4", &gear_ratio_4, &float_size) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the 4th gear ratio in nvs.");
+	}
+	if (nvs_get_blob(h, "gr_5", &gear_ratio_5, &float_size) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the 5th gear ratio in nvs.");
+	}
+	if (nvs_get_blob(h, "gr_r", &gear_ratio_R, &float_size) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the reverse gear ratio in nvs.");
+	}
+	if (nvs_get_blob(h, "gr_ema", &gear_ema_alpha, &float_size) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the gear ema alpha in nvs.");
+	}
+	if (nvs_get_blob(h, "gr_stb_tol", &gear_stability_tolerance, &float_size) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find the gear stability tolerance in nvs.");
+	}
 	nvs_close(h);
 	char out[256];
-	snprintf(out, sizeof(out), "{\"fuel_level_corr\":%u,\"low_fuel_threshold\":%u,\"overtemp_threshold\":%u}", fuel_lvl_comp_factor, fuel_low_level_threshold_pc, coolant_overtemp_threshold_degC);
+	snprintf(out, sizeof(out), "{\"fuel_level_corr\":%u,\"low_fuel_threshold\":%u,\"overtemp_threshold\":%u,\"gear_1\":%.4f,\"gear_2\":%.4f,\"gear_3\":%.4f,\"gear_4\":%.4f,\"gear_5\":%.4f,\"gear_R\":%.4f,\"gear_ema\":%.4f,\"gear_stab_tol\":%.4f}",
+			 fuel_lvl_comp_factor, fuel_low_level_threshold_pc, coolant_overtemp_threshold_degC, gear_ratio_1, gear_ratio_2, gear_ratio_3, gear_ratio_4, gear_ratio_5, gear_ratio_R, gear_ema_alpha, gear_stability_tolerance);
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, out);
 	return ESP_OK;
@@ -613,7 +655,16 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 	const char *new_fuel_level_corr_ptr = strstr(req->uri, "new_fuel_level_corr=");
 	const char *new_low_fuel_th_ptr = strstr(req->uri, "new_low_fuel_threshold=");
 	const char *new_overtemp_th_ptr = strstr(req->uri, "new_overtemp_threshold=");
+	const char *new_gear_ratio_1_ptr = strstr(req->uri, "new_gear_ratio_1=");
+	const char *new_gear_ratio_2_ptr = strstr(req->uri, "new_gear_ratio_2=");
+	const char *new_gear_ratio_3_ptr = strstr(req->uri, "new_gear_ratio_3=");
+	const char *new_gear_ratio_4_ptr = strstr(req->uri, "new_gear_ratio_4=");
+	const char *new_gear_ratio_5_ptr = strstr(req->uri, "new_gear_ratio_5=");
+	const char *new_gear_ratio_R_ptr = strstr(req->uri, "new_gear_ratio_R=");
+	const char *new_gear_ema_alpha_ptr = strstr(req->uri, "new_gear_ema_alpha=");
+	const char *new_gear_stab_tol_ptr = strstr(req->uri, "new_gear_stab_tol=");
 	long detectedNumber = 0;
+	float detectedFloat = 0.0;
 	// Check if "new_fuel_level_corr=" is a valid pointer (detected)
 	if (new_fuel_level_corr_ptr != NULL)
 	{
@@ -684,7 +735,113 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 			return ESP_FAIL;
 		}
 	}
-	if (new_low_fuel_th_ptr == NULL && new_fuel_level_corr_ptr == NULL && new_overtemp_th_ptr == NULL) // Gibberish in the request
+	if (new_gear_ratio_1_ptr != NULL)
+	{
+		const char *numberToParse = new_gear_ratio_1_ptr + sizeof("new_gear_ratio_1=") - 1;
+		if ((numberToParse[0] == '-') || (numberToParse[0] == '+') || ((numberToParse[0] >= '0') && (numberToParse[0] <= '9')))
+		{
+			detectedFloat = atoff(numberToParse);
+			// No boundaries verification
+			nvs_set_blob(h, "gr_1", &detectedFloat, float_size);
+			ESP_LOGI(__func__, "Gear ratio 1 updated to %.4f", detectedFloat);
+			nvs_commit(h);
+		}
+	}
+	if (new_gear_ratio_2_ptr != NULL)
+	{
+		const char *numberToParse = new_gear_ratio_2_ptr + sizeof("new_gear_ratio_2=") - 1;
+		if ((numberToParse[0] == '-') || (numberToParse[0] == '+') || ((numberToParse[0] >= '0') && (numberToParse[0] <= '9')))
+		{
+			detectedFloat = atoff(numberToParse);
+			// No boundaries verification
+			nvs_set_blob(h, "gr_2", &detectedFloat, float_size);
+			ESP_LOGI(__func__, "Gear ratio 2 updated to %.4f", detectedFloat);
+			nvs_commit(h);
+		}
+	}
+	if (new_gear_ratio_3_ptr != NULL)
+	{
+		const char *numberToParse = new_gear_ratio_3_ptr + sizeof("new_gear_ratio_3=") - 1;
+		if ((numberToParse[0] == '-') || (numberToParse[0] == '+') || ((numberToParse[0] >= '0') && (numberToParse[0] <= '9')))
+		{
+			detectedFloat = atoff(numberToParse);
+			// No boundaries verification
+			nvs_set_blob(h, "gr_3", &detectedFloat, float_size);
+			ESP_LOGI(__func__, "Gear ratio 3 updated to %.4f", detectedFloat);
+			nvs_commit(h);
+		}
+	}
+	if (new_gear_ratio_4_ptr != NULL)
+	{
+		const char *numberToParse = new_gear_ratio_4_ptr + sizeof("new_gear_ratio_4=") - 1;
+		if ((numberToParse[0] == '-') || (numberToParse[0] == '+') || ((numberToParse[0] >= '0') && (numberToParse[0] <= '9')))
+		{
+			detectedFloat = atoff(numberToParse);
+			// No boundaries verification
+			nvs_set_blob(h, "gr_4", &detectedFloat, float_size);
+			ESP_LOGI(__func__, "Gear ratio 4 updated to %.4f", detectedFloat);
+			nvs_commit(h);
+		}
+	}
+	if (new_gear_ratio_5_ptr != NULL)
+	{
+		const char *numberToParse = new_gear_ratio_5_ptr + sizeof("new_gear_ratio_5=") - 1;
+		if ((numberToParse[0] == '-') || (numberToParse[0] == '+') || ((numberToParse[0] >= '0') && (numberToParse[0] <= '9')))
+		{
+			detectedFloat = atoff(numberToParse);
+			// No boundaries verification
+			nvs_set_blob(h, "gr_5", &detectedFloat, float_size);
+			ESP_LOGI(__func__, "Gear ratio 5 updated to %.4f", detectedFloat);
+			nvs_commit(h);
+		}
+	}
+	if (new_gear_ratio_R_ptr != NULL)
+	{
+		const char *numberToParse = new_gear_ratio_R_ptr + sizeof("new_gear_ratio_R=") - 1;
+		if ((numberToParse[0] == '-') || (numberToParse[0] == '+') || ((numberToParse[0] >= '0') && (numberToParse[0] <= '9')))
+		{
+			detectedFloat = atoff(numberToParse);
+			// No boundaries verification
+			nvs_set_blob(h, "gr_r", &detectedFloat, float_size);
+			ESP_LOGI(__func__, "Reverse gear ratio updated to %.4f", detectedFloat);
+			nvs_commit(h);
+		}
+	}
+	if (new_gear_ema_alpha_ptr != NULL)
+	{
+		const char *numberToParse = new_gear_ema_alpha_ptr + sizeof("new_gear_ema_alpha=") - 1;
+		if ((numberToParse[0] == '-') || (numberToParse[0] == '+') || ((numberToParse[0] >= '0') && (numberToParse[0] <= '9')))
+		{
+			detectedFloat = atoff(numberToParse);
+			// No boundaries verification
+			nvs_set_blob(h, "gr_ema", &detectedFloat, float_size);
+			ESP_LOGI(__func__, "Gear ratio EMA alpha updated to %.4f", detectedFloat);
+			nvs_commit(h);
+		}
+	}
+	if (new_gear_stab_tol_ptr != NULL)
+	{
+		const char *numberToParse = new_gear_stab_tol_ptr + sizeof("new_gear_stab_tol=") - 1;
+		if ((numberToParse[0] == '-') || (numberToParse[0] == '+') || ((numberToParse[0] >= '0') && (numberToParse[0] <= '9')))
+		{
+			detectedFloat = atoff(numberToParse);
+			// No boundaries verification
+			nvs_set_blob(h, "gr_stb_tol", &detectedFloat, float_size);
+			ESP_LOGI(__func__, "Gear ratio stability tolerance updated to %.4f", detectedFloat);
+			nvs_commit(h);
+		}
+	}
+	if (new_low_fuel_th_ptr == NULL &&
+		new_fuel_level_corr_ptr == NULL &&
+		new_overtemp_th_ptr == NULL &&
+		new_gear_ratio_1_ptr == NULL &&
+		new_gear_ratio_2_ptr == NULL &&
+		new_gear_ratio_3_ptr == NULL &&
+		new_gear_ratio_4_ptr == NULL &&
+		new_gear_ratio_5_ptr == NULL &&
+		new_gear_ratio_R_ptr == NULL &&
+		new_gear_ema_alpha_ptr == NULL &&
+		new_gear_stab_tol_ptr == NULL) // Gibberish in the request
 	{
 		ESP_LOGE(__func__, "Invalid update request, no valid calibration input.");
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Malformed request, no correct tags");

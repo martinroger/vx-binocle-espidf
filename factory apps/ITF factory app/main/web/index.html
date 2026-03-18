@@ -39,6 +39,30 @@
             Overtemp warning : <mark><span id="overtemp_threshold">-</span>°C</mark> <input id="new_overtemp_threshold"
                 type="number"> <button type="button"
                 onclick="fetch('/set_cal?new_overtemp_threshold='+document.getElementById('new_overtemp_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Gear 1 ratio : <mark><span id="gear_ratio_1">-</span></mark> <input id="new_gear_ratio_1" type="number">
+            <button type="button"
+                onclick="fetch('/set_cal?new_gear_ratio_1='+document.getElementById('new_gear_ratio_1').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Gear 2 ratio : <mark><span id="gear_ratio_2">-</span></mark> <input id="new_gear_ratio_2" type="number">
+            <button type="button"
+                onclick="fetch('/set_cal?new_gear_ratio_2='+document.getElementById('new_gear_ratio_2').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Gear 3 ratio : <mark><span id="gear_ratio_3">-</span></mark> <input id="new_gear_ratio_3" type="number">
+            <button type="button"
+                onclick="fetch('/set_cal?new_gear_ratio_3='+document.getElementById('new_gear_ratio_3').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Gear 4 ratio : <mark><span id="gear_ratio_4">-</span></mark> <input id="new_gear_ratio_4" type="number">
+            <button type="button"
+                onclick="fetch('/set_cal?new_gear_ratio_4='+document.getElementById('new_gear_ratio_4').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Gear 5 ratio : <mark><span id="gear_ratio_5">-</span></mark> <input id="new_gear_ratio_5" type="number">
+            <button type="button"
+                onclick="fetch('/set_cal?new_gear_ratio_5='+document.getElementById('new_gear_ratio_5').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Gear R ratio : <mark><span id="gear_ratio_R">-</span></mark> <input id="new_gear_ratio_R" type="number">
+            <button type="button"
+                onclick="fetch('/set_cal?new_gear_ratio_R='+document.getElementById('new_gear_ratio_R').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Gear EMA alpha : <mark><span id="gear_ema_alpha">-</span></mark> <input id="new_gear_ema_alpha"
+                type="number"> <button type="button"
+                onclick="fetch('/set_cal?new_gear_ema_alpha='+document.getElementById('new_gear_ema_alpha').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+            Gear Stability tolerance : <mark><span id="gear_stab_tol">-</span>%</mark> <input id="new_gear_stab_tol"
+                type="number"> <button type="button"
+                onclick="fetch('/set_cal?new_gear_stab_tol='+document.getElementById('new_gear_stab_tol').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
         </p>
     </details>
 
@@ -118,6 +142,38 @@
                 if (j.overtemp_threshold) {
                     document.getElementById('overtemp_threshold').innerText = j.overtemp_threshold || '-';
                     document.getElementById('new_overtemp_threshold').value = parseInt(j.overtemp_threshold);
+                }
+                if (j.gear_1) {
+                    document.getElementById('gear_ratio_1').innerText = j.gear_1 || "-";
+                    document.getElementById('new_gear_ratio_1').value = parseFloat(j.gear_1);
+                }
+                if (j.gear_2) {
+                    document.getElementById('gear_ratio_2').innerText = j.gear_2 || "-";
+                    document.getElementById('new_gear_ratio_2').value = parseFloat(j.gear_2);
+                }
+                if (j.gear_3) {
+                    document.getElementById('gear_ratio_3').innerText = j.gear_3 || "-";
+                    document.getElementById('new_gear_ratio_3').value = parseFloat(j.gear_3);
+                }
+                if (j.gear_4) {
+                    document.getElementById('gear_ratio_4').innerText = j.gear_4 || "-";
+                    document.getElementById('new_gear_ratio_4').value = parseFloat(j.gear_4);
+                }
+                if (j.gear_5) {
+                    document.getElementById('gear_ratio_5').innerText = j.gear_5 || "-";
+                    document.getElementById('new_gear_ratio_5').value = parseFloat(j.gear_5);
+                }
+                if (j.gear_R) {
+                    document.getElementById('gear_ratio_R').innerText = j.gear_R || "-";
+                    document.getElementById('new_gear_ratio_R').value = parseFloat(j.gear_R);
+                }
+                if (j.gear_ema) {
+                    document.getElementById('gear_ema_alpha').innerText = j.gear_ema || '-';
+                    document.getElementById('new_gear_ema_alpha').value = parseFloat(j.gear_ema);
+                }
+                if (j.gear_stab_tol) {
+                    document.getElementById('gear_stab_tol').innerText = j.gear_stab_tol || '-';
+                    document.getElementById('new_gear_stab_tol').value = parseFloat(j.gear_stab_tol);
                 }
             });
         }
