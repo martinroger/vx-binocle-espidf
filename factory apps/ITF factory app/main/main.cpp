@@ -81,7 +81,7 @@ float gear_ratio_4 = 3.73;
 float gear_ratio_5 = 4.5;
 float gear_ratio_R = 10.0;
 float gear_ema_alpha = 0.05;
-float gear_stability_tolerance = 0.03;
+float gear_stability_tolerance = 3;
 
 #pragma endregion
 
