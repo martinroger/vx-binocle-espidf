@@ -50,6 +50,8 @@ typedef struct _objects_t {
     lv_obj_t *trip;
     lv_obj_t *gr_raw;
     lv_obj_t *gr_filt;
+    lv_obj_t *gr_diff;
+    lv_obj_t *gr_pos;
     lv_obj_t *airbag_tt;
     lv_obj_t *abs_tt;
     lv_obj_t *brakes_tt;

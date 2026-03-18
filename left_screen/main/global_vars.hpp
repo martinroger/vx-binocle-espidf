@@ -117,5 +117,7 @@ static const char *speed_mph_scale_labels[10] = {"0", "20", "40", "60", "80", "1
 static const char *rpm_scale_labels[10] = {"0", "10", "20", "30", "40", "50", "60", "70", "80", NULL};
 float gear_ratio_raw, p_gear_ratio_raw = 0.0;
 float gear_ratio_filtered, p_gear_ratio_filtered = 0.0;
+float gear_ratio_diff, p_gear_ratio_diff = 0.0;
+uint8_t gear_position, p_gear_position = 0;
 #endif
 #pragma endregion

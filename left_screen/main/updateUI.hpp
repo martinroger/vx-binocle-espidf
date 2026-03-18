@@ -189,14 +189,31 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     // Gear ratio debug display
     if ((p_gear_ratio_filtered != gear_ratio_filtered) || forceRefresh)
     {
-        lv_label_set_text_fmt(objects.gr_filt,"%0.3f",gear_ratio_filtered);
+        lv_label_set_text_fmt(objects.gr_filt, "%0.3f", gear_ratio_filtered);
+        lv_label_set_text_fmt(objects.gr_diff, "%3.1f", (((p_gear_ratio_filtered == 0) || (gear_ratio_filtered == 0)) ? 0 : 100 * abs(gear_ratio_filtered - p_gear_ratio_filtered) / p_gear_ratio_filtered));
         p_gear_ratio_filtered = gear_ratio_filtered;
         updatedElements++;
     }
     if ((p_gear_ratio_raw != gear_ratio_raw) || forceRefresh)
     {
-        lv_label_set_text_fmt(objects.gr_raw,"%0.3f",gear_ratio_raw);
+        lv_label_set_text_fmt(objects.gr_raw, "%0.3f", gear_ratio_raw);
         p_gear_ratio_raw = gear_ratio_raw;
+        updatedElements++;
+    }
+    if ((p_gear_position != gear_position) || forceRefresh)
+    {
+        if (gear_position > 0 && gear_position <= 5)
+        {
+            lv_label_set_text_fmt(objects.gr_pos, "%u", gear_position);
+        }
+        else if (gear_position == BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE)
+            lv_label_set_text(objects.gr_pos, "N");
+        else if (gear_position == BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_REVERSE_CHOICE)
+            lv_label_set_text(objects.gr_pos, "R");
+        else
+            lv_label_set_text(objects.gr_pos, "-");
+
+        p_gear_position = gear_position;
         updatedElements++;
     }
 
