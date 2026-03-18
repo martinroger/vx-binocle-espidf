@@ -186,6 +186,20 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // Don't update the overTemperatureOn so it can be used downstream
     }
 
+    // Gear ratio debug display
+    if ((p_gear_ratio_filtered != gear_ratio_filtered) || forceRefresh)
+    {
+        lv_label_set_text_fmt(objects.gr_filt,"%0.3f",gear_ratio_filtered);
+        p_gear_ratio_filtered = gear_ratio_filtered;
+        updatedElements++;
+    }
+    if ((p_gear_ratio_raw != gear_ratio_raw) || forceRefresh)
+    {
+        lv_label_set_text_fmt(objects.gr_raw,"%0.3f",gear_ratio_raw);
+        p_gear_ratio_raw = gear_ratio_raw;
+        updatedElements++;
+    }
+
 #endif
     if (CAN_RX_TimedOut) // Turn all on if there is a CAN Timeout
     {

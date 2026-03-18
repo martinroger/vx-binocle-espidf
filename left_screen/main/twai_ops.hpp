@@ -1233,6 +1233,21 @@ inline esp_err_t itf_board_version_Handler(twai_message_t *rxMsg)
     return ESP_OK;
 }
 
+// For live visualisation only
+inline esp_err_t DBG_gear_position_Handler(twai_message_t *rxMsg)
+{
+    static binocan_dbg_itf_gear_position_t binocan_dbg_itf_gear_position;
+
+    if (binocan_dbg_itf_gear_position_unpack(&binocan_dbg_itf_gear_position, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    {
+        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        return ESP_FAIL;
+    }
+    gear_ratio_filtered = (float)binocan_dbg_itf_gear_position_dbg_gear_ratio_filtered_decode(binocan_dbg_itf_gear_position.dbg_gear_ratio_filtered);
+    gear_ratio_raw = (float)binocan_dbg_itf_gear_position_dbg_gear_ratio_raw_decode(binocan_dbg_itf_gear_position.dbg_gear_ratio_raw);
+
+    return ESP_OK;
+}
 // GP functions
 
 /// @brief Initializer for all the timeout timers
@@ -1429,6 +1444,12 @@ inline esp_err_t dispatchFrame(twai_message_t *rxMsg)
     case UDS_REQ_FRAME_ID:
     {
         ret = OTAHandler(rxMsg);
+    }
+    break;
+
+    case BINOCAN_DBG_ITF_GEAR_POSITION_FRAME_ID:
+    {
+        ret = DBG_gear_position_Handler(rxMsg);
     }
     break;
 

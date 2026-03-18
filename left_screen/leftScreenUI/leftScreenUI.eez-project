@@ -3290,6 +3290,106 @@
                       "recolor": false
                     },
                     {
+                      "objID": "12e69ab6-fe81-4f5e-ab89-fd61230cff5e",
+                      "type": "LVGLLabelWidget",
+                      "left": -50,
+                      "top": -75,
+                      "width": 70,
+                      "height": 19,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "7a63a40f-cb36-426a-e6f7-51cf0241fa8c",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "identifier": "gr_raw",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "px",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "",
+                      "hiddenFlagType": "literal",
+                      "clickableFlag": false,
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "4eedf8d3-c2b3-4fce-91e7-9c6eaa45fffc",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "text_font": "whiteRabbit_24px",
+                              "align": "CENTER",
+                              "text_align": "CENTER"
+                            }
+                          }
+                        }
+                      },
+                      "groupIndex": 0,
+                      "text": "000.0",
+                      "textType": "literal",
+                      "longMode": "WRAP",
+                      "recolor": false
+                    },
+                    {
+                      "objID": "d2a185b9-c70d-4ca7-f72f-4571e916534b",
+                      "type": "LVGLLabelWidget",
+                      "left": 50,
+                      "top": -75,
+                      "width": 70,
+                      "height": 19,
+                      "customInputs": [],
+                      "customOutputs": [],
+                      "style": {
+                        "objID": "6d7bba6b-ad10-4717-c587-8c6b4c37f008",
+                        "useStyle": "default",
+                        "conditionalStyles": [],
+                        "childStyles": []
+                      },
+                      "timeline": [],
+                      "eventHandlers": [],
+                      "identifier": "gr_filt",
+                      "leftUnit": "px",
+                      "topUnit": "px",
+                      "widthUnit": "px",
+                      "heightUnit": "content",
+                      "children": [],
+                      "widgetFlags": "",
+                      "hiddenFlagType": "literal",
+                      "clickableFlag": false,
+                      "clickableFlagType": "literal",
+                      "flagScrollbarMode": "",
+                      "flagScrollDirection": "",
+                      "checkedStateType": "literal",
+                      "disabledStateType": "literal",
+                      "states": "",
+                      "localStyles": {
+                        "objID": "534d0979-9d8e-4091-e041-1c00736ba450",
+                        "definition": {
+                          "MAIN": {
+                            "DEFAULT": {
+                              "text_font": "whiteRabbit_24px",
+                              "align": "CENTER",
+                              "text_align": "CENTER"
+                            }
+                          }
+                        }
+                      },
+                      "groupIndex": 0,
+                      "text": "000.0",
+                      "textType": "literal",
+                      "longMode": "WRAP",
+                      "recolor": false
+                    },
+                    {
                       "objID": "2b1664a4-fe24-4264-a237-47cd0828086e",
                       "type": "LVGLImageWidget",
                       "left": 60,
