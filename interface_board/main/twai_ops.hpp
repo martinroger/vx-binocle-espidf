@@ -279,6 +279,16 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
         binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
         binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
         // Placeholder for the gear position, for now always showing Neutral
+        if (pwm_cap_rpm.frequency>0)
+        {
+            gear_ratio_raw = pwm_cap_speed.frequency / pwm_cap_rpm.frequency;
+        }
+        else
+        {
+            gear_ratio_raw = 0;
+            gear_ratio_filtered = 0;
+        }
+        
         binocan_itf_fast_metrics.itf_gear_position_st = binocan_itf_fast_metrics_itf_gear_position_st_encode(BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE);
         binocan_itf_fast_metrics_pack(tx_msg.data, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
