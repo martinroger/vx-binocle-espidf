@@ -430,8 +430,8 @@ extern "C" void app_main(void)
                     else
                         nvs_commit(nvs_h);
                 }
-
                 ESP_LOGI(TAG, "Fuel compensation factor : %u / 1000", fuel_lvl_comp_factor);
+
                 // Low fuel threshold
                 nvs_err = nvs_get_u16(nvs_h, "lo_fuel_thr", &fuel_low_level_threshold_pc); // Write if not found
                 if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
@@ -446,8 +446,8 @@ extern "C" void app_main(void)
                     else
                         nvs_commit(nvs_h);
                 }
-
                 ESP_LOGI(TAG, "Low fuel threshold : %u pc", fuel_low_level_threshold_pc);
+
                 // Coolant overtemp threshold
                 nvs_err = nvs_get_u16(nvs_h, "overtemp_th", &coolant_overtemp_threshold_degC); // Write if not found
                 if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
@@ -462,8 +462,129 @@ extern "C" void app_main(void)
                     else
                         nvs_commit(nvs_h);
                 }
-
                 ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", fuel_low_level_threshold_pc);
+
+                // Gear ratio 1 to R
+                nvs_err = nvs_get_blob(nvs_h,"gr_1",&gear_ratio_1,&float_size);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG,"Gear ratio 1 not found in memory, initialising");
+                    nvs_err = nvs_set_blob(nvs_h,"gr_1",&gear_ratio_1,float_size);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG,"Could not set gear ratio 1 in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG,"Gear ratio 2: %.4f",gear_ratio_2);
+
+                nvs_err = nvs_get_blob(nvs_h,"gr_2",&gear_ratio_2,&float_size);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG,"Gear ratio 2 not found in memory, initialising");
+                    nvs_err = nvs_set_blob(nvs_h,"gr_2",&gear_ratio_2,float_size);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG,"Could not set gear ratio 2 in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG,"Gear ratio 2: %.4f",gear_ratio_2);
+
+                nvs_err = nvs_get_blob(nvs_h,"gr_3",&gear_ratio_3,&float_size);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG,"Gear ratio 3 not found in memory, initialising");
+                    nvs_err = nvs_set_blob(nvs_h,"gr_3",&gear_ratio_3,float_size);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG,"Could not set gear ratio 3 in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG,"Gear ratio 3: %.4f",gear_ratio_3);
+
+                nvs_err = nvs_get_blob(nvs_h,"gr_4",&gear_ratio_4,&float_size);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG,"Gear ratio 4 not found in memory, initialising");
+                    nvs_err = nvs_set_blob(nvs_h,"gr_4",&gear_ratio_4,float_size);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG,"Could not set gear ratio 4 in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG,"Gear ratio 4: %.4f",gear_ratio_4);
+
+                nvs_err = nvs_get_blob(nvs_h,"gr_5",&gear_ratio_5,&float_size);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG,"Gear ratio 5 not found in memory, initialising");
+                    nvs_err = nvs_set_blob(nvs_h,"gr_5",&gear_ratio_5,float_size);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG,"Could not set gear ratio 5 in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG,"Gear ratio 5: %.4f",gear_ratio_5);
+
+                nvs_err = nvs_get_blob(nvs_h,"gr_r",&gear_ratio_R,&float_size);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG,"Reverse gear ratio not found in memory, initialising");
+                    nvs_err = nvs_set_blob(nvs_h,"gr_r",&gear_ratio_R,float_size);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG,"Could not set reverse gear ratio in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG,"Reverse gear ratio: %.4f",gear_ratio_R);
+
+                nvs_err = nvs_get_blob(nvs_h,"gr_ema",&gear_ema_alpha,&float_size);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG,"Gear ratio EMA alpha not found in memory, initialising");
+                    nvs_err = nvs_set_blob(nvs_h,"gr_ema",&gear_ema_alpha,float_size);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG,"Could not set gear EMA alpha in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG,"Gear EMA alpha: %.4f",gear_ema_alpha);
+
+                nvs_err = nvs_get_blob(nvs_h,"gr_stb_tol",&gear_stability_tolerance,&float_size);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG,"Gear ratio stability tolerance not found in memory, initialising");
+                    nvs_err = nvs_set_blob(nvs_h,"gr_stb_tol",&gear_stability_tolerance,float_size);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG,"Could not set gear ratio stability tolerance in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG,"Gear ratio stability tolerance: %.4f",gear_stability_tolerance);
+
                 nvs_close(nvs_h);
             }
         }

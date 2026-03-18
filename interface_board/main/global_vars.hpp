@@ -32,6 +32,17 @@ uint16_t fuel_lvl_comp_factor = 1000; // Is divided by 1000.0 later
 uint16_t fuel_low_level_threshold_pc = 20;
 uint16_t coolant_overtemp_threshold_degC = 106;
 
+// Gear ratios and related metrics
+size_t float_size = sizeof(float);
+float gear_ratio_1 = 1.0;
+float gear_ratio_2 = 1.83;
+float gear_ratio_3 = 2.73;
+float gear_ratio_4 = 3.73;
+float gear_ratio_5 = 4.5;
+float gear_ratio_R = 10.0;
+float gear_ema_alpha = 0.05;
+float gear_stability_tolerance = 3;
+
 #pragma region MCPWM declarations
 // PWM stats structures for coolant, rpm and speed captures
 static volatile pwm_info_t pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed = {.pos_edge_ts = 0, .prev_pos_edge_ts = 0, .period_ticks = 0, .neg_edge_ts = 0, .deltaT = 0};
