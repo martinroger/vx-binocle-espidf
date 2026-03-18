@@ -595,7 +595,7 @@ inline esp_err_t twai_ops_init()
 #endif
 
 #ifdef CONFIG_DBG_GEAR_POS_MSG
-    if (xTaskCreatePinnedToCore(dbg_itf_gear_position_PKG, "DBG_ITF_GP", 4096, NULL, 3 &dbg_itf_gear_position_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(dbg_itf_gear_position_PKG, "DBG_ITF_GP", 4096, NULL, 3, &dbg_itf_gear_position_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__,"Could not create debug gear position package task");
     }
