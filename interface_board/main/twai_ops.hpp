@@ -23,6 +23,7 @@
 #include "binocan.h"
 #include "active_hi_low_processor.h"
 #include "adc_processor.h"
+#include "gear_pos_estimator.h"
 
 #pragma region FreeRTOS tasks for CAN packaging
 // FreeRTOS handles
@@ -164,18 +165,17 @@ inline void dbg_itf_gear_position_PKG(void *pvParameters)
     binocan_dbg_itf_gear_position_init(&binocan_dbg_itf_gear_position);
     twai_message_t tx_msg = {
         .identifier = BINOCAN_DBG_ITF_GEAR_POSITION_FRAME_ID,
-        .data_length_code = BINOCAN_DBG_ITF_GEAR_POSITION_LENGTH
-    };
+        .data_length_code = BINOCAN_DBG_ITF_GEAR_POSITION_LENGTH};
 
     while (true)
     {
-        ulTaskNotifyTake(pdTRUE,pdMS_TO_TICKS(BINOCAN_DBG_ITF_GEAR_POSITION_CYCLE_TIME_MS));
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_GEAR_POSITION_CYCLE_TIME_MS));
         binocan_dbg_itf_gear_position.dbg_gear_ratio_raw = binocan_dbg_itf_gear_position_dbg_gear_ratio_raw_encode(gear_ratio_raw);
         binocan_dbg_itf_gear_position.dbg_gear_ratio_filtered = binocan_dbg_itf_gear_position_dbg_gear_ratio_filtered_encode(gear_ratio_filtered);
         binocan_dbg_itf_gear_position_pack(tx_msg.data, &binocan_dbg_itf_gear_position, BINOCAN_DBG_ITF_GEAR_POSITION_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
-            ESP_LOGW(__func__,"Could not queue debug gear position message in queue.");
+            ESP_LOGW(__func__, "Could not queue debug gear position message in queue.");
         }
     }
 }
@@ -220,7 +220,6 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         sma_add(fuel_level_SMA, adc_raw_buffer[0]);
         sma_add(lv_vol__func__e_SMA, adc_raw_buffer[1]);
 
-
         float fuel_level_raw = sma_get_avg(fuel_level_SMA);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float fuel_level_pc = lround(((float)(fuel_lvl_comp_factor / 1000.0) * COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P) * 10.0) / 10.0;
@@ -255,6 +254,10 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
     // Only faster metrics
     // speed_kph
     // rpm
+    // Gear position
+    MedianFilter5 gr_median_filter;
+    gr_median_filter.seed(0);
+
     esp_err_t compute_err;
     binocan_itf_fast_metrics_t binocan_itf_fast_metrics;
     binocan_itf_fast_metrics_init(&binocan_itf_fast_metrics);
@@ -279,16 +282,17 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
         binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
         binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
         // Placeholder for the gear position, for now always showing Neutral
-        if (pwm_cap_rpm.frequency>0)
+        if (pwm_cap_rpm.frequency > 0)
         {
             gear_ratio_raw = pwm_cap_speed.frequency / pwm_cap_rpm.frequency;
+            gear_ratio_filtered = (1 - gear_ema_alpha) * gear_ratio_filtered + gear_ema_alpha * gr_median_filter.update(gear_ratio_raw);
         }
         else
         {
             gear_ratio_raw = 0;
             gear_ratio_filtered = 0;
         }
-        
+
         binocan_itf_fast_metrics.itf_gear_position_st = binocan_itf_fast_metrics_itf_gear_position_st_encode(BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE);
         binocan_itf_fast_metrics_pack(tx_msg.data, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
@@ -554,7 +558,7 @@ inline esp_err_t twai_ops_init()
         ESP_LOGE(__func__, "Could not create base ActHiLo package task");
         ret = ESP_FAIL;
     }
-    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096+2048, NULL, 3, &itf_slow_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096 + 2048, NULL, 3, &itf_slow_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create base slow metrics package task");
         ret = ESP_FAIL;
@@ -607,7 +611,7 @@ inline esp_err_t twai_ops_init()
 #ifdef CONFIG_DBG_GEAR_POS_MSG
     if (xTaskCreatePinnedToCore(dbg_itf_gear_position_PKG, "DBG_ITF_GP", 4096, NULL, 3, &dbg_itf_gear_position_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
-        ESP_LOGE(__func__,"Could not create debug gear position package task");
+        ESP_LOGE(__func__, "Could not create debug gear position package task");
     }
 #endif
 
