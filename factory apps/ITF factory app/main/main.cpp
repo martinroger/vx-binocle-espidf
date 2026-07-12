@@ -23,6 +23,45 @@
 #include "binocan.h"
 #include "twai_daemon.h"
 
+// --- ESP-IDF v6.0 TWAI Migration Macros ---
+static QueueHandle_t ota_rx_queue = NULL;
+static esp_err_t ota_dispatch(twai_message_t *msg) {
+    if (ota_rx_queue) {
+        xQueueSend(ota_rx_queue, msg, 0);
+    }
+    return ESP_OK;
+}
+
+#define twai_transmit(msg, ticks) twai_daemon_transmit(msg, ticks)
+#define twai_receive(msg, ticks) (xQueueReceive(ota_rx_queue, msg, ticks) == pdPASS ? ESP_OK : ESP_ERR_TIMEOUT)
+#define twai_clear_receive_queue() (xQueueReset(ota_rx_queue), ESP_OK)
+#define twai_clear_transmit_queue() ESP_OK
+
+#define CAN_TX_tsk_hdl ((TaskHandle_t)1)
+
+#define vTaskSuspend(hdl) do { \
+    if((hdl) == CAN_RX_tsk_hdl) { \
+        if (ota_rx_queue == NULL) { \
+            ota_rx_queue = xQueueCreate(20, sizeof(twai_message_t)); \
+        } \
+        xQueueReset(ota_rx_queue); \
+        dispatchCANFrame = ota_dispatch; \
+    } else if ((hdl) == CAN_TX_tsk_hdl) { \
+    } else { \
+        (vTaskSuspend)(hdl); \
+    } \
+} while(0)
+
+#define vTaskResume(hdl) do { \
+    if((hdl) == CAN_RX_tsk_hdl) { \
+        dispatchCANFrame = NULL; \
+    } else if ((hdl) == CAN_TX_tsk_hdl) { \
+    } else { \
+        (vTaskResume)(hdl); \
+    } \
+} while(0)
+// ------------------------------------------
+
 #ifdef TAG
 #undef TAG
 #endif
@@ -1145,6 +1184,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		esp_timer_create_args_t timer_args = {
 			.callback = ota_TO_timer_cb,
 			.arg = NULL,
+			.dispatch_method = ESP_TIMER_TASK,
 			.name = "OTA_TO_timer",
 			.skip_unhandled_events = false};
 		esp_err_t timer_err = esp_timer_create(&timer_args, &OTA_TO_timer);
