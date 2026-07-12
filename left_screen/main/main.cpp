@@ -462,6 +462,51 @@ esp_err_t attemptRollBack()
     }
 }
 
+void CAN_Dispatch_Task(void *pvParameters) {
+    QueueHandle_t telemetry_queue = xQueueCreate(50, sizeof(twai_message_t));
+    if (!telemetry_queue) {
+        ESP_LOGE(TAG, "Failed to create telemetry queue");
+        vTaskDelete(NULL);
+    }
+    
+    twai_daemon_register_route(BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+    twai_daemon_register_route(BINOCAN_ITF_SLOW_METRICS_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+    twai_daemon_register_route(BINOCAN_ITF_FAST_METRICS_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+    twai_daemon_register_route(BINOCAN_ITF_ODOMETER_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+    twai_daemon_register_route(BINOCAN_EXT_OIL_METRICS_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+    twai_daemon_register_route(BINOCAN_EXT_CHARGECOOLING_METRICS_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+    twai_daemon_register_route(BINOCAN_ITF_BOARD_ST_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+    twai_daemon_register_route(BINOCAN_ITF_BOARD_VERSION_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+    twai_daemon_register_route(ALT_DISPLAY_ST_FRAME_ID, 0xFFFFFFFF, telemetry_queue);
+
+    twai_message_t rx_msg;
+    while (true) {
+        if (xQueueReceive(telemetry_queue, &rx_msg, pdMS_TO_TICKS(CONFIG_CAN_RX_TIMEOUT_MS)) == pdPASS) {
+            CAN_RX_TimedOut = false;
+            dispatchFrame(&rx_msg);
+        } else {
+            CAN_RX_TimedOut = true;
+        }
+    }
+}
+
+void CAN_OTA_Task(void *pvParameters) {
+    QueueHandle_t ota_queue = xQueueCreate(20, sizeof(twai_message_t));
+    if (!ota_queue) {
+        ESP_LOGE(TAG, "Failed to create OTA queue");
+        vTaskDelete(NULL);
+    }
+    
+    twai_daemon_register_route(UDS_REQ_FRAME_ID, 0xFFFFFFFF, ota_queue);
+
+    twai_message_t rx_msg;
+    while (true) {
+        if (xQueueReceive(ota_queue, &rx_msg, portMAX_DELAY) == pdPASS) {
+            OTAHandler(&rx_msg);
+        }
+    }
+}
+
 /// @brief Main app
 extern "C" void app_main()
 {
@@ -588,12 +633,22 @@ extern "C" void app_main()
     }
     // CAN communications
     ESP_LOGI(__func__, "Starting TWAI port and daemon");
-    if (initCAN(&dispatchFrame) != ESP_OK)
+    if (initCAN() != ESP_OK)
     {
         ESP_LOGW(__func__, "Issue starting TWAI port and daemon.");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
     }
+
+    if (xTaskCreatePinnedToCore(CAN_Dispatch_Task, "CAN_Dispatch", 4096, NULL, 5, NULL, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create CAN Dispatch task");
+    }
+    if (xTaskCreatePinnedToCore(CAN_OTA_Task, "CAN_OTA", 4096, NULL, 5, NULL, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create CAN OTA task");
+    }
+
     // Set up and start CAN packagers
     if (xTaskCreatePinnedToCore(display_board_st_PKG, "XDB_ST", 4096, NULL, 3, &display_board_st_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {

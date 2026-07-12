@@ -4,17 +4,43 @@
 
 const char *TAG = "CAN Daemon";
 
-frameDispatcher_t *dispatchCANFrame = nullptr;
 bool CAN_RX_TimedOut = false;
-
-// Pointer to rx task handle
-TaskHandle_t CAN_RX_tsk_hdl = nullptr;
 
 // Underlying driver node handle
 twai_node_handle_t can_node_hdl = nullptr;
 
-// Queue for received messages to pass from ISR to task
-static QueueHandle_t CAN_RX_queue_hdl = nullptr;
+#define MAX_CAN_ROUTES 32
+
+struct can_route_t {
+    uint32_t id;
+    uint32_t mask;
+    QueueHandle_t target_queue;
+    bool active;
+};
+
+static can_route_t route_table[MAX_CAN_ROUTES];
+
+esp_err_t twai_daemon_register_route(uint32_t id, uint32_t mask, QueueHandle_t queue) {
+    for (int i = 0; i < MAX_CAN_ROUTES; i++) {
+        if (!route_table[i].active) {
+            route_table[i].id = id;
+            route_table[i].mask = mask;
+            route_table[i].target_queue = queue;
+            route_table[i].active = true;
+            return ESP_OK;
+        }
+    }
+    ESP_LOGE(TAG, "Failed to register route: Table Full");
+    return ESP_ERR_NO_MEM;
+}
+
+void twai_daemon_unregister_route(QueueHandle_t queue) {
+    for (int i = 0; i < MAX_CAN_ROUTES; i++) {
+        if (route_table[i].active && route_table[i].target_queue == queue) {
+            route_table[i].active = false;
+        }
+    }
+}
 
 static bool on_rx_done(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx)
 {
@@ -33,10 +59,16 @@ static bool on_rx_done(twai_node_handle_t handle, const twai_rx_done_event_data_
             memcpy(rxMessage.data, rx_frame.buffer, rx_frame.buffer_len);
         }
         
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xQueueSendFromISR(CAN_RX_queue_hdl, &rxMessage, &xHigherPriorityTaskWoken);
-        if (xHigherPriorityTaskWoken == pdTRUE) {
-            need_yield = true;
+        for (int i = 0; i < MAX_CAN_ROUTES; i++) {
+            if (route_table[i].active && 
+               (rx_frame.header.id & route_table[i].mask) == (route_table[i].id & route_table[i].mask)) {
+                
+                BaseType_t woken = pdFALSE;
+                xQueueSendFromISR(route_table[i].target_queue, &rxMessage, &woken);
+                if (woken == pdTRUE) {
+                    need_yield = true;
+                }
+            }
         }
     }
     return need_yield;
@@ -61,19 +93,13 @@ esp_err_t twai_daemon_transmit(const twai_message_t *msg, TickType_t ticks_to_wa
     return twai_node_transmit(can_node_hdl, &tx_frame, ticks_to_wait);
 }
 
-esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
+esp_err_t initCAN(void)
 {
 #ifdef TWAI_WATCHDOG
-    // Wait, the original code had TWAI_WATCHDOG stuff, let me add a dummy handling for it or ignore it since the old one did TWAI_ALERT_NONE if undefined
     unsigned long twai_wdg_rx_dropped = 0;
 #endif
 
-    CAN_RX_queue_hdl = xQueueCreate(256, sizeof(twai_message_t));
-    if (CAN_RX_queue_hdl == NULL)
-    {
-        ESP_LOGE(TAG, "Failed to create CAN RX queue");
-        return ESP_FAIL;
-    }
+    // Route table is statically zero-initialized, which safely sets .active = false
 
     twai_onchip_node_config_t node_config = {};
     node_config.io_cfg.tx = (gpio_num_t)CONFIG_CAN_TX;
@@ -118,52 +144,6 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
         ESP_LOGI(TAG, "TWAI driver started successfully");
     }
 
-    BaseType_t twai_core_id = CONFIG_CAN_CORE_AFFINITY;
-    if (xTaskCreatePinnedToCore(CAN_RX_Task, "twai RX daemon", 4096, NULL, 5, &CAN_RX_tsk_hdl, twai_core_id) != pdPASS)
-    {
-        ESP_LOGE(TAG, "Failed to create TWAI RX task");
-        return ESP_FAIL;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "CAN RX Task created successfully");
-    }
-
-    dispatchCANFrame = frameDispatcher;
-    if (dispatchCANFrame == nullptr)
-    {
-        ESP_LOGW(TAG, "Frame dispatcher function does not exist!");
-    }
     // All checks passed
     return ESP_OK;
-}
-
-void CAN_RX_Task(void *pvParameters)
-{
-    ESP_LOGI(TAG, "CAN_RX_Task has started");
-    static twai_message_t rxMessage;
-    CAN_RX_TimedOut = false;
-    static esp_err_t rxErr;
-
-    while (true)
-    {
-        if (xQueueReceive(CAN_RX_queue_hdl, &rxMessage, pdMS_TO_TICKS(CONFIG_CAN_RX_TIMEOUT_MS)) == pdPASS)
-        {
-            CAN_RX_TimedOut = false;
-            if (dispatchCANFrame == nullptr)
-            {
-                ESP_LOGD(TAG, "No Frame dispatcher set up !");
-                continue;
-            }
-
-            if (dispatchCANFrame(&rxMessage) != ESP_OK)
-            {
-                ESP_LOGD(TAG, "Frame dispatcher returned an error");
-            }
-        }
-        else
-        {
-            CAN_RX_TimedOut = true;
-        }
-    }
 }

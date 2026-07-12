@@ -9,6 +9,13 @@
             "env": {
                 "IDF_MCP_WORKSPACE_FOLDER": "${workspaceFolder}"
             }
+        },
+        "esp-idf-eim": {
+            "command": "eim",
+            "args": [
+                "run",
+                "idf.py mcp-server"
+            ]
         }
     }
 }

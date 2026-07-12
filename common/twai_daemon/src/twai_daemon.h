@@ -21,30 +21,28 @@
 
 // Only active if the TWAI_WATCHDOG is used
 
-
-
-typedef esp_err_t frameDispatcher_t(twai_message_t *messageToDispatch);
-
-// Pointer to dispatcher function, attached on init and defined externally
-extern frameDispatcher_t *dispatchCANFrame ;
+// RX TimeOut flag. Managed externally by receiving tasks.
 
 // RX TimeOut flag. Not necessarily used
 extern bool CAN_RX_TimedOut ;
 
-// Pointer to rx task handle
-extern TaskHandle_t CAN_RX_tsk_hdl ;
-
 // Underlying driver node handle
 extern twai_node_handle_t can_node_hdl;
 
-/// @brief Initialises the TWAI driver and attaches the frame dispatcher function
-/// @param frameDispatcher 
+/// @brief Initialises the TWAI driver
 /// @return OK when all is well, otherwise an error code
-esp_err_t initCAN(frameDispatcher_t *frameDispatcher);
+esp_err_t initCAN(void);
 
-/// @brief FreeRTOS task that receives and send frames to the dispatcher function
-/// @param pvParameters 
-void CAN_RX_Task(void *pvParameters);
+/// @brief Register a route for a specific CAN ID and mask to be pushed to a queue
+/// @param id The ID to match
+/// @param mask The bitmask to apply to the incoming ID (1 = care, 0 = don't care)
+/// @param queue The FreeRTOS Queue to receive matched twai_message_t items
+/// @return ESP_OK on success, otherwise error
+esp_err_t twai_daemon_register_route(uint32_t id, uint32_t mask, QueueHandle_t queue);
+
+/// @brief Unregister a previously registered route by queue handle
+/// @param queue The FreeRTOS Queue to unregister
+void twai_daemon_unregister_route(QueueHandle_t queue);
 
 /// @brief Queues a CAN message to the internal driver TX queue
 /// @param msg Pointer to the message to send

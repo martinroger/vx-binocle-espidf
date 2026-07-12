@@ -350,7 +350,7 @@ extern "C" void app_main(void)
     }
 
     // Start TWAI
-    if (initCAN(NULL) != ESP_OK)
+    if (initCAN() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialize TWAI daemon, marking invalid and rebooting.");
         attemptRollBack();

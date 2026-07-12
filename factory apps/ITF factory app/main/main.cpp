@@ -25,12 +25,6 @@
 
 // --- ESP-IDF v6.0 TWAI Migration Macros ---
 static QueueHandle_t ota_rx_queue = NULL;
-static esp_err_t ota_dispatch(twai_message_t *msg) {
-    if (ota_rx_queue) {
-        xQueueSend(ota_rx_queue, msg, 0);
-    }
-    return ESP_OK;
-}
 
 #define twai_transmit(msg, ticks) twai_daemon_transmit(msg, ticks)
 #define twai_receive(msg, ticks) (xQueueReceive(ota_rx_queue, msg, ticks) == pdPASS ? ESP_OK : ESP_ERR_TIMEOUT)
@@ -38,6 +32,7 @@ static esp_err_t ota_dispatch(twai_message_t *msg) {
 #define twai_clear_transmit_queue() ESP_OK
 
 #define CAN_TX_tsk_hdl ((TaskHandle_t)1)
+#define CAN_RX_tsk_hdl ((TaskHandle_t)2)
 
 #define vTaskSuspend(hdl) do { \
     if((hdl) == CAN_RX_tsk_hdl) { \
@@ -45,7 +40,7 @@ static esp_err_t ota_dispatch(twai_message_t *msg) {
             ota_rx_queue = xQueueCreate(20, sizeof(twai_message_t)); \
         } \
         xQueueReset(ota_rx_queue); \
-        dispatchCANFrame = ota_dispatch; \
+        twai_daemon_register_route(UDS_REQ_FRAME_ID, 0xFFFFFFFF, ota_rx_queue); \
     } else if ((hdl) == CAN_TX_tsk_hdl) { \
     } else { \
         (vTaskSuspend)(hdl); \
@@ -54,7 +49,7 @@ static esp_err_t ota_dispatch(twai_message_t *msg) {
 
 #define vTaskResume(hdl) do { \
     if((hdl) == CAN_RX_tsk_hdl) { \
-        dispatchCANFrame = NULL; \
+        twai_daemon_unregister_route(ota_rx_queue); \
     } else if ((hdl) == CAN_TX_tsk_hdl) { \
     } else { \
         (vTaskResume)(hdl); \
@@ -1864,7 +1859,7 @@ extern "C" void app_main(void)
 		ESP_LOGE(__func__, "Could not start XDB check alive IOs");
 
 	ESP_LOGI(__func__, "Starting TWAI");
-	esp_err_t twai_err = initCAN(NULL);
+	esp_err_t twai_err = initCAN();
 	if (twai_err != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not start TWAI : %s", esp_err_to_name(twai_err));
