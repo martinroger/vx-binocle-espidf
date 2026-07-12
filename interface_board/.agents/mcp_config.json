@@ -1,0 +1,14 @@
+{
+    "mcpServers": {
+        "esp-idf-project-tools": {
+            "command": "eim",
+            "args": [
+                "run",
+                "idf.py mcp-server"
+            ],
+            "env": {
+                "IDF_MCP_WORKSPACE_FOLDER": "${workspaceFolder}"
+            }
+        }
+    }
+}

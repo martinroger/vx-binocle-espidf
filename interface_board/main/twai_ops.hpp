@@ -57,7 +57,7 @@ inline void dbg_itf_speed_PKG(void *pvParameters)
             duty_cycle = 0.0;
         binocan_dbg_itf_speed.dbg_speed_duty = binocan_dbg_itf_speed_dbg_speed_duty_encode(duty_cycle);
         binocan_dbg_itf_speed_pack(tx_msg.data, &binocan_dbg_itf_speed, BINOCAN_DBG_ITF_SPEED_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue debug speed message in queue");
         }
@@ -88,7 +88,7 @@ inline void dbg_itf_rpm_PKG(void *pvParameters)
             duty_cycle = 0.0;
         binocan_dbg_itf_rpm.dbg_rpm_duty = binocan_dbg_itf_rpm_dbg_rpm_duty_encode(pwm_cap_rpm.duty_cycle * 100.0);
         binocan_dbg_itf_rpm_pack(tx_msg.data, &binocan_dbg_itf_rpm, BINOCAN_DBG_ITF_RPM_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue debug rpm message in queue");
         }
@@ -118,7 +118,7 @@ inline void dbg_itf_coolant_PKG(void *pvParameters)
             duty_cycle = 0.0;
         binocan_dbg_itf_coolant.dbg_coolant_duty = binocan_dbg_itf_coolant_dbg_coolant_duty_encode(pwm_cap_coolant.duty_cycle * 100.0);
         binocan_dbg_itf_coolant_pack(tx_msg.data, &binocan_dbg_itf_coolant, BINOCAN_DBG_ITF_COOLANT_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue debug coolant message in queue");
         }
@@ -147,7 +147,7 @@ inline void dbg_itf_adc_raw_PKG(void *pvParameters)
         binocan_dbg_itf_adc_raw.dbg_fuel_raw_v = binocan_dbg_itf_adc_raw_dbg_fuel_raw_v_encode(fuel_raw_v);
         binocan_dbg_itf_adc_raw.dbg_12_v_raw_v = binocan_dbg_itf_adc_raw_dbg_12_v_raw_v_encode(lv_raw_v);
         binocan_dbg_itf_adc_raw_pack(tx_msg.data, &binocan_dbg_itf_adc_raw, BINOCAN_DBG_ITF_ADC_RAW_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue debug ADC raw message in queue");
         }
@@ -215,7 +215,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         binocan_itf_slow_metrics.itf_fuel_level_pc = binocan_itf_slow_metrics_itf_fuel_level_pc_encode(fuel_level_pc);
         binocan_itf_slow_metrics.itf_lv_voltage_v = binocan_itf_slow_metrics_itf_lv_voltage_v_encode(lv_v);
         binocan_itf_slow_metrics_pack(tx_msg.data, &binocan_itf_slow_metrics, BINOCAN_ITF_SLOW_METRICS_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue slow metrics message in queue");
         }
@@ -255,7 +255,7 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
         // Placeholder for the gear position, for now always showing Neutral
         binocan_itf_fast_metrics.itf_gear_position_st = binocan_itf_fast_metrics_itf_gear_position_st_encode(BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE);
         binocan_itf_fast_metrics_pack(tx_msg.data, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue fast metrics message in queue");
         }
@@ -329,7 +329,7 @@ inline void itf_active_hilo_PKG(void *pvParameters)
                 binocan_itf_active_hi_lo.itf_fuel_low_tt = binocan_itf_active_hi_lo_itf_fuel_low_tt_encode(interface_board_st.lowFuel);
                 binocan_itf_active_hi_lo_pack(tx_msg.data, &binocan_itf_active_hi_lo, BINOCAN_ITF_ACTIVE_HI_LO_LENGTH);
 
-                if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+                if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
                 {
                     ESP_LOGW(__func__, "Could not queue active hi/lo message in queue");
                 }
@@ -380,7 +380,7 @@ inline void itf_odometer_PKG(void *pvParameters)
         binocan_itf_odometer.itf_trip_km = binocan_itf_odometer_itf_trip_km_encode((float)(trip_m / 1000));
         binocan_itf_odometer.itf_trip_rem_m = binocan_itf_odometer_itf_trip_rem_m_encode((float)(trip_m % 1000));
         binocan_itf_odometer_pack(tx_msg.data, &binocan_itf_odometer, BINOCAN_ITF_ODOMETER_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue odometer message in queue");
         }
@@ -440,7 +440,7 @@ void itf_board_st_PKG(void *pvParameters)
         binocan_itf_board_st.itf_expander_st = binocan_itf_board_st_itf_expander_st_encode(interface_board_st.expander_ST);
         binocan_itf_board_st_pack(tx_msg.data, &binocan_itf_board_st, BINOCAN_ITF_BOARD_ST_LENGTH);
 
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue internal state message in queue");
         }
@@ -490,7 +490,7 @@ inline void itf_board_version_PKG(void *pvParameters)
         message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
         binocan_itf_board_version.itf_version_mux = binocan_itf_board_version_itf_version_mux_encode(message_mux);
         binocan_itf_board_version_pack(tx_msg.data, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue internal state message in queue");
         }
