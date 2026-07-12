@@ -192,16 +192,16 @@ inline esp_err_t set_capture_channel(mcpwm_cap_channel_handle_t target_cap_chan,
         .flags = {
             .pos_edge = true,
             .neg_edge = true,
-            .pull_up = false,
-            .pull_down = true,
-            .invert_cap_signal = false,
-            .io_loop_back = false}};
+            .invert_cap_signal = false}};
     // Create capture channel with target handle, common timer and config.
     if (mcpwm_new_capture_channel(cap_timer, &cap_chan_config, &target_cap_chan) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not create MCPWM Capture channel, aborting.");
         return ESP_FAIL;
     }
+
+    // Set GPIO pull-down since the flag was removed from mcpwm capture config in v6.0
+    gpio_set_pull_mode(cap_gpio, GPIO_PULLDOWN_ONLY);
 
     // Attach capture even callback using the generic CB and passing the target pwm info buffer for the given channel
     mcpwm_capture_event_callbacks_t cap_cbs = {

@@ -3,7 +3,7 @@ menu "Interface board configuration"
     menu "Runtime stats"
         config ENABLE_RUNTIME_STATS_OUTPUT
             bool "Enable runtime stats serial output"
-            default false
+            default n
             select FREERTOS_USE_TRACE_FACILITY
             select FREERTOS_USE_STATS_FORMATTING_FUNCTIONS
             select FREERTOS_VTASKLIST_INCLUDE_COREID
@@ -92,35 +92,35 @@ menu "Interface board configuration"
     menu "Debug messages"
         config ENABLE_DEBUG_MSG
             bool "Enable debug messages"
-            default false
+            default n
             help
                 Enables debug message output. When disabled, all debug message types are also disabled.
 
         config DBG_SPEED_MSG
             bool "Enable speed debug messages"
             depends on ENABLE_DEBUG_MSG
-            default false
+            default n
             help
                 Enables debug output for speed-related messages.
 
         config DBG_RPM_MSG
             bool "Enable RPM debug messages"
             depends on ENABLE_DEBUG_MSG
-            default false
+            default n
             help
                 Enables debug output for RPM-related messages.
 
         config DBG_COOL_MSG
             bool "Enable coolant debug messages"
             depends on ENABLE_DEBUG_MSG
-            default false
+            default n
             help
                 Enables debug output for coolant-related messages.
 
         config DBG_ADC_MSG
             bool "Enable ADC debug messages"
             depends on ENABLE_DEBUG_MSG
-            default false
+            default n
             help
                 Enables debug output for ADC-related messages.
     endmenu
@@ -135,7 +135,7 @@ menu "Interface board configuration"
 
         config USE_EXPANDER_INTERRUPT
             bool "Whether or not to use the expander interrupt to be more reactive"
-            default true
+            default y
             help
                 This might create core panics. Use wisely.
 
@@ -160,7 +160,7 @@ menu "Interface board configuration"
 
         config LOOP_LOG_MCPWM
             bool "Read MCPWM values in main loop."
-            default false
+            default n
 
         config COOLANT_PWM_CAP_GPIO
             int "GPIO for the capture of the coolant PWM"
