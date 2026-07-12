@@ -1,4 +1,5 @@
 #include "twai_daemon.h"
+#include <esp_log.h>
 
 const char *TAG = "CAN Daemon";
 
