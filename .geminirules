@@ -48,3 +48,21 @@
 - Pinouts, I2C/SPI bus speeds, and UART baud rates MUST be explicitly defined in header macros or `Kconfig`.
 - **Target-Specific Strapping Pin Verification**: Always check strapping GPIO assignments against the *active build target chip architecture* (e.g. ESP32: GPIO 0,2,5,12,15; ESP32-S3: GPIO 0,3,45,46; ESP32-C3: GPIO 2,8,9; ESP32-C6: GPIO 8,9,15). Do not apply a generic blanket strapping list across different MCUs.
 - Check task stack sizes for FreeRTOS tasks (minimum 2048–4096 bytes for tasks calling C stdlib/logging) to prevent stack overflow.
+
+---
+
+# Project-Specific Rules (vx-binocle-espidf)
+
+## 6. Non-Factory Screen Code Parity & Macro Differentiation
+- **Core Code Parity**: The core application logic in `main/` for `left_screen` and `right_screen` non-factory apps MUST remain identical across both targets.
+- **Macro-Based Differentiation**: Differentiate screen-specific behavior strictly using compile-time macro switches (e.g. `CONFIG_LEFT_SIDE_DISPLAY` / `#ifdef CONFIG_LEFT_SIDE_DISPLAY` / `#else`) rather than maintaining separate divergent source files.
+- **Component Exemption**: This core parity rule does NOT apply to generated UI components (e.g. `components/ui` or EEZ Studio generated code), which are allowed to differ per screen.
+
+## 7. Global README Sub-Project External Dependency Matrix
+- **Dependency Summary Table**: The top-level repository `README.md` MUST contain and maintain a structured summary table of external dependencies across all sub-projects (e.g., `left_screen`, `right_screen`, `interface_board`, `emulator-console`, `factory apps`, etc.).
+- **Required Columns**:
+  - **Sub-Project**: Name of the sub-project directory.
+  - **External Dependency**: Name of the component package invoked via `idf_component.yml`.
+  - **Locally Installed Version**: Exact version tag or short git commit SHA currently installed in `managed_components` / `dependencies.lock`.
+  - **Version Requirement**: The constraint or version specification declared in `idf_component.yml` (when available).
+

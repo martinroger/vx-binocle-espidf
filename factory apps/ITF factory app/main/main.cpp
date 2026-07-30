@@ -23,6 +23,8 @@
 #include "binocan.h"
 #include "twai_daemon.h"
 
+#define UDS_REQ_FRAME_ID BINOCAN_ITF_UDS_REQ_FRAME_ID
+
 // --- ESP-IDF v6.0 TWAI Migration Macros ---
 static QueueHandle_t ota_rx_queue = NULL;
 
@@ -1830,7 +1832,7 @@ static void start_ap_mode(void)
 	esp_read_mac(mac, ESP_MAC_WIFI_STA);
 	char ssid[32];
 	snprintf(ssid, sizeof(ssid), "ITF-%02X%02X%02X", mac[3], mac[4], mac[5]);
-	strncpy((char *)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid) - 1);
+	strlcpy((char *)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid));
 	wifi_config.ap.ssid_len = strlen(ssid);
 	wifi_config.ap.max_connection = 4;
 	wifi_config.ap.authmode = WIFI_AUTH_OPEN;
