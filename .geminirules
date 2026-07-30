@@ -1,0 +1,50 @@
+# Base Antigravity Rules & Core Constraints
+
+## 1. Requirement Grilling & Planning Phase
+- **Mandatory Interview**: Before generating multi-file implementations or writing code for non-trivial tasks, grill me on requirements!
+- Ask targeted questions regarding:
+  - Scope and core constraints.
+  - Expected output formats or architecture patterns.
+  - Potential edge cases or dependencies.
+
+## 2. Agent Scope, Constraints & Traceability Tracking (Markdown)
+- **Markdown Requirement & Constraint Tracking**: Document and track requirements, scope boundaries, and operational constraints used by the agent in explicit Markdown files (e.g. `REQUIREMENTS.md`, `CONSTRAINTS.md`, or inside `docs/`). Focus primarily on agent scope, design rules, platform/tooling constraints, and operational boundaries rather than exhaustive end-user feature manuals.
+- **Repo-Level Agent & Scope Summaries**: Maintain a top-level Markdown summary (`README.md` or `PROJECT_SUMMARY.md`) at the repository root detailing the project purpose, agent scope boundaries, technical constraints, and repo structure.
+- **Implementation Traceability**: Maintain clear traceability between agent constraints/requirements and their corresponding code implementations (e.g. in a Traceability Matrix or doc references). Keep documentation updated whenever agent scope or project constraints evolve.
+
+## 3. Error Diagnostics & Log Inspection
+- Never form a diagnostic hypothesis for a runtime failure or test breakage without reading the full, un-truncated error log.
+- Your very first action when an error occurs must be to fetch and read the exact logs.
+- Do not apply superficial patches or mask symptoms. Fix the root cause.
+
+## 4. Code & Documentation Integrity
+- Maintain existing comments and docstrings unless explicitly asked to modify them.
+- Verify method signatures and object properties before calling them.
+
+---
+
+# ESP-IDF & ESP32 Specific Project Rules
+
+## 1. Hardware & Target Verification
+- Ask or confirm target SoC: ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6, ESP32-H2, etc.
+- Ask or confirm target ESP-IDF version line (< v5.5, >= v5.5, or >= v6.0).
+
+## 2. MCP Server & Documentation Protocol
+- **Documentation Lookup**: If the `espressif-docs` MCP server is available, use `search_espressif_sources` as the authoritative source for command flags, `sdkconfig` options, and API specifications.
+- **Build Execution**: Check if an ESP-IDF Build MCP server is available. If present, prefer using its native MCP tools for building, flashing, and configuring targets.
+
+## 3. Virtual Environment Execution Standards
+- **ESP-IDF >= v6.0**: If an ESP-IDF Build MCP server is NOT available, enforce `eim` (Espressif Installation Manager) for virtual environment setup when executing `idf.py` commands (e.g., `eim exec -- idf.py build`).
+- **ESP-IDF < v6.0**: Rely on Build MCP server if available; otherwise source standard exported environment (`. $IDF_PATH/export.sh`).
+
+## 4. Project File Output Standards
+- Always ensure ESP-IDF projects maintain standard structure:
+  - `CMakeLists.txt` at root.
+  - `main/CMakeLists.txt` registering components and sources.
+  - `main/main.c` or `main/main.cpp`.
+  - `sdkconfig.defaults` for reproducible configuration.
+
+## 5. Peripheral & Target-Specific Pinout Protocol
+- Pinouts, I2C/SPI bus speeds, and UART baud rates MUST be explicitly defined in header macros or `Kconfig`.
+- **Target-Specific Strapping Pin Verification**: Always check strapping GPIO assignments against the *active build target chip architecture* (e.g. ESP32: GPIO 0,2,5,12,15; ESP32-S3: GPIO 0,3,45,46; ESP32-C3: GPIO 2,8,9; ESP32-C6: GPIO 8,9,15). Do not apply a generic blanket strapping list across different MCUs.
+- Check task stack sizes for FreeRTOS tasks (minimum 2048–4096 bytes for tasks calling C stdlib/logging) to prevent stack overflow.
