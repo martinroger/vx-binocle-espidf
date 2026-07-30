@@ -26,6 +26,15 @@
 - **Formatted Preview**: Present the output to the user as a rendered Artifact rather than relying only on the raw file diff view, so the user can immediately view formatted headings, tables, alerts, and rendered Markdown directly in the UI pane. Render the Markdown content directly as native Markdown elements (do NOT wrap the entire preview inside markdown code blocks).
 - **Workspace Sync**: Continue writing/updating the actual `.md` file in the workspace as requested, while maintaining the rendered Artifact for visual review.
 
+## 6. Portable Relative Markdown Links
+- **Relative Path Invariant**: All file references inside repository Markdown (`.md`) files MUST use relative file paths (e.g., `[TOO.MD](TOO.MD)` or `[main/main.cpp](main/main.cpp)`).
+- **No Absolute Filesystem URLs**: NEVER commit absolute local filesystem URLs (e.g. `file:///home/user/...`) inside repository documentation to preserve author privacy and ensure links render correctly on GitHub.
+
+## 7. Sub-Project Documentation Standards (`README.md` & `TOO.MD`)
+- **Sub-Project `README.md` Content**: `README.md` files located at the root of individual sub-projects or modules MUST remain lightweight, technical, and human-focused. They should describe subproject purpose, target architecture, hardware/network configuration, and key capabilities.
+- **Exclusion of Agent Instructions**: Sub-project `README.md` files MUST NOT contain agentic prompt instructions, internal rule citations (e.g., "Rule 6"), or AI operational constraint references. Agent-specific guidelines belong in repo-level files (`REQUIREMENTS.md`, top-level `README.md`, or `.geminirules`).
+- **Theory of Operation (`TOO.MD`) Requirement**: Each active sub-project and major shared component MUST maintain a `TOO.MD` (or `OTA_TOO.MD`) detailing system architecture, hardware subsystems, signal processing, data/bus ingestion and dispatch loops, API endpoints, and sequence diagrams (including protocol handshakes and timeout/error escape points).
+
 ---
 
 # ESP-IDF & ESP32 Specific Project Rules
