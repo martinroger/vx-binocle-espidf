@@ -29,19 +29,18 @@ vx-binocle-espidf/
 
 ---
 
-## Agent Scope & Operational Boundaries
+## Technical Overview & Firmware Targets
 
-- **Target Architecture**: ESP32-S3 (`CONFIG_IDF_TARGET="esp32s3"`).
+- **Primary Hardware SoC**: ESP32-S3 across all primary sub-projects (`interface_board`, `left_screen`, `right_screen`, `factory apps/*`).
 - **Target Framework Environments**:
-  - **ESP-IDF v6.2.0 (`master`)**: Enforced for `interface_board`, `ITF factory app`, `left display factory app`, and `right display factory app` via `eim run "<cmd>" master`.
-  - **ESP-IDF v5.5.5 (`v5.5.5`)**: Enforced exclusively for `left_screen` and `right_screen` via `eim run "<cmd>" v5.5.5`.
-- **Ignored / Excluded Sub-Projects**: `emulator-console` and `bennu` are excluded from firmware migration and build evaluation per repository rules.
-- **Screen Code Parity Rule**: ALL files within the `main/` subfolder across `left_screen` and `right_screen` must maintain 100% strict file parity, differentiated strictly via Kconfig macros (e.g., `CONFIG_LEFT_SIDE_DISPLAY` vs `CONFIG_RIGHT_SIDE_DISPLAY`).
-- **Documentation & Requirements Tracking**: Operational requirements and constraints are explicitly tracked in [`REQUIREMENTS.md`](REQUIREMENTS.md) and [`CONSTRAINTS.md`](CONSTRAINTS.md).
+  - **ESP-IDF v6.2.0 (`master`)**: Enforced for `interface_board`, `ITF factory app`, `left display factory app`, and `right display factory app`.
+  - **ESP-IDF v5.5.5 (`v5.5.5`)**: Enforced exclusively for `left_screen` and `right_screen` gauge cluster applications.
+- **Shared Screen Architecture**: `left_screen` and `right_screen` share identical `main/` source code, differentiated at compile time via macro switches (`CONFIG_LEFT_SIDE_DISPLAY` / `CONFIG_RIGHT_SIDE_DISPLAY`).
+- **Requirements & Specifications**: Detailed requirements and system constraints are documented in [`REQUIREMENTS.md`](REQUIREMENTS.md) and [`CONSTRAINTS.md`](CONSTRAINTS.md).
 
 ---
 
-## Sub-Project Migration & Build Status Matrix
+## Sub-Project Target & Build Status Matrix
 
 The table below tracks target framework environments and build status across all sub-projects.
 
@@ -53,8 +52,8 @@ The table below tracks target framework environments and build status across all
 | **`factory apps / right display factory app`** | ESP32-S3 | `>=6.2.0` | **v6.2.0 (`master`)** | **PASSED** | Binary `RDB_factory.bin` compiled cleanly under ESP-IDF v6.2.0. |
 | **`left_screen`** | ESP32-S3 | `>=5.5.5` | **v5.5.5 (`v5.5.5`)** | **PASSED** | Compiled cleanly under ESP-IDF v5.5.5; uses `twai_daemon` API. |
 | **`right_screen`** | ESP32-S3 | `>=5.5.5` | **v5.5.5 (`v5.5.5`)** | **PASSED** | Compiled cleanly under ESP-IDF v5.5.5; uses `twai_daemon` API. |
-| **`emulator-console`** | ESP32-S3 | N/A | N/A | **IGNORED** | Ignored per repository scope rules. |
-| **`bennu`** | ESP32-S3 | N/A | N/A | **IGNORED** | Ignored per repository scope rules. |
+| **`emulator-console`** | ESP32-S3 | N/A | N/A | **EXCLUDED** | Console debugging emulator tool. |
+| **`bennu`** | ESP32-S3 | N/A | N/A | **EXCLUDED** | Storage & bootloader payload app. |
 
 ---
 

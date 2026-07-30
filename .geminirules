@@ -86,9 +86,9 @@
   - **Locally Installed Version**: Exact version tag or short git commit SHA currently installed in `managed_components` / `dependencies.lock`.
   - **Version Requirement**: The constraint or version specification declared in `idf_component.yml` (when available).
 
-## 9. Sub-Project Documentation Standards (`README.md` & `TOO.MD`)
-- **Sub-Project `README.md` Content**: `README.md` files located at the root of individual sub-projects (`interface_board`, `left_screen`, `right_screen`, `factory apps/*`) MUST remain lightweight, technical, and human-focused. They should describe subproject purpose, target SoC, display/network configuration, and key firmware capabilities.
-- **Exclusion of Agent Instructions**: Sub-project `README.md` files MUST NOT contain agentic prompt instructions, internal rule citations (e.g. "Rule 6"), or AI operational constraint references. Agent-specific guidelines belong in repo-level files (`REQUIREMENTS.md`, `README.md`, or `.geminirules`).
+## 9. Repository & Sub-Project Documentation Standards (`README.md` & `TOO.MD`)
+- **Human-Friendly `README.md` Content**: All `README.md` files across the repository—both top-level root `README.md` and sub-project `README.md` files (`interface_board`, `left_screen`, `right_screen`, `factory apps/*`)—MUST remain clean, technical, and human-focused. They should describe project purpose, target SoC architecture, display/network configuration, and key firmware capabilities.
+- **Exclusion of Agent Instructions**: ALL `README.md` files MUST NOT contain agentic prompt instructions, internal rule citations (e.g. "Rule 6"), or AI operational constraint references (e.g., "Agent Scope", "Operational Boundaries"). Agent-specific guidelines belong in repo-level specification files (`REQUIREMENTS.md`, `CONSTRAINTS.md`, or `.geminirules`).
 - **Theory of Operation (`TOO.MD`) Requirement**: Each active sub-project and major shared component (`common/twai_daemon`) MUST maintain a `TOO.MD` (or `OTA_TOO.MD`) detailing system architecture, hardware subsystems, signal processing, CAN ingestion/dispatch loops, API endpoints, and sequence diagrams (including protocol handshakes and timeout/error escape points).
 
 ## 10. Portable Relative Markdown Links
