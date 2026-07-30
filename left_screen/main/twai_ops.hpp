@@ -76,7 +76,7 @@ inline void display_board_st_PKG(void *pvParameters)
         binocan_rdb_st.xdb_light_mode = binocan_rdb_st_xdb_light_mode_encode(display_board_st.lightMode);
         binocan_rdb_st.xdb_mode_lock = binocan_rdb_st_xdb_mode_lock_encode(display_board_st.modeLocked);
         binocan_rdb_st_pack(tx_msg.data, &binocan_rdb_st, BINOCAN_RDB_ST_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue internal state message in queue");
         }
@@ -120,7 +120,7 @@ inline void display_board_version_PKG(void *pvParameters)
         message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
         binocan_rdb_board_version.rdb_version_mux = binocan_rdb_board_version_rdb_version_mux_encode(message_mux);
         binocan_rdb_board_version_pack(tx_msg.data, &binocan_rdb_board_version, BINOCAN_RDB_BOARD_VERSION_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(TAG, "Could not queue internal state message in queue");
         }
@@ -291,7 +291,7 @@ inline void display_board_st_PKG(void *pvParameters)
         binocan_ldb_st.xdb_light_mode = binocan_ldb_st_xdb_light_mode_encode(display_board_st.lightMode);
         binocan_ldb_st.xdb_mode_lock = binocan_ldb_st_xdb_mode_lock_encode(display_board_st.modeLocked);
         binocan_ldb_st_pack(tx_msg.data, &binocan_ldb_st, BINOCAN_LDB_ST_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(__func__, "Could not queue internal state message in queue");
         }
@@ -335,7 +335,7 @@ inline void display_board_version_PKG(void *pvParameters)
         message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
         binocan_ldb_board_version.ldb_version_mux = binocan_ldb_board_version_ldb_version_mux_encode(message_mux);
         binocan_ldb_board_version_pack(tx_msg.data, &binocan_ldb_board_version, BINOCAN_LDB_BOARD_VERSION_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&tx_msg, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGW(TAG, "Could not queue internal state message in queue");
         }
@@ -491,7 +491,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         {
             UDS_RESP_MSG.data[i] = 0xAA;
         }
-        if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
             ESP_LOGE(__func__, "Could not queue internal state message in queue");
         else
             ESP_LOGI(__func__, "Error frame sent");
@@ -529,7 +529,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         {
             UDS_RESP_MSG.data[i] = 0xAA;
         }
-        if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
             ESP_LOGE(__func__, "Could not queue internal state message in queue");
         else
             ESP_LOGI(__func__, "Error frame sent");
@@ -556,7 +556,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             {
                 UDS_RESP_MSG.data[i] = 0xAA;
             }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                 ESP_LOGE(__func__, "Could not queue internal state message in queue");
             else
                 ESP_LOGI(__func__, "Error frame sent");
@@ -590,7 +590,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             {
                 UDS_RESP_MSG.data[i] = 0xAA;
             }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                 ESP_LOGE(__func__, "Could not queue internal state message in queue");
             else
                 ESP_LOGI(__func__, "Error frame sent");
@@ -617,7 +617,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             {
                 UDS_RESP_MSG.data[i] = 0xAA;
             }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                 ESP_LOGE(__func__, "Could not queue internal state message in queue");
             else
                 ESP_LOGI(__func__, "Error frame sent");
@@ -635,7 +635,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         {
             UDS_RESP_MSG.data[i] = 0xAA;
         }
-        if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
         {
             ESP_LOGE(__func__, "Could not queue UDS response message in queue");
             esp_ota_abort(ota_handle);
@@ -678,7 +678,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             {
                 UDS_RESP_MSG.data[i] = 0xAA;
             }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                 ESP_LOGE(__func__, "Could not queue internal state message in queue");
             else
                 ESP_LOGI(__func__, "Error frame sent");
@@ -707,7 +707,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             {
                 UDS_RESP_MSG.data[i] = 0xAA;
             }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                 ESP_LOGE(__func__, "Could not queue internal state message in queue");
             else
                 ESP_LOGI(__func__, "Error frame sent");
@@ -740,7 +740,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
                 {
                     UDS_RESP_MSG.data[i] = 0xAA;
                 }
-                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                     ESP_LOGE(__func__, "Could not queue internal state message in queue");
                 else
                     ESP_LOGI(__func__, "Error frame sent");
@@ -777,7 +777,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
                 {
                     UDS_RESP_MSG.data[i] = 0xAA;
                 }
-                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                     ESP_LOGE(__func__, "Could not queue internal state message in queue");
                 else
                     ESP_LOGI(__func__, "Error frame sent");
@@ -812,7 +812,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
                 {
                     UDS_RESP_MSG.data[i] = 0xAA;
                 }
-                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                     ESP_LOGE(__func__, "Could not queue internal state message in queue");
                 else
                     ESP_LOGI(__func__, "Error frame sent");
@@ -830,7 +830,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
                 {
                     UDS_RESP_MSG.data[i] = 0xAA;
                 }
-                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+                if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
                     ESP_LOGE(__func__, "Could not queue internal state message in queue");
                 else
                     ESP_LOGI(__func__, "Status frame sent");
@@ -851,7 +851,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             {
                 UDS_RESP_MSG.data[i] = 0xAA;
             }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            if (twai_daemon_transmit(&UDS_RESP_MSG, pdMS_TO_TICKS(1)) != ESP_OK)
             {
                 ESP_LOGE(__func__, "Could not queue internal state message in queue");
                 esp_ota_abort(ota_handle);

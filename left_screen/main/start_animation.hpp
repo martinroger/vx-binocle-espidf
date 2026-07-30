@@ -77,7 +77,10 @@ inline void startup_anim()
     }
 #endif
 
-    vTaskSuspend(CAN_RX_tsk_hdl); // Ignore new inputs
+    if (CAN_Dispatch_Task_hdl != NULL)
+    {
+        vTaskSuspend(CAN_Dispatch_Task_hdl); // Ignore new inputs during startup animation
+    }
     TO_timers_stop();             // Stop the watchdogs
     // Prepare values for the starting/check sequence
     p_screen_interlock_OK = !screen_interlock_OK;

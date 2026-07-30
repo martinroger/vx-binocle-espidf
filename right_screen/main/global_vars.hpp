@@ -78,6 +78,9 @@ uint8_t p_internal_ST = XDB_SM_ST_DEGRADED; // Checks internal state in the LVGL
 uint8_t itf_board_st, p_itf_board_st = XDB_SM_ST_DEGRADED;
 bool p_CAN_RX_TimedOut = true;
 
+// Task handles
+extern TaskHandle_t CAN_Dispatch_Task_hdl;
+
 // Vehicle variables and previous values retainers
 bool indicatorsOn, p_indicatorsOn = true;
 bool rightTurnOn, p_rightTurnOn = true;

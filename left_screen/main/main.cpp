@@ -462,6 +462,8 @@ esp_err_t attemptRollBack()
     }
 }
 
+TaskHandle_t CAN_Dispatch_Task_hdl = NULL;
+
 void CAN_Dispatch_Task(void *pvParameters) {
     QueueHandle_t telemetry_queue = xQueueCreate(50, sizeof(twai_message_t));
     if (!telemetry_queue) {
@@ -640,7 +642,7 @@ extern "C" void app_main()
         attemptRollBack();
     }
 
-    if (xTaskCreatePinnedToCore(CAN_Dispatch_Task, "CAN_Dispatch", 4096, NULL, 5, NULL, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(CAN_Dispatch_Task, "CAN_Dispatch", 4096, NULL, 5, &CAN_Dispatch_Task_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create CAN Dispatch task");
     }
@@ -802,7 +804,10 @@ extern "C" void app_main()
 #endif
         }
     }
-    vTaskResume(CAN_RX_tsk_hdl);
+    if (CAN_Dispatch_Task_hdl != NULL)
+    {
+        vTaskResume(CAN_Dispatch_Task_hdl);
+    }
     TO_timers_start();
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
