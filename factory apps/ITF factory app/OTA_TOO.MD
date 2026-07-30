@@ -1,53 +1,161 @@
-# CAN OTA Update Logic (UDS ISO-TP)
+# CAN OTA Update Logic & Handshake Sequence (UDS ISO-TP)
 
-This document details the over-the-air (OTA) logic implemented in `main.cpp` (specifically within the `flash_post_handler` function), which bridges an HTTP firmware upload to a CAN bus node using the UDS (Unified Diagnostic Services) protocol over ISO-TP.
+This document details the over-the-air (OTA) logic implemented in [`factory apps/ITF factory app/main/main.cpp`](file:///home/martinroger/Documents/vx-binocle-espidf/factory%20apps/ITF%20factory%20app/main/main.cpp) (specifically within `flash_post_handler`), which bridges HTTP firmware chunk uploads to a target CAN bus node using the UDS (Unified Diagnostic Services) protocol over ISO 15765-2 (ISO-TP).
 
-## Overview
+---
 
-The ESP32 acts as an HTTP server receiving a firmware file via POST request. Instead of flashing itself, it streams the firmware chunks over the CAN bus to a target node. 
+## 1. Overview
 
-The update process implements the **ISO 15765-2 (ISO-TP)** standard for sending data payloads larger than 8 bytes over classic CAN frames.
+The ESP32-S3 acts as an HTTP server receiving a firmware file via chunked `POST /flash` request. Instead of updating itself, it streams the firmware chunks over the CAN bus to a target node (such as a left or right cluster display).
 
-## 1. HTTP Chunk Reception and Validation
-1. **Chunked Reception:** The firmware is read in chunks using `httpd_req_recv` to avoid loading the entire file into RAM.
-2. **Header Validation:** On the first chunk, the code scans for the ESP-IDF image magic word (`0xABCD5432`) to ensure the uploaded file is a valid ESP firmware binary. If not found, the transfer is immediately aborted.
+---
 
-## 2. TWAI Daemon Interception (v6.0 Migration Logic)
-During the OTA transfer, the standard background TWAI (CAN) daemon must be bypassed so the OTA loop can synchronously poll for specific responses:
-- `vTaskSuspend(CAN_RX_tsk_hdl)` is intercepted via a macro in `main.cpp`. 
-- Instead of suspending the task, it points `dispatchCANFrame` to a local `ota_dispatch` function.
-- All incoming CAN frames are pushed into a dedicated `ota_rx_queue`.
-- `twai_receive` macros pull directly from this queue, giving the OTA loop exclusive, blocking access to incoming frames.
-- Upon completion, `vTaskResume(CAN_RX_tsk_hdl)` restores the daemon dispatcher to `NULL`.
+## 2. TWAI Daemon Integration (`ota_twai` Helper API)
 
-## 3. ISO-TP Transfer Sequence
+During the OTA transfer, the HTTP handler dynamically registers a route with `twai_daemon`:
 
-### Step 3.1: First Frame (FF)
-Once the daemon is suspended, the OTA process initiates the transfer by sending a **First Frame (FF)**:
-- **Byte 0:** `0x10` (Indicates a First Frame for payloads > 4095 bytes)
-- **Byte 1:** `0x00` (Escape sequence for extended data length)
-- **Bytes 2-5:** Total file size (Big Endian)
-- **Bytes 6-7:** First 2 bytes of the firmware payload.
+1. **`ota_twai_start_listening()`**: Creates/resets `ota_rx_queue` and registers a route filter for `UDS_REQ_FRAME_ID` (`0x7E0`) via `twai_daemon_register_route`.
+2. **ISR Ingestion**: The `twai_daemon` ISR (`on_rx_done`) pushes matching response frames directly to `ota_rx_queue`.
+3. **Synchronous Polling**: The OTA handler polls responses via `ota_twai_receive(msg, ticks)`.
+4. **`ota_twai_stop_listening()`**: Unregisters the route from `twai_daemon` upon completion or error abort, restoring standard background CAN routing.
 
-### Step 3.2: Flow Control (FC) Wait
-After sending the FF, the ESP32 blocks and waits for a **Flow Control (FC)** frame from the target node:
-- **`0x30` (Clear To Send / CTS):** The target is ready to receive.
-  - **Byte 1 (`CANBlockSize`):** Maximum number of frames to send before waiting for another FC. (0 = no limit).
-  - **Byte 2 (`STmin_MS`):** Minimum Separation Time (in milliseconds) required between consecutive frames.
-- **`0x40` (Status Frame):** Handled as an error if the status code is not `0x00`.
+---
 
-An `esp_timer` (`OTA_TO_timer`) enforces a strict timeout during this wait.
+## 3. ISO-TP Handshake & Transfer Protocol
 
-### Step 3.3: Consecutive Frames (CF)
-Once a CTS is received, the ESP32 loops over the remaining payload, packing it into **Consecutive Frames (CF)**:
-- **Byte 0:** `0x20` + `CF_SN` (Sequence Number, rolling over from 0 to 15).
-- **Bytes 1-7:** Up to 7 bytes of firmware payload.
+```
+ +------------------------------------------------------------------------------------+
+ | 1. First Frame (FF) Transmitted (0x10 + Total File Size + 2 Bytes Data)            |
+ +------------------------------------------------------------------------------------+
+                                          |
+                              [Wait for Flow Control]
+                                          v
+ +------------------------------------------------------------------------------------+
+ | 2. Flow Control (FC) Received (0x30 CTS, BlockSize, STmin_MS)                      |
+ +------------------------------------------------------------------------------------+
+                                          |
+                          [Ship Consecutive Frames Loop]
+                                          v
+ +------------------------------------------------------------------------------------+
+ | 3. Consecutive Frames (CF) (0x20 + SN 1..F + Payload)                             |
+ |    - Delay STmin_MS between frames                                                |
+ |    - Pause & wait for FC if BlockSize limit is reached                            |
+ +------------------------------------------------------------------------------------+
+                                          |
+                              [All Chunks Transmitted]
+                                          v
+ +------------------------------------------------------------------------------------+
+ | 4. Final Status Frame (0x40 + OTA Status Code)                                     |
+ +------------------------------------------------------------------------------------+
+```
 
-The logic respects the Flow Control parameters:
-- **Delay:** Blocks for `STmin_MS` between sending each frame.
-- **Block Size Limits:** If `CANBlockSize` is reached, it halts transmission and waits for another FC CTS (`0x30`) from the target before continuing.
+---
 
-## 4. Completion and Cleanup
-- The loop continues fetching HTTP chunks and shipping CF frames until `sentBytes == file_size`.
-- If any timeouts or errors occur, the ESP32 aborts the transfer, returns an HTTP 500/400 error to the client, and safely restores the TWAI daemon.
-- On success, the TWAI daemon is restored (`dispatchCANFrame = NULL`), and an HTTP 200 OK is sent.
+## 4. Sequence Diagrams & Escape Points
+
+### 4.1 Successful UDS Handshake & Transfer Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as HTTP Web Client
+    participant HTTP as HTTP Server (flash_post_handler)
+    participant Queue as ota_rx_queue
+    participant TWAI as TWAI Daemon Router
+    participant ECU as Target ECU Node
+
+    Client->>HTTP: POST /flash (Chunked Firmware Payload)
+    HTTP->>HTTP: Validate ESP Image Magic Word (0xABCD5432)
+    HTTP->>TWAI: ota_twai_start_listening()<br/>(Register UDS route)
+    
+    Note over HTTP,ECU: Handshake Step 1: First Frame (FF)
+    HTTP->>TWAI: twai_daemon_transmit(FF 0x10, File Size)
+    TWAI->>ECU: CAN Frame (0x10, Size, Data[0..1])
+    
+    Note over HTTP,ECU: Handshake Step 2: Flow Control (FC) Wait
+    ECU-->>TWAI: CAN Frame (0x30 CTS, BlockSize, STmin)
+    TWAI-->>Queue: Post to ota_rx_queue from ISR
+    HTTP->>Queue: ota_twai_receive(2000ms Timeout)
+    Queue-->>HTTP: FC CTS Frame (BlockSize, STmin_MS)
+    
+    Note over HTTP,ECU: Handshake Step 3: Consecutive Frames (CF) Shipping Loop
+    loop Every 7 Bytes of Payload
+        HTTP->>HTTP: Delay for STmin_MS
+        HTTP->>TWAI: twai_daemon_transmit(CF 0x20 + SN)
+        TWAI->>ECU: CAN Frame (CF Data Payload)
+        opt BlockSize Limit Reached
+            ECU-->>TWAI: CAN Frame (0x30 CTS)
+            TWAI-->>Queue: Post to ota_rx_queue
+            HTTP->>Queue: ota_twai_receive()
+        end
+    end
+
+    Note over HTTP,ECU: Handshake Step 4: Final Status Verification
+    ECU-->>TWAI: CAN Frame (0x40 Status Code 0x00)
+    TWAI-->>Queue: Post to ota_rx_queue
+    HTTP->>Queue: ota_twai_receive(5000ms Timeout)
+    Queue-->>HTTP: Status Frame (Status 0x00 OK)
+    
+    HTTP->>TWAI: ota_twai_stop_listening()
+    HTTP-->>Client: 200 OK JSON {"status":"0", "version":...}
+```
+
+---
+
+### 4.2 Escape Points & Error / Timeout Sequences
+
+The OTA handler enforces explicit escape points at every step to prevent hanging or memory leaks. In all failure cases, `ota_twai_stop_listening()` is invoked to restore the `twai_daemon`.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Client as HTTP Web Client
+    participant HTTP as HTTP Server (flash_post_handler)
+    participant TWAI as TWAI Daemon Router
+    participant ECU as Target ECU Node
+
+    alt Escape Point 1: Invalid ESP Image Header
+        Client->>HTTP: POST /flash (Corrupt Payload)
+        Note over HTTP: Scan for 0xABCD5432 Fails
+        HTTP-->>Client: 400 Bad Request ("No valid image header in file")
+        
+    else Escape Point 2: First Frame (FF) Transmission Failure
+        HTTP->>TWAI: twai_daemon_transmit(FF)
+        TWAI--xECU: [Bus Error / TX Hardware Full]
+        Note over HTTP: TX Return != ESP_OK
+        HTTP->>TWAI: ota_twai_stop_listening()
+        HTTP-->>Client: 500 Internal Server Error ("FF could not be transmitted")
+        
+    else Escape Point 3: Flow Control (FC) Timeout / No Response
+        HTTP->>TWAI: twai_daemon_transmit(FF)
+        TWAI->>ECU: CAN Frame (FF)
+        Note over HTTP: Waiting for FC Response...
+        ECU--xTWAI: [Unresponsive / Disconnected Node]
+        Note over HTTP: ota_twai_receive() Timeout / OTA_TO_timer Expired
+        HTTP->>TWAI: ota_twai_stop_listening()
+        HTTP-->>Client: 500 Internal Server Error ("FC was not received within timeout")
+        
+    else Escape Point 4: Target Status Error / NACK Frame
+        HTTP->>TWAI: twai_daemon_transmit(FF)
+        TWAI->>ECU: CAN Frame (FF)
+        ECU-->>TWAI: CAN Frame (0x40 Status Error Code 0x82)
+        TWAI-->>HTTP: ota_rx_queue (Status 0x82 Error)
+        Note over HTTP: Non-Zero Status Frame Detected
+        HTTP->>TWAI: ota_twai_stop_listening()
+        HTTP-->>Client: 500 Internal Server Error ("Status frame code: 0x82")
+        
+    else Escape Point 5: Unmatched Message Overflow (500 Frames)
+        HTTP->>TWAI: ota_twai_receive()
+        TWAI-->>HTTP: >500 Unmatched Bus Frames Received
+        Note over HTTP: otherFrames >= 500 Counter Limit
+        HTTP->>TWAI: ota_twai_stop_listening()
+        HTTP-->>Client: 500 Internal Server Error ("FC was not received in 500 frames")
+
+    else Escape Point 6: Consecutive Frame (CF) Transmission Failure
+        HTTP->>TWAI: twai_daemon_transmit(CF)
+        TWAI--xECU: [Bus Disconnected Mid-Transfer]
+        Note over HTTP: TX Return != ESP_OK
+        HTTP->>TWAI: ota_twai_stop_listening()
+        HTTP-->>Client: 500 Internal Server Error ("CF Frame TX error")
+    end
+```
