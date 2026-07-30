@@ -29,7 +29,7 @@ This document details the agent operational requirements, architecture guideline
 - `twai_daemon` must use ESP-IDF driver headers (`esp_driver_twai`, `esp_driver_gpio`).
 
 ### REQ-05: Dependency Tracking & Matrix Maintenance
-- Top-level [`README.md`](file:///home/martinroger/Documents/vx-binocle-espidf/README.md) MUST maintain an updated matrix of all external dependencies, locally installed versions (`dependencies.lock`), and requirement declarations (`idf_component.yml`).
+- Top-level [`README.md`](README.md) MUST maintain an updated matrix of all external dependencies, locally installed versions (`dependencies.lock`), and requirement declarations (`idf_component.yml`).
 
 ---
 
@@ -37,8 +37,8 @@ This document details the agent operational requirements, architecture guideline
 
 | Requirement | Description | Primary Code / Config Files | Verification Method |
 | :--- | :--- | :--- | :--- |
-| **REQ-01** | ESP-IDF target execution & manifest constraints | [`interface_board/main/idf_component.yml`](file:///home/martinroger/Documents/vx-binocle-espidf/interface_board/main/idf_component.yml)<br>[`left_screen/main/idf_component.yml`](file:///home/martinroger/Documents/vx-binocle-espidf/left_screen/main/idf_component.yml)<br>[`right_screen/main/idf_component.yml`](file:///home/martinroger/Documents/vx-binocle-espidf/right_screen/main/idf_component.yml) | `eim run "idf.py reconfigure" <master\|v5.5.5>` |
-| **REQ-02** | Target SoC & flash/PSRAM hardware settings | [`interface_board/sdkconfig.defaults`](file:///home/martinroger/Documents/vx-binocle-espidf/interface_board/sdkconfig.defaults)<br>[`left_screen/sdkconfig.defaults`](file:///home/martinroger/Documents/vx-binocle-espidf/left_screen/sdkconfig.defaults)<br>[`right_screen/sdkconfig.defaults`](file:///home/martinroger/Documents/vx-binocle-espidf/right_screen/sdkconfig.defaults) | `CONFIG_IDF_TARGET="esp32s3"` in build config |
-| **REQ-03** | Screen file parity across all `main/` files | [`left_screen/main/`](file:///home/martinroger/Documents/vx-binocle-espidf/left_screen/main)<br>[`right_screen/main/`](file:///home/martinroger/Documents/vx-binocle-espidf/right_screen/main) | `diff -r left_screen/main right_screen/main` |
-| **REQ-04** | Shared CAN & display component driver compatibility | [`common/twai_daemon/CMakeLists.txt`](file:///home/martinroger/Documents/vx-binocle-espidf/common/twai_daemon/CMakeLists.txt)<br>[`common/binocan/CMakeLists.txt`](file:///home/martinroger/Documents/vx-binocle-espidf/common/binocan/CMakeLists.txt)<br>[`common/lvgl_v9_port/CMakeLists.txt`](file:///home/martinroger/Documents/vx-binocle-espidf/common/lvgl_v9_port/CMakeLists.txt) | Sub-project reconfigure & compilation |
-| **REQ-05** | Global dependency summary matrix in root README | [`README.md`](file:///home/martinroger/Documents/vx-binocle-espidf/README.md) | Visual inspection against `dependencies.lock` |
+| **REQ-01** | ESP-IDF target execution & manifest constraints | [`interface_board/main/idf_component.yml`](interface_board/main/idf_component.yml)<br>[`left_screen/main/idf_component.yml`](left_screen/main/idf_component.yml)<br>[`right_screen/main/idf_component.yml`](right_screen/main/idf_component.yml) | `eim run "idf.py reconfigure" <master\|v5.5.5>` |
+| **REQ-02** | Target SoC & flash/PSRAM hardware settings | [`interface_board/sdkconfig.defaults`](interface_board/sdkconfig.defaults)<br>[`left_screen/sdkconfig.defaults`](left_screen/sdkconfig.defaults)<br>[`right_screen/sdkconfig.defaults`](right_screen/sdkconfig.defaults) | `CONFIG_IDF_TARGET="esp32s3"` in build config |
+| **REQ-03** | Screen file parity across all `main/` files | [`left_screen/main/`](left_screen/main)<br>[`right_screen/main/`](right_screen/main) | `diff -r left_screen/main right_screen/main` |
+| **REQ-04** | Shared CAN & display component driver compatibility | [`common/twai_daemon/CMakeLists.txt`](common/twai_daemon/CMakeLists.txt)<br>[`common/binocan/CMakeLists.txt`](common/binocan/CMakeLists.txt)<br>[`common/lvgl_v9_port/CMakeLists.txt`](common/lvgl_v9_port/CMakeLists.txt) | Sub-project reconfigure & compilation |
+| **REQ-05** | Global dependency summary matrix in root README | [`README.md`](README.md) | Visual inspection against `dependencies.lock` |

@@ -37,7 +37,7 @@ vx-binocle-espidf/
   - **ESP-IDF v5.5.5 (`v5.5.5`)**: Enforced exclusively for `left_screen` and `right_screen` via `eim run "<cmd>" v5.5.5`.
 - **Ignored / Excluded Sub-Projects**: `emulator-console` and `bennu` are excluded from firmware migration and build evaluation per repository rules.
 - **Screen Code Parity Rule**: ALL files within the `main/` subfolder across `left_screen` and `right_screen` must maintain 100% strict file parity, differentiated strictly via Kconfig macros (e.g., `CONFIG_LEFT_SIDE_DISPLAY` vs `CONFIG_RIGHT_SIDE_DISPLAY`).
-- **Documentation & Requirements Tracking**: Operational requirements and constraints are explicitly tracked in [`REQUIREMENTS.md`](file:///home/martinroger/Documents/vx-binocle-espidf/REQUIREMENTS.md) and [`CONSTRAINTS.md`](file:///home/martinroger/Documents/vx-binocle-espidf/CONSTRAINTS.md).
+- **Documentation & Requirements Tracking**: Operational requirements and constraints are explicitly tracked in [`REQUIREMENTS.md`](REQUIREMENTS.md) and [`CONSTRAINTS.md`](CONSTRAINTS.md).
 
 ---
 

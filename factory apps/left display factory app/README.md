@@ -1,32 +1,27 @@
-# _Sample project_
+# Left Display Factory App (`left display factory app`)
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+`left display factory app` is a production diagnostic and flashing firmware for the **Left Screen Cluster** board.
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+---
 
+## Technical Overview
 
+- **Target SoC**: ESP32-S3
+- **Network Mode**: Wi-Fi Access Point (SSID: `left-display`)
+- **mDNS Hostname**: [`http://left-display.local`](http://left-display.local)
+- **Web Interface**: Embedded ESP HTTP server serving static frontend assets from SPIFFS partition (`/spiffs`)
+- **Target ESP-IDF Version**: ESP-IDF v6.2.0 (`eim run "<idf.py command>" master`)
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
+---
 
-## Example folder contents
+## Key Diagnostic Features
 
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
+- **Hardware Self-Test**: Tests ST7701 display panel, backlight PWM, and touch/button inputs.
+- **NVS Management**: Formats default and `nvs_odo` partitions, inspects stored settings, and performs calibration resets.
+- **Partition Selection**: Switches active boot partition between `factory`, `ota_0`, and `ota_1` via HTTP POST (`/set_boot`).
 
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
+---
 
-Below is short explanation of remaining files in the project folder.
+## Documentation
 
-```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+For a detailed architectural breakdown of web server endpoints, SPIFFS mounting, mDNS registration, and partition management, see [TOO.MD](TOO.MD).

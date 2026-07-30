@@ -1,6 +1,6 @@
 # CAN OTA Update Logic & Handshake Sequence (UDS ISO-TP)
 
-This document details the over-the-air (OTA) logic implemented in [`factory apps/ITF factory app/main/main.cpp`](file:///home/martinroger/Documents/vx-binocle-espidf/factory%20apps/ITF%20factory%20app/main/main.cpp) (specifically within `flash_post_handler`), which bridges HTTP firmware chunk uploads to a target CAN bus node using the UDS (Unified Diagnostic Services) protocol over ISO 15765-2 (ISO-TP).
+This document details the over-the-air (OTA) logic implemented in [`main/main.cpp`](main/main.cpp) (specifically within `flash_post_handler`), which bridges HTTP firmware chunk uploads to a target CAN bus node using the UDS (Unified Diagnostic Services) protocol over ISO 15765-2 (ISO-TP).
 
 ---
 
