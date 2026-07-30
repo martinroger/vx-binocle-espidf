@@ -33,9 +33,11 @@
 - **Documentation Lookup**: If the `espressif-docs` MCP server is available, use `search_espressif_sources` as the authoritative source for command flags, `sdkconfig` options, and API specifications.
 - **Build Execution**: Check if an ESP-IDF Build MCP server is available. If present, prefer using its native MCP tools for building, flashing, and configuring targets.
 
-## 3. Virtual Environment Execution Standards
-- **ESP-IDF >= v6.0**: If an ESP-IDF Build MCP server is NOT available, enforce `eim` (Espressif Installation Manager) for virtual environment setup when executing `idf.py` commands (e.g., `eim exec -- idf.py build`).
-- **ESP-IDF < v6.0**: Rely on Build MCP server if available; otherwise source standard exported environment (`. $IDF_PATH/export.sh`).
+## 3. Virtual Environment Execution Standards (`eim`)
+- **Execution Command Syntax**:
+  - For ESP-IDF v6.2.0 sub-projects (`interface_board`, `factory apps/*`): Use `eim run "<idf.py command>" master`.
+  - For ESP-IDF v5.5.5 sub-projects (`left_screen`, `right_screen`): Use `eim run "<idf.py command>" v5.5.5`.
+- **Ignored Sub-Projects**: `emulator-console` and `bennu` are ignored from active firmware migration and build evaluation.
 
 ## 4. Project File Output Standards
 - Always ensure ESP-IDF projects maintain standard structure:
@@ -53,12 +55,16 @@
 
 # Project-Specific Rules (vx-binocle-espidf)
 
-## 6. Non-Factory Screen Code Parity & Macro Differentiation
-- **Core Code Parity**: The core application logic in `main/` for `left_screen` and `right_screen` non-factory apps MUST remain identical across both targets.
+## 6. Non-Factory Screen File Parity Across `main/` Directory
+- **Strict 100% File Parity**: ALL files inside the `main/` subfolder across `left_screen` and `right_screen` (`main.cpp`, `twai_ops.hpp`, `start_animation.hpp`, `global_vars.hpp`, `updateUI.hpp`, `CMakeLists.txt`, `idf_component.yml`, `Kconfig.projbuild`, etc.) MUST maintain 100% byte-for-byte content parity (`diff -r left_screen/main right_screen/main` must return 0 diffs).
 - **Macro-Based Differentiation**: Differentiate screen-specific behavior strictly using compile-time macro switches (e.g. `CONFIG_LEFT_SIDE_DISPLAY` / `#ifdef CONFIG_LEFT_SIDE_DISPLAY` / `#else`) rather than maintaining separate divergent source files.
 - **Component Exemption**: This core parity rule does NOT apply to generated UI components (e.g. `components/ui` or EEZ Studio generated code), which are allowed to differ per screen.
 
-## 7. Global README Sub-Project External Dependency Matrix
+## 7. Shared Component Integrity & TWAI API Standards
+- **No Direct Edits to Shared/Managed Components**: Do not edit `common/twai_daemon`, `common/binocan`, or `common/lvgl_v9_port` directly inside `managed_components` or shared folders when resolving application issues.
+- **Clean TWAI Integration**: In `left_screen` and `right_screen`, send CAN messages directly via `twai_daemon_transmit(&tx_msg, ticks)`. Avoid legacy task handles (`CAN_RX_tsk_hdl`, `CAN_TX_tsk_hdl`) and FreeRTOS macro overloads (`#define vTaskSuspend ...`), using standard `TaskHandle_t CAN_Dispatch_Task_hdl` for task pause/resume.
+
+## 8. Global README Sub-Project External Dependency Matrix
 - **Dependency Summary Table**: The top-level repository `README.md` MUST contain and maintain a structured summary table of external dependencies across all sub-projects (e.g., `left_screen`, `right_screen`, `interface_board`, `emulator-console`, `factory apps`, etc.).
 - **Required Columns**:
   - **Sub-Project**: Name of the sub-project directory.

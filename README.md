@@ -32,26 +32,29 @@ vx-binocle-espidf/
 ## Agent Scope & Operational Boundaries
 
 - **Target Architecture**: ESP32-S3 (`CONFIG_IDF_TARGET="esp32s3"`).
-- **Target Framework**: ESP-IDF v6.2.0 (managed via `eim run "<cmd>" master`).
-- **Screen Code Parity Rule**: The main application code (`main/main.cpp`) in `left_screen` and `right_screen` must maintain strict code parity, differentiated strictly via Kconfig macros (e.g. `CONFIG_LEFT_SIDE_DISPLAY`).
+- **Target Framework Environments**:
+  - **ESP-IDF v6.2.0 (`master`)**: Enforced for `interface_board`, `ITF factory app`, `left display factory app`, and `right display factory app` via `eim run "<cmd>" master`.
+  - **ESP-IDF v5.5.5 (`v5.5.5`)**: Enforced exclusively for `left_screen` and `right_screen` via `eim run "<cmd>" v5.5.5`.
+- **Ignored / Excluded Sub-Projects**: `emulator-console` and `bennu` are excluded from firmware migration and build evaluation per repository rules.
+- **Screen Code Parity Rule**: ALL files within the `main/` subfolder across `left_screen` and `right_screen` must maintain 100% strict file parity, differentiated strictly via Kconfig macros (e.g., `CONFIG_LEFT_SIDE_DISPLAY` vs `CONFIG_RIGHT_SIDE_DISPLAY`).
 - **Documentation & Requirements Tracking**: Operational requirements and constraints are explicitly tracked in [`REQUIREMENTS.md`](file:///home/martinroger/Documents/vx-binocle-espidf/REQUIREMENTS.md) and [`CONSTRAINTS.md`](file:///home/martinroger/Documents/vx-binocle-espidf/CONSTRAINTS.md).
 
 ---
 
-## Sub-Project Migration Status Matrix
+## Sub-Project Migration & Build Status Matrix
 
-The table below tracks ESP-IDF v6.2.0 migration status across all sub-projects.
+The table below tracks target framework environments and build status across all sub-projects.
 
-| Sub-Project | Target Chip | Manifest IDF Version | ESP-IDF v6.2 Status | Notes |
-| :--- | :--- | :--- | :--- | :--- |
-| **`interface_board`** | ESP32-S3 | `>=6.2.0` | **MIGRATED (PASSED)** | Binary compiled cleanly under ESP-IDF v6.2.0. |
-| **`factory apps / ITF factory app`** | ESP32-S3 | `>=6.2.0` | **MIGRATED (PASSED)** | Binary `ITF_factory.bin` compiled cleanly under ESP-IDF v6.2.0. |
-| **`factory apps / left display factory app`** | ESP32-S3 | `>=6.2.0` | **MIGRATED (PASSED)** | Binary `LDB_factory.bin` compiled cleanly under ESP-IDF v6.2.0. |
-| **`factory apps / right display factory app`** | ESP32-S3 | `>=6.2.0` | **MIGRATED (PASSED)** | Binary `RDB_factory.bin` compiled cleanly under ESP-IDF v6.2.0. |
-| **`left_screen`** | ESP32-S3 | `>=4.1.0` | **EXCLUDED** | Excluded due to un-migrated legacy `esp32_display_panel` / `esp32_io_expander` driver dependencies. |
-| **`right_screen`** | ESP32-S3 | `>=4.1.0` | **EXCLUDED** | Excluded due to un-migrated legacy `esp32_display_panel` / `esp32_io_expander` driver dependencies. |
-| **`emulator-console`** | ESP32-S3 | N/A | **EXCLUDED** | Excluded per system scope rules. |
-| **`bennu`** | ESP32-S3 | N/A | **EXCLUDED** | Excluded per system scope rules. |
+| Sub-Project | Target Chip | Manifest IDF Version | Target ESP-IDF | Status | Notes |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`interface_board`** | ESP32-S3 | `>=6.2.0` | **v6.2.0 (`master`)** | **PASSED** | Binary compiled cleanly under ESP-IDF v6.2.0. |
+| **`factory apps / ITF factory app`** | ESP32-S3 | `>=6.2.0` | **v6.2.0 (`master`)** | **PASSED** | Binary `ITF_factory.bin` compiled cleanly under ESP-IDF v6.2.0. |
+| **`factory apps / left display factory app`** | ESP32-S3 | `>=6.2.0` | **v6.2.0 (`master`)** | **PASSED** | Binary `LDB_factory.bin` compiled cleanly under ESP-IDF v6.2.0. |
+| **`factory apps / right display factory app`** | ESP32-S3 | `>=6.2.0` | **v6.2.0 (`master`)** | **PASSED** | Binary `RDB_factory.bin` compiled cleanly under ESP-IDF v6.2.0. |
+| **`left_screen`** | ESP32-S3 | `>=5.5.5` | **v5.5.5 (`v5.5.5`)** | **PASSED** | Compiled cleanly under ESP-IDF v5.5.5; uses `twai_daemon` API. |
+| **`right_screen`** | ESP32-S3 | `>=5.5.5` | **v5.5.5 (`v5.5.5`)** | **PASSED** | Compiled cleanly under ESP-IDF v5.5.5; uses `twai_daemon` API. |
+| **`emulator-console`** | ESP32-S3 | N/A | N/A | **IGNORED** | Ignored per repository scope rules. |
+| **`bennu`** | ESP32-S3 | N/A | N/A | **IGNORED** | Ignored per repository scope rules. |
 
 ---
 
