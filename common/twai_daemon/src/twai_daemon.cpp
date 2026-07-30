@@ -1,23 +1,33 @@
+/**
+ * @file twai_daemon.cpp
+ * @brief Implementation of the TWAI Router Daemon and ISR callbacks.
+ */
+
 #include "twai_daemon.h"
 #include <esp_log.h>
 #include <string.h>
 
-const char *TAG = "CAN Daemon";
+static const char *TAG = "CAN Daemon";
 
 bool CAN_RX_TimedOut = false;
 
-// Underlying driver node handle
 twai_node_handle_t can_node_hdl = nullptr;
 
+/** @brief Maximum number of simultaneous CAN route subscriptions. */
 #define MAX_CAN_ROUTES 32
 
+/**
+ * @struct can_route_t
+ * @brief Internal routing table entry mapping a CAN ID/mask filter to a destination queue.
+ */
 struct can_route_t {
-    uint32_t id;
-    uint32_t mask;
-    QueueHandle_t target_queue;
-    bool active;
+    uint32_t id;                /**< Base CAN identifier to match */
+    uint32_t mask;              /**< Bitmask filter (1 = check bit, 0 = ignore) */
+    QueueHandle_t target_queue; /**< Destination FreeRTOS queue handle */
+    bool active;                /**< True if this route slot is active */
 };
 
+/** @brief Static route registry storage array. */
 static can_route_t route_table[MAX_CAN_ROUTES];
 
 esp_err_t twai_daemon_register_route(uint32_t id, uint32_t mask, QueueHandle_t queue) {
@@ -42,6 +52,15 @@ void twai_daemon_unregister_route(QueueHandle_t queue) {
     }
 }
 
+/**
+ * @brief ISR Event Callback triggered when TWAI frame reception completes.
+ * @details Drains all received frames from hardware FIFO, matches them against active
+ *          routes in `route_table`, and posts matching frames to subscribed FreeRTOS queues.
+ * @param[in] handle Handle to the TWAI node emitting the interrupt.
+ * @param[in] edata Pointer to event data containing RX metrics.
+ * @param[in] user_ctx Context pointer (unused).
+ * @return True if a higher-priority task was woken and a yield is requested; false otherwise.
+ */
 static bool on_rx_done(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx)
 {
     twai_frame_t rx_frame;
@@ -147,3 +166,4 @@ esp_err_t initCAN(void)
     // All checks passed
     return ESP_OK;
 }
+

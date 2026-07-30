@@ -1,3 +1,10 @@
+/**
+ * @file twai_ops.hpp
+ * @brief Interface Board CAN Message Packaging Tasks and Operations.
+ * @details Implements FreeRTOS packaging tasks that periodically gather sensor measurements,
+ *          encode payloads using Binocan structs, and publish frames via `twai_daemon_transmit`.
+ */
+
 #pragma once
 #include <stdio.h>
 #include <string.h>

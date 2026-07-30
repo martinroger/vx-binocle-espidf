@@ -1,3 +1,11 @@
+/**
+ * @file main.cpp
+ * @brief Interface Board Firmware Main Entry Point and System Initialization.
+ * @details Manages 5V power channels, peripheral initializations (ADC, MCPWM pulse capture,
+ *          TCA9555 GPIO expander), TWAI daemon CAN driver startup, odometer NVS flash persistence,
+ *          and periodic CAN packaging tasks.
+ */
+
 #include <stdio.h>
 // #include <string.h> // Required for version and SHA extraction
 #include "esp_log.h"

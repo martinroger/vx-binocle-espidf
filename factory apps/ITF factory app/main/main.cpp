@@ -2,21 +2,25 @@
 #include <string.h>
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_timer.h"
+/**
+ * @file main.cpp
+ * @brief ITF Factory Diagnostic Firmware and UDS ISO-TP OTA Engine.
+ * @details Implements Wi-Fi SoftAP/Station connectivity, mDNS discovery, SPIFFS web server hosting,
+ *          diagnostic REST APIs, and UDS over CAN firmware flashing engine.
+ */
+
 #include "nvs_flash.h"
-#include "esp_event.h"
-#include "esp_log.h"
-#include "esp_netif.h"
 #include "esp_wifi.h"
+#include "esp_event.h"
+#include "esp_netif.h"
+#include "esp_mac.h"
 #include "mdns.h"
 #include "esp_http_server.h"
-#include "esp_ota_ops.h"
+#include "esp_app_format.h"
 #include "esp_partition.h"
-#include "esp_err.h"
-#include "esp_mac.h"
-#include "esp_image_format.h"
+#include "esp_ota_ops.h"
+#include "esp_timer.h"
+#include "driver/gpio.h"
 #include "esp_spiffs.h"
 #include <algorithm>
 
@@ -25,39 +29,61 @@
 
 #define UDS_REQ_FRAME_ID BINOCAN_ITF_UDS_REQ_FRAME_ID
 
-// --- ESP-IDF v6.0 TWAI Migration Macros ---
+// --- ESP-IDF v6.0 TWAI Migration Helper API ---
 static QueueHandle_t ota_rx_queue = NULL;
 
-#define twai_transmit(msg, ticks) twai_daemon_transmit(msg, ticks)
-#define twai_receive(msg, ticks) (xQueueReceive(ota_rx_queue, msg, ticks) == pdPASS ? ESP_OK : ESP_ERR_TIMEOUT)
-#define twai_clear_receive_queue() (xQueueReset(ota_rx_queue), ESP_OK)
-#define twai_clear_transmit_queue() ESP_OK
+/**
+ * @brief Initializes the OTA RX queue and registers the UDS route with TWAI daemon.
+ * @return ESP_OK on success, or ESP_ERR_NO_MEM if queue creation fails.
+ */
+static esp_err_t ota_twai_start_listening(void)
+{
+    if (ota_rx_queue == NULL)
+    {
+        ota_rx_queue = xQueueCreate(20, sizeof(twai_message_t));
+        if (ota_rx_queue == NULL)
+        {
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    xQueueReset(ota_rx_queue);
+    return twai_daemon_register_route(UDS_REQ_FRAME_ID, 0xFFFFFFFF, ota_rx_queue);
+}
 
-#define CAN_TX_tsk_hdl ((TaskHandle_t)1)
-#define CAN_RX_tsk_hdl ((TaskHandle_t)2)
+/**
+ * @brief Unregisters the UDS route from TWAI daemon.
+ */
+static void ota_twai_stop_listening(void)
+{
+    if (ota_rx_queue != NULL)
+    {
+        twai_daemon_unregister_route(ota_rx_queue);
+    }
+}
 
-#define vTaskSuspend(hdl) do { \
-    if((hdl) == CAN_RX_tsk_hdl) { \
-        if (ota_rx_queue == NULL) { \
-            ota_rx_queue = xQueueCreate(20, sizeof(twai_message_t)); \
-        } \
-        xQueueReset(ota_rx_queue); \
-        twai_daemon_register_route(UDS_REQ_FRAME_ID, 0xFFFFFFFF, ota_rx_queue); \
-    } else if ((hdl) == CAN_TX_tsk_hdl) { \
-    } else { \
-        (vTaskSuspend)(hdl); \
-    } \
-} while(0)
+/**
+ * @brief Receives a UDS response message from the OTA RX queue.
+ * @param[out] msg Pointer to target message structure.
+ * @param[in] ticks_to_wait FreeRTOS tick wait duration.
+ * @return ESP_OK if received successfully, ESP_ERR_TIMEOUT on timeout.
+ */
+static esp_err_t ota_twai_receive(twai_message_t *msg, TickType_t ticks_to_wait)
+{
+    if (ota_rx_queue == NULL) return ESP_ERR_INVALID_STATE;
+    return (xQueueReceive(ota_rx_queue, msg, ticks_to_wait) == pdPASS) ? ESP_OK : ESP_ERR_TIMEOUT;
+}
 
-#define vTaskResume(hdl) do { \
-    if((hdl) == CAN_RX_tsk_hdl) { \
-        twai_daemon_unregister_route(ota_rx_queue); \
-    } else if ((hdl) == CAN_TX_tsk_hdl) { \
-    } else { \
-        (vTaskResume)(hdl); \
-    } \
-} while(0)
-// ------------------------------------------
+/**
+ * @brief Clears pending messages in the OTA RX queue.
+ */
+static void ota_twai_clear_receive_queue(void)
+{
+    if (ota_rx_queue != NULL)
+    {
+        xQueueReset(ota_rx_queue);
+    }
+}
+// ----------------------------------------------
 
 #ifdef TAG
 #undef TAG
@@ -1007,9 +1033,14 @@ static void ota_TO_timer_cb(void *arg)
 	ota_timer_expired = true;
 }
 
-/// @brief Handler for the ECU update over CAN (brutal)
-/// @param req POST /flash?targetECU=
-/// @return
+/**
+ * @brief HTTP POST handler for target ECU firmware flashing over UDS ISO-TP CAN bus.
+ * @details Receives firmware binary payload in chunked HTTP POST requests, validates
+ *          ESP image header, registers UDS route with twai_daemon, and transmits frames
+ *          following ISO 15765-2 (ISO-TP) protocol with Flow Control and Consecutive Frames.
+ * @param[in] req HTTP request context pointer.
+ * @return ESP_OK on successful flashing completion, or ESP_FAIL / HTTP error response on failure.
+ */
 static esp_err_t flash_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
@@ -1214,8 +1245,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Chunk retrieval failed.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					ota_twai_stop_listening();
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1249,8 +1279,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No valid image header in file");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					ota_twai_stop_listening();
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1259,23 +1288,16 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			memcpy(&image_metadata, img_descriptor, sizeof(esp_app_desc_t));
 			image_header_OK = true;
 		}
-		// Suspend the daemon tasks and flush incoming buffer if still running
+		// Register TWAI UDS listening route and flush incoming buffer if still running
 		if (!daemonSuspended)
 		{
-			vTaskSuspend(CAN_RX_tsk_hdl);
-			vTaskSuspend(CAN_TX_tsk_hdl);
+			if (ota_twai_start_listening() != ESP_OK)
+			{
+				ESP_LOGE(__func__, "Failed to register UDS route with TWAI daemon");
+			}
 			daemonSuspended = true;
-			rx_err = twai_clear_receive_queue();
-			if (rx_err != ESP_OK)
-			{
-				ESP_LOGW(__func__, "Could not clear RX queue : %s", esp_err_to_name(rx_err));
-			}
-			tx_err = twai_clear_transmit_queue();
-			if (tx_err != ESP_OK)
-			{
-				ESP_LOGW(__func__, "Could not clear TX queue : %s", esp_err_to_name(tx_err));
-			}
-			ESP_LOGI(__func__, "CAN Daemon tasks suspended for OTA transfer.");
+			ota_twai_clear_receive_queue();
+			ESP_LOGI(__func__, "TWAI UDS route registered for OTA transfer.");
 		}
 
 		// Start by sending the FF if it has not been sent yet
@@ -1296,7 +1318,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 
 			// Disable interrupts during critical FF transmission
 			// portDISABLE_INTERRUPTS();
-			tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(1000));
+			tx_err = twai_daemon_transmit(&txMsg, pdMS_TO_TICKS(1000));
 			// portENABLE_INTERRUPTS();
 
 			if (tx_err != ESP_OK) // FF is not transmitted for some hard reason
@@ -1307,8 +1329,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FF could not be transmitted.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					ota_twai_stop_listening();
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1340,7 +1361,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		int otherFrames = 0; // This should ideally be replaced by a timer
 		while (otherFrames < 500 && FC_wait)
 		{
-			rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(2000));
+			rx_err = ota_twai_receive(&rxMsg, pdMS_TO_TICKS(2000));
 			switch (rx_err)
 			{
 			case ESP_ERR_TIMEOUT: // Return on RX timed out
@@ -1351,8 +1372,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within 5s timeout.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					ota_twai_stop_listening();
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1383,8 +1403,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, out);
 						if (daemonSuspended)
 						{
-							vTaskResume(CAN_RX_tsk_hdl);
-							vTaskResume(CAN_TX_tsk_hdl);
+							ota_twai_stop_listening();
 							daemonSuspended = false;
 						}
 						return ESP_FAIL;
@@ -1402,8 +1421,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC frame RX error.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					ota_twai_stop_listening();
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1425,8 +1443,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received in 500 frames.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					ota_twai_stop_listening();
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1440,8 +1457,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within timeout.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					ota_twai_stop_listening();
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1482,7 +1498,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 
 				// Disable interrupts during critical CF transmission
 				// portDISABLE_INTERRUPTS();
-				tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(5)); // Actually ship the message
+				tx_err = twai_daemon_transmit(&txMsg, pdMS_TO_TICKS(5)); // Actually ship the message
 				// portENABLE_INTERRUPTS();
 
 				if (tx_err != ESP_OK) // Escape case for TX errors
@@ -1493,8 +1509,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "CF Frame TX error.");
 					if (daemonSuspended)
 					{
-						vTaskResume(CAN_RX_tsk_hdl);
-						vTaskResume(CAN_TX_tsk_hdl);
+						ota_twai_stop_listening();
 						daemonSuspended = false;
 					}
 					return ESP_FAIL;
@@ -1511,7 +1526,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					break;
 				}
 				// Otherwise check here for any error-coded status frame (will check later if the transfer is finished)
-				while ((twai_receive(&rxMsg, pdMS_TO_TICKS(0)) == ESP_OK) && (sentBytes != file_size))
+				while ((ota_twai_receive(&rxMsg, pdMS_TO_TICKS(0)) == ESP_OK) && (sentBytes != file_size))
 				{
 					if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x40)) // Status frame case
 					{
@@ -1524,8 +1539,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 							httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, out);
 							if (daemonSuspended)
 							{
-								vTaskResume(CAN_RX_tsk_hdl);
-								vTaskResume(CAN_TX_tsk_hdl);
+								ota_twai_stop_listening();
 								daemonSuspended = false;
 							}
 							return ESP_FAIL;
@@ -1549,8 +1563,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unexpected shipping loop error.");
 		if (daemonSuspended)
 		{
-			vTaskResume(CAN_RX_tsk_hdl);
-			vTaskResume(CAN_TX_tsk_hdl);
+			ota_twai_stop_listening();
 			daemonSuspended = false;
 		}
 		return ESP_FAIL;
@@ -1580,7 +1593,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 
 	while (otherFrames < 500 && !statusReceived)
 	{
-		rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
+		rx_err = ota_twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
 		switch (rx_err)
 		{
 		case ESP_ERR_TIMEOUT: // Return on RX timed out
@@ -1638,8 +1651,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 
 	if (daemonSuspended)
 	{
-		vTaskResume(CAN_RX_tsk_hdl);
-		vTaskResume(CAN_TX_tsk_hdl);
+		ota_twai_stop_listening();
 		daemonSuspended = false;
 	}
 	free(buf);
