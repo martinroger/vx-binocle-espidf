@@ -21,6 +21,11 @@
 - Maintain existing comments and docstrings unless explicitly asked to modify them.
 - Verify method signatures and object properties before calling them.
 
+## 5. Formatted Markdown Presentation
+- **Presentation Preference**: Whenever creating or updating a Markdown (`.md`) file in the workspace, always generate/update a corresponding **Artifact** (`user_facing: true`).
+- **Formatted Preview**: Present the output to the user as a rendered Artifact rather than relying only on the raw file diff view, so the user can immediately view formatted headings, tables, alerts, and rendered Markdown directly in the UI pane. Render the Markdown content directly as native Markdown elements (do NOT wrap the entire preview inside markdown code blocks).
+- **Workspace Sync**: Continue writing/updating the actual `.md` file in the workspace as requested, while maintaining the rendered Artifact for visual review.
+
 ---
 
 # ESP-IDF & ESP32 Specific Project Rules
