@@ -1,32 +1,29 @@
-# _Sample project_
+# Interface Board Firmware (`interface_board`)
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+`interface_board` is the central IO controller firmware driving sensor data acquisition, power rail management, and real-time CAN bus telemetry broadcasting for the digital gauge cluster system.
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+---
 
+## Technical Overview
 
+- **Target SoC**: ESP32-S3 (16MB Flash, Octal PSRAM)
+- **Target ESP-IDF Version**: ESP-IDF v6.2.0 (`eim run "<idf.py command>" master`)
+- **CAN Bus Driver**: `common/twai_daemon` (500 kbps bitrate, ISR-driven router)
+- **Message Codec**: `common/binocan` (DBC-derived C++ CAN frame encoder)
 
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
+---
 
-## Example folder contents
+## Key Hardware Functions
 
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
+- **Power Management**: Controls 5V main and 5V AUX supply channels (`init_5V_ctrl`).
+- **Analog Sensor Acquisition**: Reads coolant temperature, primary/auxiliary fuel levels, and battery voltage via ADC1/ADC2 with Simple Moving Average (`sma_filter`) noise filtering.
+- **Pulse Capture**: Measures speed sensor frequency and tachometer RPM via ESP32-S3 MCPWM capture timers.
+- **I2C Expansion & Discrete Inputs**: Reads vehicle discrete signals and light switches via TCA9555 IO expander.
+- **Persistent Mileage Tracking**: Maintains total odometer and trip metrics in dedicated NVS flash (`nvs_odo`) with wear leveling and rollback protection.
+- **Periodic CAN Publishing**: Runs FreeRTOS tasks to broadcast telemetry, odometer, board status, and diagnostic messages.
 
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
+---
 
-Below is short explanation of remaining files in the project folder.
+## Documentation
 
-```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+For a detailed architectural breakdown of hardware interfaces, sensor processing pipelines, and FreeRTOS packaging tasks, see [TOO.MD](TOO.MD).

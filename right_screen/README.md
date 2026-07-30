@@ -15,9 +15,9 @@
 
 ---
 
-## Source Parity Notice
+## Source Parity
 
-Per repository design rules (Rule 6), source files within `main/` maintain **100% byte-for-byte content parity** with `left_screen/main/`. Functional differences are differentiated strictly at compile-time via `CONFIG_RIGHT_SIDE_DISPLAY`.
+Source files within `main/` are shared and identical with `left_screen/main/`. Functional differences between screens are enabled at compile-time via `CONFIG_RIGHT_SIDE_DISPLAY`.
 
 ---
 
