@@ -71,6 +71,7 @@
           },
           {
             "type": "border",
+            "selected": 0,
             "location": "bottom",
             "children": [
               {
@@ -117,13 +118,12 @@
             {
               "type": "row",
               "id": "#b6980cab-f12a-4a29-b066-dbe81f98a72a",
-              "weight": 15,
+              "weight": 24.60624071322437,
               "children": [
                 {
                   "type": "tabset",
                   "id": "#9903ae04-9ba5-448e-a7f2-8bbe1c1d48c1",
                   "weight": 1,
-                  "selected": 2,
                   "enableClose": false,
                   "children": [
                     {
@@ -189,7 +189,7 @@
             {
               "type": "tabset",
               "id": "EDITORS",
-              "weight": 65,
+              "weight": 55.393759286775634,
               "enableDeleteWhenEmpty": false,
               "enableClose": false,
               "children": [
@@ -974,18 +974,12 @@
       "selection": {
         "0": {
           "0": {
-            "0": {
-              "1": {},
-              "2": {}
-            },
-            "1": {
-              "5": {},
-              "20": {},
-              "22": {}
-            },
             "2": {
-              "4": {},
-              "5": {}
+              "5": {},
+              "6": {
+                "$selected": true
+              },
+              "7": {}
             }
           }
         }

@@ -160,10 +160,11 @@ inline esp_err_t alt_display_st_Handler(twai_message_t *rxMsg)
         {
 
             display_board_st.lightMode = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode);
-            switch_theme(!(display_board_st.lightMode), true);
+            // switch_theme(!(display_board_st.lightMode), true); // Might conflict with headlightsOn
 
             if (display_board_st.modeLocked) // Write light mode if mode lock is engaged
             {
+                switch_theme(!(display_board_st.lightMode), true);
                 nvs_handle_t h;
                 if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
                     ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
@@ -181,7 +182,7 @@ inline esp_err_t alt_display_st_Handler(twai_message_t *rxMsg)
     {
         ESP_LOGW(__func__, "RDB light mode out of range: %d", binocan_rdb_st_msg.xdb_light_mode);
     }
-    // Mode lock
+    // Light / Dark Mode lock
     if (binocan_rdb_st_xdb_mode_lock_is_in_range(binocan_rdb_st_msg.xdb_mode_lock))
     {
         if (display_board_st.modeLocked != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock)) // Mode lock is different
