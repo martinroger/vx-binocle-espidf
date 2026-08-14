@@ -1,5 +1,5 @@
-# This file was generated using idf.py save-defconfig. It can be edited manually.
-# Espressif IoT Development Framework (ESP-IDF) 5.5.1 Project Minimal Configuration
+# This file was generated using idf.py save-defconfig or menuconfig [D] key. It can be edited manually.
+# Espressif IoT Development Framework (ESP-IDF) 5.5.5 Project Minimal Configuration
 #
 CONFIG_IDF_TARGET="esp32s3"
 CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
@@ -8,9 +8,9 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_ESPTOOLPY_HEADER_FLASHSIZE_UPDATE=y
 CONFIG_PARTITION_TABLE_CUSTOM=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitionTable.csv"
-CONFIG_SMA_2_SIZE=1
-CONFIG_SMA_3_SIZE=1
 CONFIG_USE_EXPANDER_INTERRUPT=y
+CONFIG_COOLANT_PWM_CAP_GPIO=6
+CONFIG_RPM_PWM_CAP_GPIO=4
 CONFIG_GPIO_CTRL_FUNC_IN_IRAM=y
 CONFIG_GPTIMER_CTRL_FUNC_IN_IRAM=y
 CONFIG_I2C_ISR_IRAM_SAFE=y
