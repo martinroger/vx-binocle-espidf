@@ -1,147 +1,346 @@
 #pragma once
-#include <stdio.h>
+#include "driver/mcpwm_prelude.h"
 #include "esp_log.h"
-#include "driver/ledc.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include <math.h>
+#include <stdio.h>
 
 #ifdef TAG
 #undef TAG
 #endif
 #define TAG "PWM_GEN"
 
-// #define COOLANT_PWM_BASE_FREQ_HZ 100
-// #define COOLANT_PWM_BASE_DUTY_PCT 10
-// #define RPM_PWM_BASE_FREQ_HZ 3
-// #define RPM_PWM_BASE_DUTY_PCT 50
-// #define SPEED_PWM_BASE_FREQ_HZ 3
-// #define SPEED_PWM_BASE_DUTY_PCT 50
+#define MCPWM_CHANNEL_COOLANT 0
+#define MCPWM_CHANNEL_RPM 1
+#define MCPWM_CHANNEL_SPEED 2
+#define MCPWM_CHANNEL_COUNT 3
 
-static bool active_timers[4] = {false};
+typedef struct {
+	int group_id;
+	mcpwm_timer_handle_t timer;
+	mcpwm_oper_handle_t oper;
+	mcpwm_cmpr_handle_t cmpr;
+	mcpwm_gen_handle_t gen;
+	uint32_t resolution_hz;
+	double current_freq_hz;
+	double current_duty_pct;
+	uint32_t period_ticks;
+	uint32_t cmp_ticks;
+	bool is_active;
+	bool is_initialized;
+} mcpwm_channel_ctx_t;
 
-static uint32_t duty_resolutions_bit[4] = {0};
+static mcpwm_channel_ctx_t mcpwm_channels[MCPWM_CHANNEL_COUNT] = {0};
 
-/// @brief Creator and initialisator function for the PWM sources (mostly used on the emulator board)
-/// @param timer_num Identifier of the timer used
-/// @param base_freq_hz Starting (or base) frequency, in Herz. Note that these are entire Hz steps
-/// @param output_gpio GPIO pin used to output the PWM signal
-/// @param channel Ledc channel that will be associated with this generator
-/// @param duty_pc Start duty cycle, in pc (entire pcts)
-/// @param clk_cfg Clock source. XTAL clock by default because of the low frequency range.
-/// @return ESP_OK if all set correctly, ESP_FAIL otherwise.
-esp_err_t set_pwm_generator(ledc_timer_t timer_num,
-                            uint32_t base_freq_hz,
-                            gpio_num_t output_gpio,
-                            ledc_channel_t channel,
-                            uint8_t duty_pc,
-                            ledc_clk_cfg_t clk_cfg = LEDC_USE_RC_FAST_CLK)
-{
-    // --- LEDC PWM Setup ---
-    ledc_timer_config_t ledc_timer = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .duty_resolution = (ledc_timer_bit_t)ledc_find_suitable_duty_resolution(SOC_CLK_RC_FAST_FREQ_APPROX, base_freq_hz),
-        .timer_num = timer_num,
-        .freq_hz = base_freq_hz,
-        .clk_cfg = clk_cfg,
-        .deconfigure = false};
-    duty_resolutions_bit[(uint32_t)(channel)] = (uint32_t)(ledc_timer.duty_resolution);
-    ESP_LOGI(TAG, "Channel %lu : Max duty resolution to use: %lu", (uint32_t)(channel), ledc_find_suitable_duty_resolution(SOC_CLK_RC_FAST_FREQ_APPROX, base_freq_hz));
-    if (ledc_timer_config(&ledc_timer) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to configure LEDC timer");
-        return ESP_FAIL;
-    }
-    // --- LEDC Channel Setup ---
-    ledc_channel_config_t ledc_channel = {
-        .gpio_num = output_gpio,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = channel,
-        .timer_sel = timer_num,
-        .duty = (duty_pc * (((uint32_t)1 << (uint32_t)(ledc_timer.duty_resolution)) - 1)) / 100,
-        .hpoint = 0,
-        .flags = {.output_invert = 1}};
-    if (ledc_channel_config(&ledc_channel) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to configure LEDC channel");
-        return ESP_FAIL;
-    }
-    active_timers[(int)timer_num] = true;
-    ESP_LOGI(TAG, "Ledc channel %d set up on GPIO %d", channel, (int)output_gpio);
-    return ESP_OK;
+/* =========================================================================
+ *                         MCPWM GENERATOR FUNCTIONS
+ * ========================================================================= */
+
+/// @brief Initialize an MCPWM channel with dedicated timer, operator, comparator, and generator
+/// @param channel_idx Channel index (0: Coolant, 1: RPM, 2: Speed)
+/// @param group_id MCPWM group ID (0 or 1)
+/// @param timer_clk_hz Timer clock frequency in Hz (e.g. 500kHz for Coolant/RPM in Group 0, 200kHz for Speed in Group
+/// 1)
+/// @param base_freq_hz Initial frequency in Hz
+/// @param output_gpio GPIO pin to output the PWM signal
+/// @param duty_pct Initial duty cycle in percent (0.0 to 100.0)
+/// @return ESP_OK on success, error code otherwise
+esp_err_t set_mcpwm_generator(int channel_idx, int group_id, uint32_t timer_clk_hz, double base_freq_hz,
+							  gpio_num_t output_gpio, double duty_pct) {
+	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
+		ESP_LOGE(TAG, "Invalid MCPWM channel index: %d", channel_idx);
+		return ESP_ERR_INVALID_ARG;
+	}
+
+	if (base_freq_hz <= 0.0) {
+		base_freq_hz = 100.0;
+	}
+
+	uint32_t period_ticks = (uint32_t)round((double)timer_clk_hz / base_freq_hz);
+	if (period_ticks > 65535) {
+		period_ticks = 65535;
+	}
+	if (period_ticks < 1) {
+		period_ticks = 1;
+	}
+
+	uint32_t cmp_ticks = (uint32_t)round((duty_pct * (double)period_ticks) / 100.0);
+	if (cmp_ticks > period_ticks) {
+		cmp_ticks = period_ticks;
+	}
+
+	mcpwm_channel_ctx_t *ctx = &mcpwm_channels[channel_idx];
+	ctx->group_id = group_id;
+	ctx->resolution_hz = timer_clk_hz;
+	ctx->period_ticks = period_ticks;
+	ctx->cmp_ticks = cmp_ticks;
+	ctx->current_freq_hz = (double)timer_clk_hz / (double)period_ticks;
+	ctx->current_duty_pct = (100.0 * (double)cmp_ticks) / (double)period_ticks;
+
+	// 1. Create Timer
+	mcpwm_timer_config_t timer_config = {
+		.group_id = group_id,
+		.clk_src = MCPWM_TIMER_CLK_SRC_DEFAULT,
+		.resolution_hz = timer_clk_hz,
+		.count_mode = MCPWM_TIMER_COUNT_MODE_UP,
+		.period_ticks = period_ticks,
+		.flags =
+			{
+				.update_period_on_empty = false,
+				.update_period_on_sync = false,
+			},
+	};
+	esp_err_t ret = mcpwm_new_timer(&timer_config, &ctx->timer);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to create MCPWM timer for channel %d (group %d): %s", channel_idx, group_id,
+				 esp_err_to_name(ret));
+		return ret;
+	}
+
+	// 2. Create Operator
+	mcpwm_operator_config_t operator_config = {
+		.group_id = group_id,
+	};
+	ret = mcpwm_new_operator(&operator_config, &ctx->oper);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to create MCPWM operator for channel %d (group %d): %s", channel_idx, group_id,
+				 esp_err_to_name(ret));
+		return ret;
+	}
+
+	ret = mcpwm_operator_connect_timer(ctx->oper, ctx->timer);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to connect timer to operator for channel %d: %s", channel_idx, esp_err_to_name(ret));
+		return ret;
+	}
+
+	// 3. Create Comparator
+	mcpwm_comparator_config_t comparator_config = {
+		.flags =
+			{
+				.update_cmp_on_tez = false,
+				.update_cmp_on_tep = false,
+				.update_cmp_on_sync = false,
+			},
+	};
+	ret = mcpwm_new_comparator(ctx->oper, &comparator_config, &ctx->cmpr);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to create MCPWM comparator for channel %d: %s", channel_idx, esp_err_to_name(ret));
+		return ret;
+	}
+
+	ret = mcpwm_comparator_set_compare_value(ctx->cmpr, cmp_ticks);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to set compare value for channel %d: %s", channel_idx, esp_err_to_name(ret));
+		return ret;
+	}
+
+	// 4. Create Generator
+	mcpwm_generator_config_t generator_config = {
+		.gen_gpio_num = output_gpio,
+	};
+	ret = mcpwm_new_generator(ctx->oper, &generator_config, &ctx->gen);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to create MCPWM generator for channel %d: %s", channel_idx, esp_err_to_name(ret));
+		return ret;
+	}
+
+	// 5. Configure Generator actions: HIGH on TEZ (counter=0), LOW on Compare match
+	ret = mcpwm_generator_set_action_on_timer_event(
+		ctx->gen,
+		MCPWM_GEN_TIMER_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, MCPWM_TIMER_EVENT_EMPTY, MCPWM_GEN_ACTION_HIGH));
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to set timer event action for channel %d: %s", channel_idx, esp_err_to_name(ret));
+		return ret;
+	}
+
+	ret = mcpwm_generator_set_action_on_compare_event(
+		ctx->gen, MCPWM_GEN_COMPARE_EVENT_ACTION(MCPWM_TIMER_DIRECTION_UP, ctx->cmpr, MCPWM_GEN_ACTION_LOW));
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to set compare event action for channel %d: %s", channel_idx, esp_err_to_name(ret));
+		return ret;
+	}
+
+	// 6. Enable and Start Timer
+	ret = mcpwm_timer_enable(ctx->timer);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to enable MCPWM timer for channel %d: %s", channel_idx, esp_err_to_name(ret));
+		return ret;
+	}
+
+	ret = mcpwm_timer_start_stop(ctx->timer, MCPWM_TIMER_START_NO_STOP);
+	if (ret != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to start MCPWM timer for channel %d: %s", channel_idx, esp_err_to_name(ret));
+		return ret;
+	}
+
+	ctx->is_active = true;
+	ctx->is_initialized = true;
+
+	ESP_LOGI(TAG,
+			 "MCPWM channel %d initialized on GPIO %d [Group %d] (Clk: %lu Hz, Period: %lu ticks, Freq: %.4f Hz, Duty: "
+			 "%.4f%%)",
+			 channel_idx, (int)output_gpio, group_id, timer_clk_hz, period_ticks, ctx->current_freq_hz,
+			 ctx->current_duty_pct);
+
+	return ESP_OK;
 }
 
-/// @brief Wrapper function to update a channel duty cycle specified in pct, assumes 14bit precision
-/// @param channel PWM generator channel
-/// @param duty_pc Integral value for the target duty cycle, in percents
-/// @return ESP_OK if set and updated without issue, various error messages otherwise
-esp_err_t change_duty_cycle(ledc_channel_t channel, double duty_pc)
-{
+/// @brief Pause an MCPWM channel (forces output level to LOW)
+esp_err_t pause_mcpwm_channel(int channel_idx) {
+	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
+		return ESP_ERR_INVALID_ARG;
+	}
+	mcpwm_channel_ctx_t *ctx = &mcpwm_channels[channel_idx];
+	if (!ctx->is_initialized) {
+		return ESP_ERR_INVALID_STATE;
+	}
 
-    if (channel < LEDC_CHANNEL_0 || channel >= LEDC_CHANNEL_MAX)
-    {
-        ESP_LOGE(TAG, "Invalid channel %d", (int)channel);
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (duty_pc > 100.0 || duty_pc < 0 )
-    {
-        ESP_LOGE(TAG, "Duty cycle must be between 0 and 100, got %.2f", duty_pc);
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    if (active_timers[(int)channel] != true)
-    {
-        ledc_timer_resume(LEDC_LOW_SPEED_MODE, (ledc_timer_t)channel);
-        active_timers[(int)channel] = true;
-    }
-    
-    uint32_t duty = (uint32_t)((duty_pc * (((uint32_t)1 << duty_resolutions_bit[(uint32_t)channel]) - 1)) / 100.0);
-    esp_err_t err = ledc_set_duty(LEDC_LOW_SPEED_MODE, channel, duty);
-    if (err != ESP_OK)
-        return err;
-    return ledc_update_duty(LEDC_LOW_SPEED_MODE, channel);
+	mcpwm_generator_set_force_level(ctx->gen, 0, true);
+	ctx->is_active = false;
+	return ESP_OK;
 }
 
-/// @brief Wrapper function to update the timer of a PWM generator to update the frequency
-/// @param channel LedC channel to update. This will map each channel to each timer (with same index number)
-/// @param freq_hz Target frequency. Will throw an error if impossible to update because out of feasible range.
-/// @return ESP_OK if all good, various errors otherwise
-esp_err_t change_frequency(ledc_channel_t channel, uint32_t freq_hz)
-{
-    // Find the timer associated with the channel
-    ledc_timer_t timer_sel = LEDC_TIMER_0;
-    switch (channel)
-    {
-    case LEDC_CHANNEL_0:
-        timer_sel = LEDC_TIMER_0;
-        break;
-    case LEDC_CHANNEL_1:
-        timer_sel = LEDC_TIMER_1;
-        break;
-    case LEDC_CHANNEL_2:
-        timer_sel = LEDC_TIMER_2;
-        break;
-    case LEDC_CHANNEL_3:
-        timer_sel = LEDC_TIMER_3;
-        break;
-    case LEDC_CHANNEL_4:
-        timer_sel = LEDC_TIMER_3;
-        break;
-    default:
-        return ESP_ERR_INVALID_ARG;
-        break;
-    }
+/// @brief Resume a paused MCPWM channel (releases forced level back to active PWM)
+esp_err_t resume_mcpwm_channel(int channel_idx) {
+	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
+		return ESP_ERR_INVALID_ARG;
+	}
+	mcpwm_channel_ctx_t *ctx = &mcpwm_channels[channel_idx];
+	if (!ctx->is_initialized) {
+		return ESP_ERR_INVALID_STATE;
+	}
 
-    if (freq_hz < 3)
-    {
-        ESP_LOGW(TAG, "Frequency must be greater than 3Hz, got %lu Hz, pausing channel", freq_hz);
-        ledc_timer_pause(LEDC_LOW_SPEED_MODE, (ledc_timer_t)channel);
-        active_timers[(int)channel] = false;
-        return ESP_OK;
-    }
-    else
-    {
-        ledc_timer_resume(LEDC_LOW_SPEED_MODE, timer_sel);
-        active_timers[(int)channel] = true;
-        return ledc_set_freq(LEDC_LOW_SPEED_MODE, timer_sel, freq_hz);
-    }
+	mcpwm_generator_set_force_level(ctx->gen, -1, true);
+	ctx->is_active = true;
+	return ESP_OK;
 }
+
+/// @brief Update duty cycle of an MCPWM channel (0.0 to 100.0%)
+esp_err_t change_mcpwm_duty_cycle(int channel_idx, double duty_pct) {
+	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
+		ESP_LOGE(TAG, "Invalid MCPWM channel %d", channel_idx);
+		return ESP_ERR_INVALID_ARG;
+	}
+	if (duty_pct > 100.0 || duty_pct < 0.0) {
+		ESP_LOGE(TAG, "Duty cycle must be between 0 and 100, got %.2f", duty_pct);
+		return ESP_ERR_INVALID_ARG;
+	}
+	mcpwm_channel_ctx_t *ctx = &mcpwm_channels[channel_idx];
+	if (!ctx->is_initialized) {
+		return ESP_ERR_INVALID_STATE;
+	}
+
+	uint32_t cmp_ticks = (uint32_t)round((duty_pct * (double)ctx->period_ticks) / 100.0);
+	if (cmp_ticks > ctx->period_ticks) {
+		cmp_ticks = ctx->period_ticks;
+	}
+
+	ctx->cmp_ticks = cmp_ticks;
+	ctx->current_duty_pct = (100.0 * (double)cmp_ticks) / (double)ctx->period_ticks;
+
+	esp_err_t ret = mcpwm_comparator_set_compare_value(ctx->cmpr, cmp_ticks);
+	if (ret != ESP_OK) {
+		return ret;
+	}
+
+	if (ctx->is_active) {
+		mcpwm_generator_set_force_level(ctx->gen, -1, true);
+	}
+	return ESP_OK;
+}
+
+/// @brief Update frequency of an MCPWM channel (in Hz)
+esp_err_t change_mcpwm_frequency(int channel_idx, double freq_hz) {
+	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
+		ESP_LOGE(TAG, "Invalid MCPWM channel %d", channel_idx);
+		return ESP_ERR_INVALID_ARG;
+	}
+	mcpwm_channel_ctx_t *ctx = &mcpwm_channels[channel_idx];
+	if (!ctx->is_initialized) {
+		return ESP_ERR_INVALID_STATE;
+	}
+
+	if (freq_hz < 3.0) {
+		pause_mcpwm_channel(channel_idx);
+		ctx->current_freq_hz = 0.0;
+		return ESP_OK;
+	}
+
+	uint32_t period_ticks = (uint32_t)round((double)ctx->resolution_hz / freq_hz);
+	if (period_ticks > 65535) {
+		period_ticks = 65535;
+	}
+	if (period_ticks < 1) {
+		period_ticks = 1;
+	}
+
+	ctx->period_ticks = period_ticks;
+	ctx->current_freq_hz = (double)ctx->resolution_hz / (double)period_ticks;
+
+	esp_err_t ret = mcpwm_timer_set_period(ctx->timer, period_ticks);
+	if (ret != ESP_OK) {
+		return ret;
+	}
+
+	// Scale comparator threshold to preserve existing duty percentage
+	uint32_t cmp_ticks = (uint32_t)round((ctx->current_duty_pct * (double)period_ticks) / 100.0);
+	if (cmp_ticks > period_ticks) {
+		cmp_ticks = period_ticks;
+	}
+	ctx->cmp_ticks = cmp_ticks;
+	ctx->current_duty_pct = (100.0 * (double)cmp_ticks) / (double)period_ticks;
+
+	ret = mcpwm_comparator_set_compare_value(ctx->cmpr, cmp_ticks);
+	if (ret != ESP_OK) {
+		return ret;
+	}
+
+	if (!ctx->is_active) {
+		resume_mcpwm_channel(channel_idx);
+	} else {
+		mcpwm_generator_set_force_level(ctx->gen, -1, true);
+	}
+
+	return ESP_OK;
+}
+
+bool is_mcpwm_channel_active(int channel_idx) {
+	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
+		return false;
+	}
+	return mcpwm_channels[channel_idx].is_active;
+}
+
+double get_mcpwm_actual_freq(int channel_idx) {
+	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
+		return 0.0;
+	}
+	return mcpwm_channels[channel_idx].current_freq_hz;
+}
+
+double get_mcpwm_actual_duty(int channel_idx) {
+	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
+		return 0.0;
+	}
+	return mcpwm_channels[channel_idx].current_duty_pct;
+}
+
+/* =========================================================================
+ *                         CONVENIENCE WRAPPERS
+ * ========================================================================= */
+
+esp_err_t change_duty_cycle(int channel, double duty_pc) { return change_mcpwm_duty_cycle(channel, duty_pc); }
+
+esp_err_t change_frequency(int channel, double freq_hz) { return change_mcpwm_frequency(channel, freq_hz); }
+
+bool is_channel_active(int channel) { return is_mcpwm_channel_active(channel); }
+
+esp_err_t pause_channel(int channel) { return pause_mcpwm_channel(channel); }
+
+esp_err_t resume_channel(int channel) { return resume_mcpwm_channel(channel); }
+
+double get_channel_actual_duty(int channel) { return get_mcpwm_actual_duty(channel); }
+
+double get_channel_actual_freq(int channel) { return get_mcpwm_actual_freq(channel); }

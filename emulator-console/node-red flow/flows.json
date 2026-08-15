@@ -3074,6 +3074,19 @@
             {
                 "name": "trim",
                 "params": []
+            },
+            {
+                "name": "chompRight",
+                "params": [
+                    {
+                        "type": "str",
+                        "value": "degC"
+                    }
+                ]
+            },
+            {
+                "name": "trim",
+                "params": []
             }
         ],
         "prop": "payload",
@@ -7633,7 +7646,7 @@
         }
     },
     {
-        "id": "39f9769c2a177f18",
+        "id": "687de82ad357822f",
         "type": "global-config",
         "env": [],
         "modules": {
