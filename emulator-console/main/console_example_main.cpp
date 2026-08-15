@@ -141,6 +141,7 @@ extern "C" void app_main(void) {
 	register_setSpeedKPH();
 	register_setSpeedMPH();
 	register_getSpeed();
+	register_pwm();
 
 	register_setExpIO();
 	register_printExpStatus();

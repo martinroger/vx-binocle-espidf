@@ -1017,3 +1017,126 @@ static void register_getSpeed(void) {
 }
 
 #pragma endregion
+
+// Combined PWM setter (Speed, RPM, Coolant)
+static struct {
+	struct arg_dbl *speed;
+	struct arg_int *rpm;
+	struct arg_dbl *temperature;
+	struct arg_end *end;
+} pwm_args;
+
+static int pwm(int argc, char **argv) {
+	int nerrors = arg_parse(argc, argv, (void **)&pwm_args);
+	if (nerrors != 0) {
+		arg_print_errors(stderr, pwm_args.end, argv[0]);
+		return 1;
+	}
+	assert((pwm_args.speed->count == 1) && (pwm_args.rpm->count == 1) && (pwm_args.temperature->count == 1));
+
+	const int speed_channel = MCPWM_CHANNEL_SPEED;
+	const int rpm_channel = MCPWM_CHANNEL_RPM;
+	const int cool_channel = MCPWM_CHANNEL_COOLANT;
+	const double speed_duty = 50.0;
+	const double rpm_duty = 33.0;
+	const double coolant_freq = 100.0;
+
+	// Coolant temperature
+	double target_temperature = pwm_args.temperature->dval[0];
+	if (target_temperature < 70.0) {
+		target_temperature = 70.0;
+	} else if (target_temperature > 130.0) {
+		target_temperature = 130.0;
+	}
+
+	double target_coolant_duty = (double)((target_temperature)*COEFF_COOLANT_DEGC_TO_DUTY_M + COEFF_COOLANT_DEGC_TO_DUTY_P);
+	if (target_coolant_duty > 100.0 || target_coolant_duty < 0.0) {
+		return 1;
+	}
+
+	if (!is_channel_active(cool_channel)) {
+		resume_channel(cool_channel);
+	}
+	if (change_duty_cycle(cool_channel, target_coolant_duty) != ESP_OK) {
+		return 1;
+	}
+	if (change_frequency(cool_channel, coolant_freq) != ESP_OK) {
+		return 1;
+	}
+
+	// Speed in KPH
+	double target_speed = pwm_args.speed->dval[0];
+	if (target_speed > MAX_SPEED_KPH) {
+		target_speed = MAX_SPEED_KPH;
+	}
+	if (target_speed < 0.0) {
+		return 1;
+	}
+
+	double target_speed_f = target_speed * COEFF_SPEED_KPH_TO_FREQ_M + COEFF_SPEED_KPH_TO_FREQ_P;
+	if (target_speed_f < 3.0 || target_speed <= 0.0) {
+		current_speed_kph = 0.0;
+		current_speed_mph = 0.0;
+		pause_channel(speed_channel);
+	} else {
+		if (!is_channel_active(speed_channel)) {
+			resume_channel(speed_channel);
+		}
+		if (change_frequency(speed_channel, target_speed_f) != ESP_OK) {
+			return 1;
+		}
+		if (change_duty_cycle(speed_channel, speed_duty) != ESP_OK) {
+			return 1;
+		}
+		double actual_speed_f = get_channel_actual_freq(speed_channel);
+		double actual_speed = (COEFF_FREQ_TO_SPEED_KPH_M * actual_speed_f + COEFF_FREQ_TO_SPEED_KPH_P);
+		current_speed_kph = actual_speed;
+		current_speed_mph = actual_speed / 1.60934;
+	}
+
+	// RPM
+	int raw_rpm = pwm_args.rpm->ival[0];
+	uint32_t target_rpm = (raw_rpm > 0) ? (uint32_t)raw_rpm : 0;
+	if (target_rpm < 250 && target_rpm != 0) {
+		target_rpm = 250;
+	} else if (target_rpm > 9000) {
+		target_rpm = 9000;
+	}
+
+	double target_rpm_f = (double)target_rpm * COEFF_RPM_TO_FREQ_M + COEFF_RPM_TO_FREQ_P;
+	if (target_rpm_f < 3.0 || target_rpm == 0) {
+		current_rpm = 0;
+		pause_channel(rpm_channel);
+	} else {
+		if (!is_channel_active(rpm_channel)) {
+			resume_channel(rpm_channel);
+		}
+		if (change_frequency(rpm_channel, target_rpm_f) != ESP_OK) {
+			return 1;
+		}
+		if (change_duty_cycle(rpm_channel, rpm_duty) != ESP_OK) {
+			return 1;
+		}
+		double actual_rpm_f = get_channel_actual_freq(rpm_channel);
+		uint32_t actual_rpm = (uint32_t)(COEFF_FREQ_TO_RPM_M * actual_rpm_f + COEFF_FREQ_TO_RPM_P);
+		current_rpm = actual_rpm;
+	}
+
+	return 0;
+}
+
+static void register_pwm(void) {
+	pwm_args.speed = arg_dbl1(NULL, NULL, "<speed>", "Speed in kph");
+	pwm_args.rpm = arg_int1(NULL, NULL, "<rpm>", "RPM (integer)");
+	pwm_args.temperature = arg_dbl1(NULL, NULL, "<temperature>", "Coolant temperature in °C");
+	pwm_args.end = arg_end(5);
+
+	const esp_console_cmd_t cmd = {
+		.command = "pwm",
+		.help = "Set PWM values (speed in kph, rpm, temperature in degC)",
+		.hint = NULL,
+		.func = &pwm,
+		.argtable = &pwm_args,
+	};
+	ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
