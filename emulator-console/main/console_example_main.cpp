@@ -79,21 +79,21 @@ static void initialize_nvs(void)
     ESP_ERROR_CHECK(err);
 }
 
-ledc_channel_t pwm_gen_coolant = LEDC_CHANNEL_0;
-ledc_channel_t pwm_gen_rpm = LEDC_CHANNEL_1;
-ledc_channel_t pwm_gen_speed = LEDC_CHANNEL_2;
+int pwm_gen_coolant = MCPWM_CHANNEL_COOLANT;
+int pwm_gen_rpm = MCPWM_CHANNEL_RPM;
+int pwm_gen_speed = MCPWM_CHANNEL_SPEED;
 
 extern "C" void app_main(void)
 {
-    // Initialize and start the PWM generators
-    set_pwm_generator(LEDC_TIMER_0, CONFIG_COOLANT_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_COOLANT_PWM_GEN_GPIO, pwm_gen_coolant, CONFIG_COOLANT_PWM_BASE_DUTY_PCT);
-    set_pwm_generator(LEDC_TIMER_1, CONFIG_RPM_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_RPM_PWM_GEN_GPIO, pwm_gen_rpm, CONFIG_RPM_PWM_BASE_DUTY_PCT);
-    if (change_frequency(pwm_gen_rpm, 0) != ESP_OK)
+    // Initialize and start the MCPWM generators
+    set_mcpwm_generator(MCPWM_CHANNEL_COOLANT, 1000000, CONFIG_COOLANT_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_COOLANT_PWM_GEN_GPIO, CONFIG_COOLANT_PWM_BASE_DUTY_PCT);
+    set_mcpwm_generator(MCPWM_CHANNEL_RPM, 500000, CONFIG_RPM_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_RPM_PWM_GEN_GPIO, CONFIG_RPM_PWM_BASE_DUTY_PCT);
+    if (change_frequency(MCPWM_CHANNEL_RPM, 0) != ESP_OK)
     {
         ESP_LOGW("Setup", "Impossible to stop RPM PWM");
     }
-    set_pwm_generator(LEDC_TIMER_2, CONFIG_SPEED_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_SPEED_PWM_GEN_GPIO, pwm_gen_speed, CONFIG_SPEED_PWM_BASE_DUTY_PCT);
-    if (change_frequency(pwm_gen_speed, 0) != ESP_OK)
+    set_mcpwm_generator(MCPWM_CHANNEL_SPEED, 200000, CONFIG_SPEED_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_SPEED_PWM_GEN_GPIO, CONFIG_SPEED_PWM_BASE_DUTY_PCT);
+    if (change_frequency(MCPWM_CHANNEL_SPEED, 0) != ESP_OK)
     {
         ESP_LOGW("Setup", "Impossible to stop Speed PWM");
     }

@@ -22,12 +22,12 @@ ledc_channel_t dac_pwm_lv = LEDC_CHANNEL_4;
 esp_err_t initialize_dacpwm()
 {
 
-    if (set_pwm_generator(LEDC_TIMER_3, 5000, (gpio_num_t)CONFIG_DAC0_PIN, dac_pwm_fuel, 50) != ESP_OK)
+    if (set_ledc_generator(LEDC_TIMER_3, 5000, (gpio_num_t)CONFIG_DAC0_PIN, dac_pwm_fuel, 50) != ESP_OK)
     {
         ESP_LOGE(TAG, "Couldn't start fuel DAC PWM");
         return ESP_FAIL;
     }
-    if (set_pwm_generator(LEDC_TIMER_3, 5000, (gpio_num_t)CONFIG_DAC1_PIN, dac_pwm_lv, 50) != ESP_OK)
+    if (set_ledc_generator(LEDC_TIMER_3, 5000, (gpio_num_t)CONFIG_DAC1_PIN, dac_pwm_lv, 50) != ESP_OK)
     {
         ESP_LOGE(TAG, "Couldn't start fuel DAC PWM");
         return ESP_FAIL;
@@ -78,8 +78,8 @@ static int set_fuel_v(int argc, char **argv)
     }
 
 
-    target_duty = (uint32_t)((((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1)*(target_voltage/3.3));
-    printf("Calculated target duty: %.2f pc\n", (100.0*target_duty)/(((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
+    target_duty = (uint32_t)((((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1)*(target_voltage/3.3));
+    printf("Calculated target duty: %.2f pc\n", (100.0*target_duty)/(((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
 
     if (ledc_set_duty(LEDC_LOW_SPEED_MODE, targetChannel,target_duty) != ESP_OK)
     {
@@ -92,7 +92,7 @@ static int set_fuel_v(int argc, char **argv)
         return 1;
     }
     vTaskDelay(pdMS_TO_TICKS(100));
-    printf("Actual target voltage: %.4f\n",(3.3*ledc_get_duty(LEDC_LOW_SPEED_MODE,targetChannel))/(((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
+    printf("Actual target voltage: %.4f\n",(3.3*ledc_get_duty(LEDC_LOW_SPEED_MODE,targetChannel))/(((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
     return 0;
 }
 
@@ -127,8 +127,8 @@ static int set_fuel_pc(int argc, char **argv)
 
     double target_voltage = COEFF_FUEL_PC_TO_V_M*target_level_pc+COEFF_FUEL_PC_TO_V_P;
 
-    target_duty = (uint32_t)((((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1)*(target_voltage/3.3));
-    printf("Calculated target duty: %.2f pc\n", (100.0*target_duty)/(((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
+    target_duty = (uint32_t)((((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1)*(target_voltage/3.3));
+    printf("Calculated target duty: %.2f pc\n", (100.0*target_duty)/(((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
 
     if (ledc_set_duty(LEDC_LOW_SPEED_MODE, targetChannel,target_duty) != ESP_OK)
     {
@@ -141,7 +141,7 @@ static int set_fuel_pc(int argc, char **argv)
         return 1;
     }
     vTaskDelay(pdMS_TO_TICKS(100));
-    printf("Actual target voltage: %.4f\n",(3.3*ledc_get_duty(LEDC_LOW_SPEED_MODE,targetChannel))/(((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
+    printf("Actual target voltage: %.4f\n",(3.3*ledc_get_duty(LEDC_LOW_SPEED_MODE,targetChannel))/(((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
     return 0;
 }
 
@@ -176,8 +176,8 @@ static int set_lv_v(int argc, char **argv)
 
     double target_lv_voltage = COEFF_LV_TO_V_M*target_voltage+COEFF_LV_TO_V_P;
 
-    target_duty = (uint32_t)((((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1)*(target_lv_voltage/3.3));
-    printf("Calculated target duty: %.2f pc\n", (100.0*target_duty)/(((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
+    target_duty = (uint32_t)((((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1)*(target_lv_voltage/3.3));
+    printf("Calculated target duty: %.2f pc\n", (100.0*target_duty)/(((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
 
     if (ledc_set_duty(LEDC_LOW_SPEED_MODE, targetChannel,target_duty) != ESP_OK)
     {
@@ -190,7 +190,7 @@ static int set_lv_v(int argc, char **argv)
         return 1;
     }
     vTaskDelay(pdMS_TO_TICKS(100));
-    printf("Actual target voltage: %.4f\n",(3.3*ledc_get_duty(LEDC_LOW_SPEED_MODE,targetChannel))/(((uint32_t)1 << duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
+    printf("Actual target voltage: %.4f\n",(3.3*ledc_get_duty(LEDC_LOW_SPEED_MODE,targetChannel))/(((uint32_t)1 << ledc_duty_resolutions_bit[(uint32_t)targetChannel]) - 1));
     return 0;
 }
 
