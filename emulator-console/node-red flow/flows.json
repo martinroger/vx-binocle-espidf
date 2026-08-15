@@ -3,7 +3,7 @@
         "id": "236d17f0ee9c01ae",
         "type": "tab",
         "label": "Emulator Console Interface",
-        "disabled": true,
+        "disabled": false,
         "info": "",
         "env": []
     },
@@ -3068,6 +3068,19 @@
                     {
                         "type": "str",
                         "value": "esp32s3#"
+                    }
+                ]
+            },
+            {
+                "name": "trim",
+                "params": []
+            },
+            {
+                "name": "chompRight",
+                "params": [
+                    {
+                        "type": "str",
+                        "value": "degC"
                     }
                 ]
             },
@@ -7633,7 +7646,7 @@
         }
     },
     {
-        "id": "a08bc1c09bea48e4",
+        "id": "687de82ad357822f",
         "type": "global-config",
         "env": [],
         "modules": {
