@@ -12,7 +12,7 @@
 #include "esp_ota_ops.h"
 
 #include "adc_processor.h"
-#include "sma_filter.h"
+// #include "sma_filter.h"
 
 #include "global_vars.hpp"
 #include "twai_ops.hpp"
@@ -495,7 +495,7 @@ extern "C" void app_main(void)
         interface_board_st.adc_ST = false;
         attemptRollBack();
     }
-    if (initialize_adc_processor() != ESP_OK) // ADC processor
+    if (initialize_ADC_processor() != ESP_OK) // ADC processor
     {
         ESP_LOGE(TAG, "Could not start ADC processor");
         interface_board_st.adc_ST = false;
