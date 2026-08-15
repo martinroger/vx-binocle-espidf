@@ -7,23 +7,22 @@
    CONDITIONS OF ANY KIND, either express or implied.
 */
 
-#include <stdio.h>
-#include <string.h>
-#include "esp_system.h"
-#include "esp_log.h"
+#include "cmd_nvs.h"
+#include "cmd_system.h"
+#include "cmd_wifi.h"
 #include "esp_console.h"
+#include "esp_log.h"
+#include "esp_system.h"
 #include "esp_vfs_dev.h"
 #include "esp_vfs_fat.h"
 #include "nvs.h"
 #include "nvs_flash.h"
-#include "cmd_system.h"
-#include "cmd_wifi.h"
-#include "cmd_nvs.h"
+#include <stdio.h>
+#include <string.h>
 // #include "gpio_defs.h"
-#include "pwm_console_cmds.h"
-#include "gpio_exp_console_cmds.h"
-#include "dac_PWM_output_cmds.h"
 #include "general_cmds.h"
+#include "gpio_exp_console_cmds.h"
+#include "pwm_console_cmds.h"
 
 /*
  * We warn if a secondary serial console is enabled. A secondary serial console is always output-only and
@@ -52,130 +51,122 @@
 #define MOUNT_PATH "/data"
 #define HISTORY_PATH MOUNT_PATH "/history.txt"
 
-static void initialize_filesystem(void)
-{
-    static wl_handle_t wl_handle;
-    const esp_vfs_fat_mount_config_t mount_config = {
+static void initialize_filesystem(void) {
+	static wl_handle_t wl_handle;
+	const esp_vfs_fat_mount_config_t mount_config = {
 
-        .format_if_mount_failed = true,
-        .max_files = 4};
-    esp_err_t err = esp_vfs_fat_spiflash_mount_rw_wl(MOUNT_PATH, "storage", &mount_config, &wl_handle);
-    if (err != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Failed to mount FATFS (%s)", esp_err_to_name(err));
-        return;
-    }
+		.format_if_mount_failed = true, .max_files = 4};
+	esp_err_t err = esp_vfs_fat_spiflash_mount_rw_wl(MOUNT_PATH, "storage", &mount_config, &wl_handle);
+	if (err != ESP_OK) {
+		ESP_LOGE(TAG, "Failed to mount FATFS (%s)", esp_err_to_name(err));
+		return;
+	}
 }
 #endif // CONFIG_STORE_HISTORY
 
-static void initialize_nvs(void)
-{
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
-    {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(err);
+static void initialize_nvs(void) {
+	esp_err_t err = nvs_flash_init();
+	if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+		ESP_ERROR_CHECK(nvs_flash_erase());
+		err = nvs_flash_init();
+	}
+	ESP_ERROR_CHECK(err);
 }
 
-ledc_channel_t pwm_gen_coolant = LEDC_CHANNEL_0;
-ledc_channel_t pwm_gen_rpm = LEDC_CHANNEL_1;
-ledc_channel_t pwm_gen_speed = LEDC_CHANNEL_2;
+int pwm_gen_coolant = MCPWM_CHANNEL_COOLANT;
+int pwm_gen_rpm = MCPWM_CHANNEL_RPM;
+int pwm_gen_speed = MCPWM_CHANNEL_SPEED;
 
-extern "C" void app_main(void)
-{
-    // Initialize and start the PWM generators
-    set_pwm_generator(LEDC_TIMER_0, CONFIG_COOLANT_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_COOLANT_PWM_GEN_GPIO, pwm_gen_coolant, CONFIG_COOLANT_PWM_BASE_DUTY_PCT);
-    set_pwm_generator(LEDC_TIMER_1, CONFIG_RPM_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_RPM_PWM_GEN_GPIO, pwm_gen_rpm, CONFIG_RPM_PWM_BASE_DUTY_PCT);
-    if (change_frequency(pwm_gen_rpm, 0) != ESP_OK)
-    {
-        ESP_LOGW("Setup", "Impossible to stop RPM PWM");
-    }
-    set_pwm_generator(LEDC_TIMER_2, CONFIG_SPEED_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_SPEED_PWM_GEN_GPIO, pwm_gen_speed, CONFIG_SPEED_PWM_BASE_DUTY_PCT);
-    if (change_frequency(pwm_gen_speed, 0) != ESP_OK)
-    {
-        ESP_LOGW("Setup", "Impossible to stop Speed PWM");
-    }
+extern "C" void app_main(void) {
+	// Initialize and start the MCPWM generators
+	// Group 0: Coolant (500 kHz clock, 100 Hz base frequency)
+	set_mcpwm_generator(MCPWM_CHANNEL_COOLANT, 0, 500000, CONFIG_COOLANT_PWM_BASE_FREQ_HZ,
+						(gpio_num_t)CONFIG_COOLANT_PWM_GEN_GPIO, CONFIG_COOLANT_PWM_BASE_DUTY_PCT);
+	// Group 0: RPM (500 kHz clock, 100 Hz base frequency, initially paused)
+	set_mcpwm_generator(MCPWM_CHANNEL_RPM, 0, 500000, CONFIG_RPM_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_RPM_PWM_GEN_GPIO,
+						CONFIG_RPM_PWM_BASE_DUTY_PCT);
+	pause_channel(MCPWM_CHANNEL_RPM);
 
-    initialize_dacpwm();
+	// Group 1: Speed (200 kHz clock, 100 Hz base frequency, initially paused)
+	set_mcpwm_generator(MCPWM_CHANNEL_SPEED, 1, 200000, CONFIG_SPEED_PWM_BASE_FREQ_HZ,
+						(gpio_num_t)CONFIG_SPEED_PWM_GEN_GPIO, CONFIG_SPEED_PWM_BASE_DUTY_PCT);
+	pause_channel(MCPWM_CHANNEL_SPEED);
 
-    // Initialize the IO expander controlling the Active High and Low outputs
-    initialize_expanders();
+	// Initialize the IO expander controlling the Active High and Low outputs
+	initialize_expanders();
 
-    // Initialize console objects
-    esp_console_repl_t *repl = NULL;
-    esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-    /* Prompt to be printed before each line.
-     * This can be customized, made dynamic, etc.
-     */
-    repl_config.prompt = PROMPT_STR "#";
-    repl_config.max_cmdline_length = CONFIG_CONSOLE_MAX_COMMAND_LINE_LENGTH;
+	// Initialize console objects
+	esp_console_repl_t *repl = NULL;
+	esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
+	/* Prompt to be printed before each line.
+	 * This can be customized, made dynamic, etc.
+	 */
+	repl_config.prompt = PROMPT_STR "#";
+	repl_config.max_cmdline_length = CONFIG_CONSOLE_MAX_COMMAND_LINE_LENGTH;
 
-    initialize_nvs();
+	initialize_nvs();
 
 #if CONFIG_CONSOLE_STORE_HISTORY
-    initialize_filesystem();
-    repl_config.history_save_path = HISTORY_PATH;
-    ESP_LOGI(TAG, "Command history enabled");
+	initialize_filesystem();
+	repl_config.history_save_path = HISTORY_PATH;
+	ESP_LOGI(TAG, "Command history enabled");
 #else
-    ESP_LOGI(TAG, "Command history disabled");
+	ESP_LOGI(TAG, "Command history disabled");
 #endif
 
-    /* Register commands */
-    esp_console_register_help_command();
-    register_system_common();
+	/* Register commands */
+	esp_console_register_help_command();
+	register_system_common();
 #if SOC_LIGHT_SLEEP_SUPPORTED
-    register_system_light_sleep();
+	register_system_light_sleep();
 #endif
 #if SOC_DEEP_SLEEP_SUPPORTED
-    register_system_deep_sleep();
+	register_system_deep_sleep();
 #endif
 #if (CONFIG_ESP_WIFI_ENABLED || CONFIG_ESP_HOST_WIFI_ENABLED)
-    register_wifi();
+	register_wifi();
 #endif
-    register_nvs();
+	register_nvs();
 
-    // Homemade commands.
-    register_set_5V();
-    register_set_channel_duty_freq();
-    register_set_channel_duty();
-    register_set_channel_freq();
-    register_getChannelsInfo();
-    register_setCoolant();
-    register_getCoolant();
-    register_setRPM();
-    register_getRPM();
-    register_setSpeedKPH();
-    register_setSpeedMPH();
-    register_getSpeed();
-    register_pwm();
+	// Homemade commands.
+	register_set_5V();
+	register_set_channel_duty_freq();
+	register_set_channel_duty();
+	register_set_channel_freq();
+	register_getChannelsInfo();
+	register_setCoolant();
+	register_getCoolant();
+	register_setRPM();
+	register_getRPM();
+	register_setSpeedKPH();
+	register_setSpeedMPH();
+	register_getSpeed();
+	register_pwm();
 
-    register_setExpIO();
-    register_printExpStatus();
-    register_set_shortcuts();
-    register_dac_pwms();
-    register_setAllExpIO();
-    register_setxxxResOut();
-    register_getExpMask();
-    register_setExpMask();
-    register_fuelResFuncs();
+	register_setExpIO();
+	register_printExpStatus();
+	register_set_shortcuts();
+	register_setAllExpIO();
+	register_setxxxResOut();
+	register_getExpMask();
+	register_setExpMask();
+	register_fuelResFuncs();
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
-    esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
+	esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
+	ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
 
 #elif defined(CONFIG_ESP_CONSOLE_USB_CDC)
-    esp_console_dev_usb_cdc_config_t hw_config = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&hw_config, &repl_config, &repl));
+	esp_console_dev_usb_cdc_config_t hw_config = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
+	ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&hw_config, &repl_config, &repl));
 
 #elif defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
-    esp_console_dev_usb_serial_jtag_config_t hw_config = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&hw_config, &repl_config, &repl));
+	esp_console_dev_usb_serial_jtag_config_t hw_config = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
+	ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&hw_config, &repl_config, &repl));
 
 #else
 #error Unsupported console type
 #endif
 
-    ESP_ERROR_CHECK(esp_console_start_repl(repl));
+	ESP_ERROR_CHECK(esp_console_start_repl(repl));
 }
