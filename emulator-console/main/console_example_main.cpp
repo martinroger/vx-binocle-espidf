@@ -82,18 +82,15 @@ extern "C" void app_main(void) {
 	// Group 0: Coolant (500 kHz clock, 100 Hz base frequency)
 	set_mcpwm_generator(MCPWM_CHANNEL_COOLANT, 0, 500000, CONFIG_COOLANT_PWM_BASE_FREQ_HZ,
 						(gpio_num_t)CONFIG_COOLANT_PWM_GEN_GPIO, CONFIG_COOLANT_PWM_BASE_DUTY_PCT);
-	// Group 0: RPM (500 kHz clock, 100 Hz base frequency, initially stopped)
+	// Group 0: RPM (500 kHz clock, 100 Hz base frequency, initially paused)
 	set_mcpwm_generator(MCPWM_CHANNEL_RPM, 0, 500000, CONFIG_RPM_PWM_BASE_FREQ_HZ, (gpio_num_t)CONFIG_RPM_PWM_GEN_GPIO,
 						CONFIG_RPM_PWM_BASE_DUTY_PCT);
-	if (change_frequency(MCPWM_CHANNEL_RPM, 0) != ESP_OK) {
-		ESP_LOGW("Setup", "Impossible to stop RPM PWM");
-	}
-	// Group 1: Speed (200 kHz clock, 100 Hz base frequency, initially stopped)
+	pause_channel(MCPWM_CHANNEL_RPM);
+
+	// Group 1: Speed (200 kHz clock, 100 Hz base frequency, initially paused)
 	set_mcpwm_generator(MCPWM_CHANNEL_SPEED, 1, 200000, CONFIG_SPEED_PWM_BASE_FREQ_HZ,
 						(gpio_num_t)CONFIG_SPEED_PWM_GEN_GPIO, CONFIG_SPEED_PWM_BASE_DUTY_PCT);
-	if (change_frequency(MCPWM_CHANNEL_SPEED, 0) != ESP_OK) {
-		ESP_LOGW("Setup", "Impossible to stop Speed PWM");
-	}
+	pause_channel(MCPWM_CHANNEL_SPEED);
 
 	// Initialize the IO expander controlling the Active High and Low outputs
 	initialize_expanders();

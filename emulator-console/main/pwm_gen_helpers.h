@@ -87,7 +87,7 @@ esp_err_t set_mcpwm_generator(int channel_idx, int group_id, uint32_t timer_clk_
 		.period_ticks = period_ticks,
 		.flags =
 			{
-				.update_period_on_empty = true,
+				.update_period_on_empty = false,
 				.update_period_on_sync = false,
 			},
 	};
@@ -119,7 +119,7 @@ esp_err_t set_mcpwm_generator(int channel_idx, int group_id, uint32_t timer_clk_
 	mcpwm_comparator_config_t comparator_config = {
 		.flags =
 			{
-				.update_cmp_on_tez = true,
+				.update_cmp_on_tez = false,
 				.update_cmp_on_tep = false,
 				.update_cmp_on_sync = false,
 			},
@@ -187,7 +187,7 @@ esp_err_t set_mcpwm_generator(int channel_idx, int group_id, uint32_t timer_clk_
 	return ESP_OK;
 }
 
-/// @brief Pause an MCPWM channel (stops counter and forces output level to LOW)
+/// @brief Pause an MCPWM channel (forces output level to LOW)
 esp_err_t pause_mcpwm_channel(int channel_idx) {
 	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
 		return ESP_ERR_INVALID_ARG;
@@ -198,12 +198,11 @@ esp_err_t pause_mcpwm_channel(int channel_idx) {
 	}
 
 	mcpwm_generator_set_force_level(ctx->gen, 0, true);
-	mcpwm_timer_start_stop(ctx->timer, MCPWM_TIMER_STOP_EMPTY);
 	ctx->is_active = false;
 	return ESP_OK;
 }
 
-/// @brief Resume a paused MCPWM channel
+/// @brief Resume a paused MCPWM channel (releases forced level back to active PWM)
 esp_err_t resume_mcpwm_channel(int channel_idx) {
 	if (channel_idx < 0 || channel_idx >= MCPWM_CHANNEL_COUNT) {
 		return ESP_ERR_INVALID_ARG;
@@ -213,8 +212,7 @@ esp_err_t resume_mcpwm_channel(int channel_idx) {
 		return ESP_ERR_INVALID_STATE;
 	}
 
-	mcpwm_generator_set_force_level(ctx->gen, -1, false);
-	mcpwm_timer_start_stop(ctx->timer, MCPWM_TIMER_START_NO_STOP);
+	mcpwm_generator_set_force_level(ctx->gen, -1, true);
 	ctx->is_active = true;
 	return ESP_OK;
 }
@@ -248,7 +246,7 @@ esp_err_t change_mcpwm_duty_cycle(int channel_idx, double duty_pct) {
 	}
 
 	if (ctx->is_active) {
-		mcpwm_generator_set_force_level(ctx->gen, -1, false);
+		mcpwm_generator_set_force_level(ctx->gen, -1, true);
 	}
 	return ESP_OK;
 }
@@ -294,10 +292,15 @@ esp_err_t change_mcpwm_frequency(int channel_idx, double freq_hz) {
 	ctx->cmp_ticks = cmp_ticks;
 	ctx->current_duty_pct = (100.0 * (double)cmp_ticks) / (double)period_ticks;
 
-	mcpwm_comparator_set_compare_value(ctx->cmpr, cmp_ticks);
+	ret = mcpwm_comparator_set_compare_value(ctx->cmpr, cmp_ticks);
+	if (ret != ESP_OK) {
+		return ret;
+	}
 
 	if (!ctx->is_active) {
 		resume_mcpwm_channel(channel_idx);
+	} else {
+		mcpwm_generator_set_force_level(ctx->gen, -1, true);
 	}
 
 	return ESP_OK;
