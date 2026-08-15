@@ -312,7 +312,7 @@ static struct {
 	struct arg_end *end;
 } setRPM_args, chgRPM_args;
 
-static double current_rpm = 0.0;
+static uint32_t current_rpm = 0;
 
 static int setRPM(int argc, char **argv) {
 	int nerrors = arg_parse(argc, argv, (void **)&setRPM_args);
@@ -341,7 +341,7 @@ static int setRPM(int argc, char **argv) {
 
 	if (target_frequency < 3.0) {
 		printf("Target frequency is below 3Hz, pausing RPM channel, actual RPM 0 revs.\n");
-		current_rpm = 0.0;
+		current_rpm = 0;
 		pause_channel(target_channel);
 		return 0;
 	}
@@ -362,9 +362,9 @@ static int setRPM(int argc, char **argv) {
 	}
 
 	double actual_freq = get_channel_actual_freq(target_channel);
-	double actual_RPM = COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P;
-	printf("RPM channel %d set to target duty %.2f pc at actual frequency %.4f Hz, actual RPM %.2f revs\n",
-		   target_channel, target_duty, actual_freq, actual_RPM);
+	uint32_t actual_RPM = (uint32_t)round(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
+	printf("RPM channel %d set to target duty %.2f pc at actual frequency %.4f Hz, actual RPM %lu revs\n",
+		   target_channel, target_duty, actual_freq, (unsigned long)actual_RPM);
 	current_rpm = actual_RPM;
 	return 0;
 }
@@ -381,12 +381,8 @@ static int incRPM(int argc, char **argv) {
 	const double target_duty = 33.0;
 
 	// Calculate the target RPM
-	uint32_t target_rpm = 0;
-	if (chgRPM_args.rpm->count == 1) {
-		target_rpm = (uint32_t)round(current_rpm) + (uint32_t)(chgRPM_args.rpm->ival[0]);
-	} else {
-		target_rpm = (uint32_t)round(current_rpm) + 100;
-	}
+	uint32_t delta = (chgRPM_args.rpm->count == 1) ? (uint32_t)(chgRPM_args.rpm->ival[0]) : 100;
+	uint32_t target_rpm = current_rpm + delta;
 
 	// Run checks on the issued rpm value
 	if (target_rpm < 250 && target_rpm != 0) {
@@ -402,7 +398,7 @@ static int incRPM(int argc, char **argv) {
 
 	if (target_frequency < 3.0) {
 		printf("Target frequency is below 3Hz, pausing RPM channel, actual RPM 0 revs.\n");
-		current_rpm = 0.0;
+		current_rpm = 0;
 		pause_channel(target_channel);
 		return 0;
 	}
@@ -423,9 +419,9 @@ static int incRPM(int argc, char **argv) {
 	}
 
 	double actual_freq = get_channel_actual_freq(target_channel);
-	double actual_RPM = COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P;
-	printf("RPM channel %d set to target duty %.2f pc at actual frequency %.4f Hz, actual RPM %.2f revs\n",
-		   target_channel, target_duty, actual_freq, actual_RPM);
+	uint32_t actual_RPM = (uint32_t)round(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
+	printf("RPM channel %d set to target duty %.2f pc at actual frequency %.4f Hz, actual RPM %lu revs\n",
+		   target_channel, target_duty, actual_freq, (unsigned long)actual_RPM);
 	current_rpm = actual_RPM;
 	return 0;
 }
@@ -436,20 +432,14 @@ static int decRPM(int argc, char **argv) {
 		arg_print_errors(stderr, chgRPM_args.end, argv[0]);
 		return 1;
 	}
-	assert(chgRPM_args.rpm->count < 1);
+	assert(chgRPM_args.rpm->count < 2);
 
 	const int target_channel = MCPWM_CHANNEL_RPM;
 	const double target_duty = 33.0;
 
 	// Calculate the target RPM
-	uint32_t cur_r = (uint32_t)round(current_rpm);
-	uint32_t target_rpm = 0;
-	if (chgRPM_args.rpm->count < 2) {
-		target_rpm =
-			(cur_r > (uint32_t)(chgRPM_args.rpm->ival[0])) ? (cur_r - (uint32_t)(chgRPM_args.rpm->ival[0])) : 0;
-	} else {
-		target_rpm = (cur_r > 100) ? (cur_r - 100) : 0;
-	}
+	uint32_t delta = (chgRPM_args.rpm->count == 1) ? (uint32_t)(chgRPM_args.rpm->ival[0]) : 100;
+	uint32_t target_rpm = (current_rpm > delta) ? (current_rpm - delta) : 0;
 
 	// Run checks on the issued rpm value
 	if (target_rpm < 250 && target_rpm > 0) {
@@ -465,7 +455,7 @@ static int decRPM(int argc, char **argv) {
 
 	if (target_frequency < 3.0) {
 		printf("Target frequency is below 3Hz, pausing RPM channel, actual RPM 0 revs.\n");
-		current_rpm = 0.0;
+		current_rpm = 0;
 		pause_channel(target_channel);
 		return 0;
 	}
@@ -486,9 +476,9 @@ static int decRPM(int argc, char **argv) {
 	}
 
 	double actual_freq = get_channel_actual_freq(target_channel);
-	double actual_RPM = COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P;
-	printf("RPM channel %d set to target duty %.2f pc at actual frequency %.4f Hz, actual RPM %.2f revs\n",
-		   target_channel, target_duty, actual_freq, actual_RPM);
+	uint32_t actual_RPM = (uint32_t)round(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
+	printf("RPM channel %d set to target duty %.2f pc at actual frequency %.4f Hz, actual RPM %lu revs\n",
+		   target_channel, target_duty, actual_freq, (unsigned long)actual_RPM);
 	current_rpm = actual_RPM;
 	return 0;
 }
@@ -497,11 +487,11 @@ static int getRPM(int argc, char **argv) {
 	const int target_channel = MCPWM_CHANNEL_RPM;
 	if (is_channel_active(target_channel)) {
 		double actual_freq = get_channel_actual_freq(target_channel);
-		current_rpm = COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P;
+		current_rpm = (uint32_t)round(COEFF_FREQ_TO_RPM_M * actual_freq + COEFF_FREQ_TO_RPM_P);
 	} else {
-		current_rpm = 0.0;
+		current_rpm = 0;
 	}
-	printf("%.2f\n", current_rpm);
+	printf("%lu\n", (unsigned long)current_rpm);
 	return 0;
 }
 
