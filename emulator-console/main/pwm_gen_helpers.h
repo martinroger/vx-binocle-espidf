@@ -139,6 +139,10 @@ esp_err_t set_mcpwm_generator(int channel_idx, int group_id, uint32_t timer_clk_
 	// 4. Create Generator
 	mcpwm_generator_config_t generator_config = {
 		.gen_gpio_num = output_gpio,
+		.flags =
+			{
+				.invert_pwm = true,
+			},
 	};
 	ret = mcpwm_new_generator(ctx->oper, &generator_config, &ctx->gen);
 	if (ret != ESP_OK) {
