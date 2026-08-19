@@ -1,156 +1,136 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-H2 | ESP32-H21 | ESP32-H4 | ESP32-P4 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | --------- | -------- | -------- | -------- | -------- |
+# Emulator Console Firmware
 
-# Basic Console Example (`esp_console_repl`)
+Interactive REPL console firmware for the **VX Binocle Vehicle Emulator**. This firmware turns an ESP32-S3 into a comprehensive vehicle signal simulator and hardware test bench, generating precise PWM signals, driving active high/low indicator lines, and simulating analog fuel level sender resistances.
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+---
 
-This example illustrates the usage of the REPL (Read-Eval-Print Loop) APIs of the [Console Component](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/console.html#console) to create an interactive shell on the ESP chip. The interactive shell running on the ESP chip can then be controlled/interacted with over a serial interface. This example supports UART and USB interfaces.
+## Features
 
-The interactive shell implemented in this example contains a wide variety of commands, and can act as a basis for applications that require a command-line interface (CLI).
+- **MCPWM Signal Generation**: Frequency and duty cycle modulation for Speed, RPM, and Coolant gauge signals (with GPIO matrix hardware inversion for inverted board circuitry).
+- **Vehicle Indicator Emulation**: 16 discrete Active High / Active Low vehicle warning signals and telltale indicators via I2C GPIO expander.
+- **Fuel Sender Resistor Network**: 19 discrete switched resistance steps (30.2 Ohm to 270.0 Ohm) simulating standard automotive fuel sender levels.
+- **Power Rail Control**: 5V auxiliary supply enable/toggle.
+- **Interactive REPL**: Rich terminal interface with tab autocompletion, persistent command history in FATFS/flash, and system diagnostics.
 
-Compared to the [advanced console example](../advanced), this example requires less code to initialize and run the console. `esp_console_repl` API handles most of the details. If you'd like to customize the way console works (for example, process console commands in an existing task), please check the advanced console example.
+---
 
-## How to use example
+## Quickstart
 
-This example can be used on boards with UART and USB interfaces. The sections below explain how to set up the board and configure the example.
+### 1. Build and Flash
 
-### Using with UART
+Using the `eim` ESP-IDF environment manager:
 
-When UART interface is used, this example should run on any commonly available Espressif development board. UART interface is enabled by default (`CONFIG_ESP_CONSOLE_UART_DEFAULT` option in menuconfig). No extra configuration is required.
+```bash
+# Build the project (ESP-IDF v5.5.5)
+eim select v5.5.5 && eim run "idf.py build"
 
-### Using with USB_SERIAL_JTAG
-
-*NOTE: We recommend to disable the secondary console output on chips with USB_SERIAL_JTAG since the secondary serial is output-only and would not be very useful when using a console application. This is why the secondary console output is deactivated per default (CONFIG_ESP_CONSOLE_SECONDARY_NONE=y)*
-
-On chips with USB_SERIAL_JTAG peripheral, console example can be used over the USB serial port.
-
-* First, connect the USB cable to the USB_SERIAL_JTAG interface.
-* Second, run `idf.py menuconfig` and enable `CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG` option.
-
-For more details about connecting and configuring USB_SERIAL_JTAG (including pin numbers), see the IDF Programming Guide:
-* [ESP32-C3 USB_SERIAL_JTAG](https://docs.espressif.com/projects/esp-idf/en/stable/esp32c3/api-guides/usb-serial-jtag-console.html)
-* [ESP32-S3 USB_SERIAL_JTAG](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/usb-serial-jtag-console.html)
-
-### Using with USB CDC (USB_OTG peripheral)
-
-USB_OTG peripheral can also provide a USB serial port which works with this example.
-
-* First, connect the USB cable to the USB_OTG peripheral interface.
-* Second, run `idf.py menuconfig` and enable `CONFIG_ESP_CONSOLE_USB_CDC` option.
-
-For more details about connecting and configuring USB_OTG (including pin numbers), see the IDF Programming Guide:
-* [ESP32-S2 USB_OTG](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s2/api-guides/usb-otg-console.html)
-* [ESP32-S3 USB_OTG](https://docs.espressif.com/projects/esp-idf/en/stable/esp32s3/api-guides/usb-otg-console.html)
-
-### Other configuration options
-
-This example has an option to store the command history in Flash. This option is enabled by default.
-
-To disable this, run `idf.py menuconfig` and disable `CONFIG_CONSOLE_STORE_HISTORY` option.
-
-### Build and Flash
-
-Build the project and flash it to the board, then run monitor tool to view serial output:
-
-```
-idf.py -p PORT flash monitor
+# Flash to target and open serial monitor
+eim select v5.5.5 && eim run "idf.py -p /dev/ttyUSB0 flash monitor"
 ```
 
-(Replace PORT with the name of the serial port to use.)
+> [!NOTE]
+> To exit the serial monitor, press `Ctrl-]`.
 
-(To exit the serial monitor, type ``Ctrl-]``.)
+### 2. Connect
 
-See the Getting Started Guide for full steps to configure and use ESP-IDF to build projects.
+Connect to the console via USB-Serial or UART at **115200 baud**. Press `Enter` to display the prompt:
 
-## Example Output
-
-Enter the `help` command get a full list of all available commands. The following is a sample session of the Console Example where a variety of commands provided by the Console Example are used.
-
-On ESP32, GPIO15 may be connected to GND to remove the boot log output.
-
-```
-This is an example of ESP-IDF console component.
-Type 'help' to get the list of commands.
-Use UP/DOWN arrows to navigate through command history.
-Press TAB when typing command name to auto-complete.
-[esp32]> help
-help
-  Print the list of registered commands
-
-free
-  Get the total size of heap memory available
-
-restart
-  Restart the program
-
-deep_sleep  [-t <t>] [--io=<n>] [--io_level=<0|1>]
-  Enter deep sleep mode. Two wakeup modes are supported: timer and GPIO. If no
-  wakeup option is specified, will sleep indefinitely.
-  -t, --time=<t>  Wake up time, ms
-      --io=<n>  If specified, wakeup using GPIO with given number
-  --io_level=<0|1>  GPIO level to trigger wakeup
-
-join  [--timeout=<t>] <ssid> [<pass>]
-  Join WiFi AP as a station
-  --timeout=<t>  Connection timeout, ms
-        <ssid>  SSID of AP
-        <pass>  PSK of AP
-
-[esp32]> free
-257200
-[esp32]> deep_sleep -t 1000
-I (146929) deep_sleep: Enabling timer wakeup, timeout=1000000us
-I (619) heap_init: Initializing. RAM available for dynamic allocation:
-I (620) heap_init: At 3FFAE2A0 len 00001D60 (7 KiB): DRAM
-I (626) heap_init: At 3FFB7EA0 len 00028160 (160 KiB): DRAM
-I (645) heap_init: At 3FFE0440 len 00003BC0 (14 KiB): D/IRAM
-I (664) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
-I (684) heap_init: At 40093EA8 len 0000C158 (48 KiB): IRAM
-
-This is an example of ESP-IDF console component.
-Type 'help' to get the list of commands.
-Use UP/DOWN arrows to navigate through command history.
-Press TAB when typing command name to auto-complete.
-[esp32]> join --timeout 10000 test_ap test_password
-I (182639) connect: Connecting to 'test_ap'
-I (184619) connect: Connected
-[esp32]> free
-212328
-[esp32]> restart
-I (205639) restart: Restarting
-I (616) heap_init: Initializing. RAM available for dynamic allocation:
-I (617) heap_init: At 3FFAE2A0 len 00001D60 (7 KiB): DRAM
-I (623) heap_init: At 3FFB7EA0 len 00028160 (160 KiB): DRAM
-I (642) heap_init: At 3FFE0440 len 00003BC0 (14 KiB): D/IRAM
-I (661) heap_init: At 3FFE4350 len 0001BCB0 (111 KiB): D/IRAM
-I (681) heap_init: At 40093EA8 len 0000C158 (48 KiB): IRAM
-
-This is an example of ESP-IDF console component.
-Type 'help' to get the list of commands.
-Use UP/DOWN arrows to navigate through command history.
-Press TAB when typing command name to auto-complete.
-[esp32]>
-
+```text
+esp32s3# help
 ```
 
-## Troubleshooting
+---
 
-### Line Endings
+## Command Reference
 
-The line endings in the Console Example are configured to match particular serial monitors. Therefore, if the following log output appears, consider using a different serial monitor (e.g. Putty for Windows) or modify the example's [UART configuration](#Configuring-UART-and-VFS).
+### Custom Vehicle & Hardware Commands
 
-```
-This is an example of ESP-IDF console component.
-Type 'help' to get the list of commands.
-Use UP/DOWN arrows to navigate through command history.
-Press TAB when typing command name to auto-complete.
-Your terminal application does not support escape sequences.
-Line editing and history features are disabled.
-On Windows, try using Windows Terminal or Putty instead.
-esp32>
-```
+| Category | Command | Syntax | Description |
+| :--- | :--- | :--- | :--- |
+| **Combined** | `pwm` | `pwm <speed> <rpm> <temp>` | Set Speed (kph), RPM, and Coolant temp (degC) simultaneously. |
+| **Speed** | `setSpeedKPH` | `setSpeedKPH <speed>` | Set vehicle speed in km/h. |
+| | `incSpeedKPH` | `incSpeedKPH [<step>]` | Increment speed in km/h (default step: 5). |
+| | `decSpeedKPH` | `decSpeedKPH [<step>]` | Decrement speed in km/h (default step: 5). |
+| | `setSpeedMPH` | `setSpeedMPH <speed>` | Set vehicle speed in mph. |
+| | `incSpeedMPH` | `incSpeedMPH [<step>]` | Increment speed in mph (default step: 5). |
+| | `decSpeedMPH` | `decSpeedMPH [<step>]` | Decrement speed in mph (default step: 5). |
+| | `getSpeed` | `getSpeed` | Display current speed in kph, mph, and actual frequency. |
+| **Engine RPM** | `setRPM` | `setRPM <rpm>` | Set engine RPM (0..9000). Pauses signal at 0 RPM. |
+| | `incRPM` | `incRPM [<step>]` | Increment engine RPM (default step: 250). |
+| | `decRPM` | `decRPM [<step>]` | Decrement engine RPM (default step: 250). |
+| | `getRPM` | `getRPM` | Display current RPM and actual frequency. |
+| **Coolant** | `setCoolant` | `setCoolant <temp>` | Set coolant temperature in degC (70..130 degC). |
+| | `getCoolant` | `getCoolant` | Display current coolant temperature and PWM duty cycle. |
+| **Raw MCPWM** | `setChannelDutyFreq` | `setChannelDutyFreq <chan> <duty> <freq>` | Set raw duty cycle (%) and frequency (Hz) for channel `0:Coolant`, `1:RPM`, `2:Speed`. |
+| | `setChannelDuty` | `setChannelDuty <chan> <duty>` | Set raw duty cycle (%) on channel (0..2). |
+| | `setChannelFreq` | `setChannelFreq <chan> <freq>` | Set raw frequency (Hz) on channel (0..2). Frequency < 3 Hz pauses channel. |
+| | `getChannelsInfo` | `getChannelsInfo` | Query active/paused status, frequency, and duty cycle for all 3 channels. |
+| **Power** | `set_5V` | `set_5V [<1\|0>]` | Turn 5V output rail ON (1), OFF (0), or toggle if omitted. |
+| **Fuel Level** | `setFuelResLevel` | `setFuelResLevel [<1..19>]` | Set fuel sender resistance level (Level 1: 30.2 Ohm to Level 19: 270.0 Ohm). |
+| | `incFuelResLevel` | `incFuelResLevel` | Step fuel resistance up to next level (towards Empty). |
+| | `decFuelResLevel` | `decFuelResLevel` | Step fuel resistance down to previous level (towards Full). |
+| | `setLowResOut` | `setLowResOut <0..8>` | Low caliber resistor emulator (max 270 Ohm, 0 is open circuit). |
+| | `setHighResOut` | `setHighResOut <0..8>` | High caliber resistor emulator (max 2000 Ohm, 0 is open circuit). |
+| **Indicators** | `set_ignition` | `set_ignition [<1\|0>]` | Set or toggle Ignition line. |
+| | `set_hi_beams` | `set_hi_beams [<1\|0>]` | Set or toggle High Beams indicator. |
+| | `set_alternator` | `set_alternator [<1\|0>]` | Set or toggle Alternator / Battery charge warning. |
+| | `set_brake` | `set_brake [<1\|0>]` | Set or toggle Brake fluid warning. |
+| | `set_parking_brake` | `set_parking_brake [<1\|0>]` | Set or toggle Parking Brake / Handbrake. |
+| | `set_oil_low` | `set_oil_low [<1\|0>]` | Set or toggle Low Oil Pressure warning. |
+| | `set_airbag` | `set_airbag [<1\|0>]` | Set or toggle Airbag warning light. |
+| | `set_CEL` | `set_CEL [<1\|0>]` | Set or toggle Check Engine Light (CEL). |
+| | `set_right_turn` | `set_right_turn [<1\|0>]` | Set or toggle Right Turn signal indicator. |
+| | `set_left_turn` | `set_left_turn [<1\|0>]` | Set or toggle Left Turn signal indicator. |
+| | `set_ABS` | `set_ABS [<1\|0>]` | Set or toggle ABS warning light. |
+| | `set_door` | `set_door [<1\|0>]` | Set or toggle Door Open indicator. |
+| | `set_coolant_low` | `set_coolant_low [<1\|0>]` | Set or toggle Low Coolant warning light. |
+| | `set_button` | `set_button [<1\|0>]` | Set or toggle Cluster Button / Trip input. |
+| | `set_alarm` | `set_alarm [<1\|0>]` | Set or toggle Alarm status output. |
+| | `set_backlight` | `set_backlight [<1\|0>]` | Set or toggle Cluster Backlight illumination. |
+| **Raw Expander**| `setExpIO` | `setExpIO <expander> <gpio> <1\|0>` | Set individual GPIO on expander (0 or 1). |
+| | `setAllExpIO` | `setAllExpIO <expander> <1\|0>` | Set all pins on target expander to HIGH (1) or LOW (0). |
+| | `getExpMask` | `getExpMask <expander>` | Read 16-bit hex mask of current expander pin states. |
+| | `setExpMask` | `setExpMask <expander> <mask>` | Write 16-bit hex mask directly to expander outputs. |
+| | `printExpStatus` | `printExpStatus [<expander>]` | Print pin configuration and levels of expander(s). |
 
-### Escape Sequences on Windows 10
+---
 
-When using the default command line or PowerShell on Windows 10, you may see a message indicating that the console does not support escape sequences, as shown in the above output. To avoid such issues, it is recommended to run the serial monitor under [Windows Terminal](https://en.wikipedia.org/wiki/Windows_Terminal), which supports all required escape sequences for the app, unlike the default terminal. The main escape sequence of concern is the Device Status Report (`0x1b[5n`), which is used to check terminal capabilities. Any response to this sequence indicates support. This should not be an issue on Windows 11, where Windows Terminal is the default.
+### Built-in ESP-IDF System Commands
+
+| Category | Command | Syntax | Description |
+| :--- | :--- | :--- | :--- |
+| **System** | `help` | `help [<command>]` | Print list of all registered commands or details for a command. |
+| | `free` | `free` | Get current free heap memory size. |
+| | `heap` | `heap` | Get minimum free heap size recorded during execution. |
+| | `version` | `version` | Display chip information and ESP-IDF SDK version. |
+| | `restart` | `restart` | Software reset the ESP32-S3 chip. |
+| | `tasks` | `tasks` | Display running FreeRTOS tasks and runtime statistics. |
+| | `log_level` | `log_level <tag> <level>` | Set log level (`none`, `error`, `warn`, `info`, `debug`, `verbose`). |
+| | `light_sleep` | `light_sleep [-t <ms>]` | Put SoC into light sleep mode. |
+| | `deep_sleep` | `deep_sleep [-t <ms>] [--io=<n>]` | Put SoC into deep sleep mode with timer or GPIO wakeup. |
+| **NVS** | `nvs_get` | `nvs_get <key> <type>` | Read key value from Non-Volatile Storage. |
+| | `nvs_set` | `nvs_set <key> <type> -v <val>` | Write key value to Non-Volatile Storage. |
+| | `nvs_erase` | `nvs_erase <key>` | Erase specific NVS key. |
+| | `nvs_erase_namespace` | `nvs_erase_namespace <ns>` | Erase entire NVS namespace. |
+| | `nvs_list` | `nvs_list [<part>]` | List stored NVS entries. |
+| | `nvs_dump` | `nvs_dump <part> <ns>` | Dump NVS data partition contents. |
+| **Wi-Fi** | `join` | `join <ssid> [<password>]` | Connect to an external Wi-Fi Access Point. |
+| | `scan` | `scan` | Scan for nearby Wi-Fi Access Points. |
+| | `sta` | `sta <status\|scan\|disconnect>` | Manage Wi-Fi Station interface. |
+| | `ap` | `ap <ssid> [<password>]` | Configure ESP32 softAP mode. |
+| | `query` | `query` | Query Wi-Fi connection parameters. |
+
+---
+
+## Hardware Defaults
+
+| Peripheral | Function / Signal | Default GPIO / Address |
+| :--- | :--- | :--- |
+| **5V Rail** | 5V Enable Output | GPIO 8 |
+| **MCPWM Ch 0** | Coolant PWM Output | GPIO 12 |
+| **MCPWM Ch 1** | RPM PWM Output | GPIO 11 |
+| **MCPWM Ch 2** | Speed PWM Output | GPIO 10 |
+| **I2C Bus** | SDA / SCL | GPIO 5 / GPIO 6 |
+| **Expander 0** | Primary IO Expander (Active Hi/Lo) | I2C Address `0x20` (TCA9555) |
+| **Expander 1** | Secondary IO Expander (Resistor Bank) | I2C Address `0x21` (TCA9555) |
+| **DAC Out** | DAC0 / DAC1 | GPIO 13 / GPIO 14 |
