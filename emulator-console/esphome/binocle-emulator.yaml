@@ -30,21 +30,21 @@ substitutions:
 
   # Indicator Polarity Inversion (true = Active Low, false = Active High)
   inv_ignition: "false"
-  inv_hi_beams: "false"
-  inv_alternator: "true"
-  inv_left_turn: "false"
-  inv_right_turn: "false"
-  inv_abs: "true"
-  inv_door: "true"
+  inv_hi_beams: "true"
+  inv_alternator: "false"
+  inv_left_turn: "true"
+  inv_right_turn: "true"
+  inv_abs: "false"
+  inv_door: "false"
   inv_coolant_low: "true"
-  inv_button: "true"
+  inv_button: "false"
   inv_alarm: "false"
   inv_backlight: "false"
-  inv_cel: "true"
-  inv_airbag: "true"
-  inv_oil_low: "true"
-  inv_parking_brake: "true"
-  inv_brake_low: "true"
+  inv_cel: "false"
+  inv_airbag: "false"
+  inv_oil_low: "false"
+  inv_parking_brake: "false"
+  inv_brake_low: "false"
 
   # Conversion Coefficients (Matching common/coefficients.h)
   coeff_speed_kph_to_freq_m: "4.088998"   # 31285.0 / 7651.0
@@ -52,6 +52,7 @@ substitutions:
   coeff_rpm_to_freq_m: "0.03333333"       # 1.0 / 30.0
   coeff_coolant_degc_to_duty_m: "1.408451" # 100.0 / 71.0
   coeff_coolant_degc_to_duty_p: "-90.140845" # -100.0 * 64.0 / 71.0
+  light_test_delay: "600"
 
 esphome:
   name: ${name}
@@ -60,15 +61,17 @@ esphome:
     - resistor_ladder.h
     - custom_mcpwm.h
   on_boot:
-    priority: 600.0
+    priority: 600
     then:
-      - lambda: |-
+      - lambda: |
           ESP_LOGI("BOOT", "Initializing MCPWM outputs (Speed GPIO %d, RPM GPIO %d, Coolant GPIO %d)",
                    ${pin_num_pwm_speed}, ${pin_num_pwm_rpm}, ${pin_num_pwm_coolant});
           esphome::vehicle_emulator::McpwmManager::init_all(${pin_num_pwm_coolant}, ${pin_num_pwm_rpm}, ${pin_num_pwm_speed});
-          
+
           ESP_LOGI("BOOT", "Applying early boot standby masks: Expander 0 = 0xD940, Expander 1 = 0x7FFF");
-          esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, 1);
+          //esphome::vehicle_emulator::write_resistor_mask(id(bus_i2c),${i2c_addr_primary},0xD940);
+          //esphome::vehicle_emulator::write_resistor_mask(id(bus_i2c),${i2c_addr_resistor},0x7FFF);
+      - button.press: btn_ignition_on
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -99,7 +102,7 @@ web_server:
 # Native Home Assistant Integration
 api:
   encryption:
-    key: !secret api_encryption_key
+    key: !secret binocle_emulator__encryption_key
 
 # Over-The-Air Firmware Updates
 ota:
@@ -134,7 +137,7 @@ switch:
     id: power_5v
     pin: ${pin_5v_enable}
     icon: "mdi:power-socket-us"
-    restore_mode: ALWAYS_ON
+    restore_mode: ALWAYS_OFF
 
   # Synchronized Hazard Flasher
   - platform: template
@@ -214,7 +217,7 @@ switch:
       mode: OUTPUT
       inverted: ${inv_backlight}
     icon: "mdi:car-parking-lights"
-    restore_mode: ALWAYS_ON # Active in 0xD940
+    restore_mode: ALWAYS_OFF # Active in 0xD940
 
   - platform: gpio
     name: "Alarm Status"
@@ -225,7 +228,7 @@ switch:
       mode: OUTPUT
       inverted: ${inv_alarm}
     icon: "mdi:shield-car"
-    restore_mode: ALWAYS_ON # Active in 0xD940
+    restore_mode: ALWAYS_OFF # Active in 0xD940
 
   - platform: gpio
     name: "Cluster Button - Trip"
@@ -258,7 +261,7 @@ switch:
       mode: OUTPUT
       inverted: ${inv_door}
     icon: "mdi:car-door"
-    restore_mode: ALWAYS_ON # Active in 0xD940
+    restore_mode: ALWAYS_OFF # Active in 0xD940
 
   - platform: gpio
     name: "ABS Warning"
@@ -291,7 +294,7 @@ switch:
       mode: OUTPUT
       inverted: ${inv_left_turn}
     icon: "mdi:arrow-left-bold-circle-outline"
-    restore_mode: ALWAYS_ON # Active in 0xD940
+    restore_mode: ALWAYS_OFF # Active in 0xD940
 
   - platform: gpio
     name: "Alternator - Battery Charge"
@@ -312,8 +315,8 @@ switch:
       number: 14
       mode: OUTPUT
       inverted: ${inv_hi_beams}
-    icon: "mdi:car-light-high-beam"
-    restore_mode: ALWAYS_ON # Active in 0xD940
+    icon: "mdi:car-light-high"
+    restore_mode: ALWAYS_OFF # Active in 0xD940
 
   - platform: gpio
     name: "Ignition"
@@ -412,7 +415,7 @@ number:
     unit_of_measurement: "RPM"
     min_value: 0
     max_value: 9000
-    step: 50
+    step: 1
     initial_value: 0
     optimistic: true
     set_action:
@@ -531,6 +534,13 @@ button:
       - script.execute: script_ignition_on_preset
 
 # Automation Scripts for Sequences & Tests
+  - platform: template
+    name: Restart to OTA
+    id: btn_ota_restart
+    icon: "mdi:download-circle-outline"
+    on_press:
+      - then:
+          - script.execute: script_ota_mode_switch
 script:
   # Hazard blinker timer loop (1.5 Hz sync)
   - id: script_hazard_flash
@@ -551,27 +561,53 @@ script:
   - id: script_lamp_test
     mode: single
     then:
-      - logger.log: "Starting Cluster Lamp Test sequence..."
+      - logger.log: Starting Cluster Lamp Test sequence...
       - switch.turn_on: ind_brake_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_brake_low
       - switch.turn_on: ind_parking_brake
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_parking_brake
       - switch.turn_on: ind_oil_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_oil_low
       - switch.turn_on: ind_airbag
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_airbag
       - switch.turn_on: ind_cel
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_cel
       - switch.turn_on: ind_backlight
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_backlight
       - switch.turn_on: ind_alarm
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_alarm
       - switch.turn_on: ind_button
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_button
       - switch.turn_on: ind_coolant_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_coolant_low
       - switch.turn_on: ind_door
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_door
       - switch.turn_on: ind_abs
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_abs
       - switch.turn_on: ind_right_turn
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_right_turn
       - switch.turn_on: ind_left_turn
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_left_turn
       - switch.turn_on: ind_alternator
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_alternator
       - switch.turn_on: ind_hi_beams
-      - switch.turn_on: ind_ignition
-      - delay: 3000ms
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_hi_beams
       - script.execute: script_ignition_on_preset
-
-  # Gauge sweep sequence
   - id: script_gauge_sweep
     mode: single
     then:
@@ -636,19 +672,35 @@ script:
       - switch.turn_off: ind_oil_low
       - switch.turn_off: ind_airbag
       - switch.turn_off: ind_cel
-      - switch.turn_on: ind_backlight
-      - switch.turn_on: ind_alarm
+      - switch.turn_off: ind_backlight
+      - switch.turn_off: ind_alarm
       - switch.turn_off: ind_button
       - switch.turn_off: ind_coolant_low
-      - switch.turn_on: ind_door
+      - switch.turn_off: ind_door
       - switch.turn_off: ind_abs
       - switch.turn_off: ind_right_turn
-      - switch.turn_on: ind_left_turn
+      - switch.turn_off: ind_left_turn
       - switch.turn_off: ind_alternator
-      - switch.turn_on: ind_hi_beams
+      - switch.turn_off: ind_hi_beams
       - switch.turn_on: ind_ignition
+      - number.to_min: speed_kph
+      - number.to_min: coolant_temp
+      - number.to_min: engine_rpm
 
 # Live Telemetry Feedback Sensors
+  - id: script_ota_mode_switch
+    mode: single
+    then:
+      - switch.turn_on: ind_button
+      - switch.turn_on: ind_hi_beams
+      - switch.turn_off: ind_ignition
+      - delay:
+          milliseconds: '200'
+      - switch.turn_on: ind_ignition
+      - delay:
+          seconds: '10'
+      - switch.turn_off: ind_button
+      - switch.turn_off: ind_hi_beams
 sensor:
   - platform: template
     name: "Fuel Sender Resistance"
