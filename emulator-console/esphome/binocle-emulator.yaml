@@ -51,10 +51,14 @@ substitutions:
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  includes:
+    - resistor_ladder.h
   on_boot:
     priority: 600.0
     then:
-      - logger.log: "Executing early boot standby initialization (Mask 0xD940 on Expander 0)..."
+      - lambda: |-
+          ESP_LOGI("BOOT", "Applying early boot standby masks: Expander 0 = 0xD940, Expander 1 = 0x7FFF");
+          esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, 1);
 
 esp32:
   board: esp32-s3-devkitc-1
@@ -298,3 +302,118 @@ switch:
       inverted: ${inv_ignition}
     icon: "mdi:key-wireless"
     restore_mode: ALWAYS_ON # Active in 0xD940
+
+# --- Phase 3: Fuel Level & Resistor Network Controls ---
+select:
+  - platform: template
+    name: "Fuel Resistor Step"
+    id: fuel_resistor_step
+    icon: "mdi:gas-station"
+    optimistic: true
+    initial_option: "Step 01 - 30.2 Ω (Full)"
+    options:
+      - "Step 01 - 30.2 Ω (Full)"
+      - "Step 02 - 39.6 Ω"
+      - "Step 03 - 50.0 Ω"
+      - "Step 04 - 59.5 Ω"
+      - "Step 05 - 70.9 Ω"
+      - "Step 06 - 79.3 Ω (3/4 Tank)"
+      - "Step 07 - 90.0 Ω"
+      - "Step 08 - 100.9 Ω"
+      - "Step 09 - 112.3 Ω"
+      - "Step 10 - 118.9 Ω (1/2 Tank)"
+      - "Step 11 - 129.8 Ω"
+      - "Step 12 - 138.8 Ω"
+      - "Step 13 - 149.2 Ω"
+      - "Step 14 - 161.2 Ω (1/4 Tank)"
+      - "Step 15 - 175.3 Ω"
+      - "Step 16 - 192.2 Ω"
+      - "Step 17 - 212.6 Ω"
+      - "Step 18 - 237.9 Ω"
+      - "Step 19 - 270.0 Ω (Empty)"
+    set_action:
+      - lambda: |-
+          int step = 1;
+          for (size_t i = 0; i < fuel_resistor_step->traits.get_options().size(); i++) {
+            if (fuel_resistor_step->traits.get_options()[i] == x) {
+              step = i + 1;
+              break;
+            }
+          }
+          esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);
+          id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::FUEL_RES_VALUES[step - 1]);
+          // Sync percentage slider (Step 1 = 100%, Step 19 = 0%)
+          float pct = 100.0f - ((float)(step - 1) / 18.0f) * 100.0f;
+          id(fuel_percent).publish_state(pct);
+
+number:
+  # Fuel Level Slider (0% to 100%)
+  - platform: template
+    name: "Fuel Level Percentage"
+    id: fuel_percent
+    icon: "mdi:fuel"
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 100
+    optimistic: true
+    set_action:
+      - lambda: |-
+          // Map percentage (100% -> Step 1 / 30.2 Ohm, 0% -> Step 19 / 270 Ohm)
+          int step = 19 - (int)round((x / 100.0f) * 18.0f);
+          if (step < 1) step = 1;
+          if (step > 19) step = 19;
+          esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);
+          id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::FUEL_RES_VALUES[step - 1]);
+          id(fuel_resistor_step).publish_state(id(fuel_resistor_step)->traits.get_options()[step - 1]);
+
+  # Low-Caliber Resistor Divider (0..8, 0 is open circuit)
+  - platform: template
+    name: "Low Caliber Divider"
+    id: low_res_divider
+    icon: "mdi:resistor"
+    min_value: 0
+    max_value: 8
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          int divider = (int)x;
+          esphome::vehicle_emulator::set_low_caliber_divider(id(bus_i2c), ${i2c_addr_resistor}, divider);
+          if (divider == 0) {
+            id(sensor_fuel_resistance).publish_state(NAN); // Open Circuit
+          } else {
+            id(sensor_fuel_resistance).publish_state(270.0f / (float)divider);
+          }
+
+  # High-Caliber Resistor Divider (0..8, 0 is open circuit)
+  - platform: template
+    name: "High Caliber Divider"
+    id: high_res_divider
+    icon: "mdi:resistor"
+    min_value: 0
+    max_value: 8
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          int divider = (int)x;
+          esphome::vehicle_emulator::set_high_caliber_divider(id(bus_i2c), ${i2c_addr_resistor}, divider);
+          if (divider == 0) {
+            id(sensor_fuel_resistance).publish_state(NAN); // Open Circuit
+          } else {
+            id(sensor_fuel_resistance).publish_state(2000.0f / (float)divider);
+          }
+
+# Resistance Sensor Feedback
+sensor:
+  - platform: template
+    name: "Fuel Sender Resistance"
+    id: sensor_fuel_resistance
+    icon: "mdi:omega"
+    unit_of_measurement: "Ω"
+    accuracy_decimals: 1
+    update_interval: never
