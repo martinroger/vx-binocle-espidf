@@ -370,9 +370,9 @@ select:
 
 # --- Gauge Controllers & Caliber Dividers ---
 number:
-  # Vehicle Speed (km/h)
+  # Vehicle Speed (km⁄h)
   - platform: template
-    name: "Vehicle Speed km/h"
+    name: "Vehicle Speed (km⁄h)"
     id: speed_kph
     icon: "mdi:speedometer"
     unit_of_measurement: "km/h"
