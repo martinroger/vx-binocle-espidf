@@ -20,8 +20,26 @@ substitutions:
   rpm_default_duty_pct: "50.0"
 
   # Boot Standby Expander Masks
-  mask_exp0_standby: "0xD940" # Ignition ON standby (Pins 15, 14, 12, 11, 8, 6 active)
+  mask_exp0_standby: "0xD940" # Ignition ON standby
   mask_exp1_default: "0x7FFF" # 30.2 Ohm initial resistance (Step 1)
+
+  # Indicator Polarity Inversion (true = Active Low, false = Active High)
+  inv_ignition: "false"
+  inv_hi_beams: "false"
+  inv_alternator: "true"
+  inv_left_turn: "false"
+  inv_right_turn: "false"
+  inv_abs: "true"
+  inv_door: "true"
+  inv_coolant_low: "true"
+  inv_button: "true"
+  inv_alarm: "false"
+  inv_backlight: "false"
+  inv_cel: "true"
+  inv_airbag: "true"
+  inv_oil_low: "true"
+  inv_parking_brake: "true"
+  inv_brake_low: "true"
 
   # Conversion Coefficients (Matching common/coefficients.h)
   coeff_speed_kph_to_freq_m: "4.088998"   # 31285.0 / 7651.0
@@ -112,6 +130,7 @@ switch:
       tca9555: expander_indicators
       number: 0
       mode: OUTPUT
+      inverted: ${inv_brake_low}
     icon: "mdi:car-brake-fluid-level"
     restore_mode: ALWAYS_OFF
 
@@ -122,6 +141,7 @@ switch:
       tca9555: expander_indicators
       number: 1
       mode: OUTPUT
+      inverted: ${inv_parking_brake}
     icon: "mdi:car-brake-parking"
     restore_mode: ALWAYS_OFF
 
@@ -132,6 +152,7 @@ switch:
       tca9555: expander_indicators
       number: 2
       mode: OUTPUT
+      inverted: ${inv_oil_low}
     icon: "mdi:oil"
     restore_mode: ALWAYS_OFF
 
@@ -142,6 +163,7 @@ switch:
       tca9555: expander_indicators
       number: 3
       mode: OUTPUT
+      inverted: ${inv_airbag}
     icon: "mdi:airbag"
     restore_mode: ALWAYS_OFF
 
@@ -152,7 +174,74 @@ switch:
       tca9555: expander_indicators
       number: 4
       mode: OUTPUT
+      inverted: ${inv_cel}
     icon: "mdi:engine-outline"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Cluster Backlight"
+    id: ind_backlight
+    pin:
+      tca9555: expander_indicators
+      number: 5
+      mode: OUTPUT
+      inverted: ${inv_backlight}
+    icon: "mdi:car-parking-lights"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+  - platform: gpio
+    name: "Alarm Status"
+    id: ind_alarm
+    pin:
+      tca9555: expander_indicators
+      number: 6
+      mode: OUTPUT
+      inverted: ${inv_alarm}
+    icon: "mdi:shield-car"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+  - platform: gpio
+    name: "Cluster Button - Trip"
+    id: ind_button
+    pin:
+      tca9555: expander_indicators
+      number: 7
+      mode: OUTPUT
+      inverted: ${inv_button}
+    icon: "mdi:gesture-tap-button"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Low Coolant"
+    id: ind_coolant_low
+    pin:
+      tca9555: expander_indicators
+      number: 8
+      mode: OUTPUT
+      inverted: ${inv_coolant_low}
+    icon: "mdi:coolant-temperature"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Door Ajar"
+    id: ind_door
+    pin:
+      tca9555: expander_indicators
+      number: 9
+      mode: OUTPUT
+      inverted: ${inv_door}
+    icon: "mdi:car-door"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+  - platform: gpio
+    name: "ABS Warning"
+    id: ind_abs
+    pin:
+      tca9555: expander_indicators
+      number: 10
+      mode: OUTPUT
+      inverted: ${inv_abs}
+    icon: "mdi:car-brake-abs"
     restore_mode: ALWAYS_OFF
 
   - platform: gpio
@@ -160,8 +249,9 @@ switch:
     id: ind_right_turn
     pin:
       tca9555: expander_indicators
-      number: 5
+      number: 11
       mode: OUTPUT
+      inverted: ${inv_right_turn}
     icon: "mdi:arrow-right-bold-circle-outline"
     restore_mode: ALWAYS_OFF
 
@@ -170,78 +260,20 @@ switch:
     id: ind_left_turn
     pin:
       tca9555: expander_indicators
-      number: 6
+      number: 12
       mode: OUTPUT
+      inverted: ${inv_left_turn}
     icon: "mdi:arrow-left-bold-circle-outline"
     restore_mode: ALWAYS_ON # Active in 0xD940
 
   - platform: gpio
-    name: "ABS Warning"
-    id: ind_abs
-    pin:
-      tca9555: expander_indicators
-      number: 7
-      mode: OUTPUT
-    icon: "mdi:car-brake-abs"
-    restore_mode: ALWAYS_OFF
-
-  - platform: gpio
-    name: "Door Ajar"
-    id: ind_door
-    pin:
-      tca9555: expander_indicators
-      number: 8
-      mode: OUTPUT
-    icon: "mdi:car-door"
-    restore_mode: ALWAYS_ON # Active in 0xD940
-
-  - platform: gpio
-    name: "Low Coolant"
-    id: ind_coolant_low
-    pin:
-      tca9555: expander_indicators
-      number: 9
-      mode: OUTPUT
-    icon: "mdi:coolant-temperature"
-    restore_mode: ALWAYS_OFF
-
-  - platform: gpio
-    name: "Cluster Button / Trip"
-    id: ind_button
-    pin:
-      tca9555: expander_indicators
-      number: 10
-      mode: OUTPUT
-    icon: "mdi:gesture-tap-button"
-    restore_mode: ALWAYS_OFF
-
-  - platform: gpio
-    name: "Alarm Status"
-    id: ind_alarm
-    pin:
-      tca9555: expander_indicators
-      number: 11
-      mode: OUTPUT
-    icon: "mdi:shield-car"
-    restore_mode: ALWAYS_ON # Active in 0xD940
-
-  - platform: gpio
-    name: "Cluster Backlight"
-    id: ind_backlight
-    pin:
-      tca9555: expander_indicators
-      number: 12
-      mode: OUTPUT
-    icon: "mdi:car-parking-lights"
-    restore_mode: ALWAYS_ON # Active in 0xD940
-
-  - platform: gpio
-    name: "Alternator / Battery Charge"
+    name: "Alternator - Battery Charge"
     id: ind_alternator
     pin:
       tca9555: expander_indicators
       number: 13
       mode: OUTPUT
+      inverted: ${inv_alternator}
     icon: "mdi:car-battery"
     restore_mode: ALWAYS_OFF
 
@@ -252,6 +284,7 @@ switch:
       tca9555: expander_indicators
       number: 14
       mode: OUTPUT
+      inverted: ${inv_hi_beams}
     icon: "mdi:car-light-high-beam"
     restore_mode: ALWAYS_ON # Active in 0xD940
 
@@ -262,5 +295,6 @@ switch:
       tca9555: expander_indicators
       number: 15
       mode: OUTPUT
+      inverted: ${inv_ignition}
     icon: "mdi:key-wireless"
     restore_mode: ALWAYS_ON # Active in 0xD940
