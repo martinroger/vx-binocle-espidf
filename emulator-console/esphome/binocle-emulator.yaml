@@ -101,6 +101,61 @@ api:
   encryption:
     key: !secret api_encryption_key
 
+# Bidirectional MQTT Integration with Custom Migration Topics
+mqtt:
+  broker: !secret mqtt_broker
+  port: !secret mqtt_port
+  username: !secret mqtt_username
+  password: !secret mqtt_password
+  topic_prefix: ${name}
+  birth_message:
+    topic: "${name}/status"
+    payload: "online"
+  will_message:
+    topic: "${name}/status"
+    payload: "offline"
+  on_json_message:
+    - topic: "${name}/custom/pwm"
+      then:
+        - lambda: |-
+            if (x.containsKey("speed")) {
+              float spd = x["speed"];
+              id(speed_kph).publish_state(spd);
+              esphome::vehicle_emulator::McpwmManager::set_speed_kph(spd);
+            }
+            if (x.containsKey("rpm")) {
+              int rpm = x["rpm"];
+              id(engine_rpm).publish_state(rpm);
+              esphome::vehicle_emulator::McpwmManager::set_rpm(rpm);
+            }
+            if (x.containsKey("temp")) {
+              float temp = x["temp"];
+              id(coolant_temp).publish_state(temp);
+              esphome::vehicle_emulator::McpwmManager::set_coolant_degc(temp);
+            }
+    - topic: "${name}/custom/set_mask_0"
+      then:
+        - lambda: |-
+            if (x.containsKey("mask")) {
+              uint16_t mask = x["mask"];
+              id(ind_brake_low).publish_state((mask & (1 << 0)) != 0);
+              id(ind_parking_brake).publish_state((mask & (1 << 1)) != 0);
+              id(ind_oil_low).publish_state((mask & (1 << 2)) != 0);
+              id(ind_airbag).publish_state((mask & (1 << 3)) != 0);
+              id(ind_cel).publish_state((mask & (1 << 4)) != 0);
+              id(ind_backlight).publish_state((mask & (1 << 5)) != 0);
+              id(ind_alarm).publish_state((mask & (1 << 6)) != 0);
+              id(ind_button).publish_state((mask & (1 << 7)) != 0);
+              id(ind_coolant_low).publish_state((mask & (1 << 8)) != 0);
+              id(ind_door).publish_state((mask & (1 << 9)) != 0);
+              id(ind_abs).publish_state((mask & (1 << 10)) != 0);
+              id(ind_right_turn).publish_state((mask & (1 << 11)) != 0);
+              id(ind_left_turn).publish_state((mask & (1 << 12)) != 0);
+              id(ind_alternator).publish_state((mask & (1 << 13)) != 0);
+              id(ind_hi_beams).publish_state((mask & (1 << 14)) != 0);
+              id(ind_ignition).publish_state((mask & (1 << 15)) != 0);
+            }
+
 # Over-The-Air Firmware Updates
 ota:
   - platform: esphome
@@ -126,7 +181,7 @@ tca9555:
     address: ${i2c_addr_resistor}
     i2c_id: bus_i2c
 
-# 5V Power Rail & Discrete Indicator Switches
+# 5V Power Rail, Indicator Switches & Hazard Flasher
 switch:
   # 5V Auxiliary Power Rail
   - platform: gpio
@@ -135,6 +190,19 @@ switch:
     pin: ${pin_5v_enable}
     icon: "mdi:power-socket-us"
     restore_mode: ALWAYS_ON
+
+  # Synchronized Hazard Flasher
+  - platform: template
+    name: "Hazard Flasher"
+    id: hazard_flasher
+    icon: "mdi:hazard-lights"
+    optimistic: true
+    turn_on_action:
+      - script.execute: script_hazard_flash
+    turn_off_action:
+      - script.stop: script_hazard_flash
+      - switch.turn_off: ind_left_turn
+      - switch.turn_off: ind_right_turn
 
   # --- Expander 0 (0x20): 16 Discrete Vehicle Indicator Lines ---
   - platform: gpio
@@ -352,7 +420,6 @@ select:
           }
           esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);
           id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::FUEL_RES_VALUES[step - 1]);
-          // Sync percentage slider (Step 1 = 100%, Step 19 = 0%)
           float pct = 100.0f - ((float)(step - 1) / 18.0f) * 100.0f;
           id(fuel_percent).publish_state(pct);
 
@@ -372,7 +439,6 @@ number:
     set_action:
       - lambda: |-
           esphome::vehicle_emulator::McpwmManager::set_speed_kph(x);
-          // Sync mph slider (mph = kph / 1.609344)
           id(speed_mph).publish_state(roundf(x / 1.609344f));
           id(sensor_speed_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED));
 
@@ -390,7 +456,6 @@ number:
     set_action:
       - lambda: |-
           esphome::vehicle_emulator::McpwmManager::set_speed_mph(x);
-          // Sync kph slider (kph = mph * 1.609344)
           id(speed_kph).publish_state(roundf(x * 1.609344f));
           id(sensor_speed_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED));
 
@@ -461,7 +526,7 @@ number:
           int divider = (int)x;
           esphome::vehicle_emulator::set_low_caliber_divider(id(bus_i2c), ${i2c_addr_resistor}, divider);
           if (divider == 0) {
-            id(sensor_fuel_resistance).publish_state(NAN); // Open Circuit
+            id(sensor_fuel_resistance).publish_state(NAN);
           } else {
             id(sensor_fuel_resistance).publish_state(270.0f / (float)divider);
           }
@@ -481,10 +546,162 @@ number:
           int divider = (int)x;
           esphome::vehicle_emulator::set_high_caliber_divider(id(bus_i2c), ${i2c_addr_resistor}, divider);
           if (divider == 0) {
-            id(sensor_fuel_resistance).publish_state(NAN); // Open Circuit
+            id(sensor_fuel_resistance).publish_state(NAN);
           } else {
             id(sensor_fuel_resistance).publish_state(2000.0f / (float)divider);
           }
+
+# --- Action Buttons & Automated Routines ---
+button:
+  # Lamp Test / Cluster Self-Test Routine
+  - platform: template
+    name: "Lamp Test (All Indicators ON)"
+    id: btn_lamp_test
+    icon: "mdi:car-light-dimmed"
+    on_press:
+      - script.execute: script_lamp_test
+
+  # Gauge Sweep Routine (0% -> 100% -> 0%)
+  - platform: template
+    name: "Gauge Sweep (Speed / RPM / Temp)"
+    id: btn_gauge_sweep
+    icon: "mdi:rotate-right"
+    on_press:
+      - script.execute: script_gauge_sweep
+
+  # All Off / Safe State
+  - platform: template
+    name: "All Off / Safe State"
+    id: btn_all_off
+    icon: "mdi:power"
+    on_press:
+      - script.execute: script_all_off
+
+  # Ignition ON Standby Preset (Mask 0xD940)
+  - platform: template
+    name: "Ignition ON Preset"
+    id: btn_ignition_on
+    icon: "mdi:restart"
+    on_press:
+      - script.execute: script_ignition_on_preset
+
+# Automation Scripts for Sequences & Tests
+script:
+  # Hazard blinker timer loop (1.5 Hz sync)
+  - id: script_hazard_flash
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: "return id(hazard_flasher).state;"
+          then:
+            - switch.turn_on: ind_left_turn
+            - switch.turn_on: ind_right_turn
+            - delay: 350ms
+            - switch.turn_off: ind_left_turn
+            - switch.turn_off: ind_right_turn
+            - delay: 350ms
+
+  # Lamp test sequence
+  - id: script_lamp_test
+    mode: single
+    then:
+      - logger.log: "Starting Cluster Lamp Test sequence..."
+      - switch.turn_on: ind_brake_low
+      - switch.turn_on: ind_parking_brake
+      - switch.turn_on: ind_oil_low
+      - switch.turn_on: ind_airbag
+      - switch.turn_on: ind_cel
+      - switch.turn_on: ind_backlight
+      - switch.turn_on: ind_alarm
+      - switch.turn_on: ind_button
+      - switch.turn_on: ind_coolant_low
+      - switch.turn_on: ind_door
+      - switch.turn_on: ind_abs
+      - switch.turn_on: ind_right_turn
+      - switch.turn_on: ind_left_turn
+      - switch.turn_on: ind_alternator
+      - switch.turn_on: ind_hi_beams
+      - switch.turn_on: ind_ignition
+      - delay: 3000ms
+      - script.execute: script_ignition_on_preset
+
+  # Gauge sweep sequence
+  - id: script_gauge_sweep
+    mode: single
+    then:
+      - logger.log: "Starting Gauge Sweep sequence..."
+      - number.set:
+          id: speed_kph
+          value: 200
+      - number.set:
+          id: engine_rpm
+          value: 7000
+      - number.set:
+          id: coolant_temp
+          value: 120
+      - delay: 2500ms
+      - number.set:
+          id: speed_kph
+          value: 0
+      - number.set:
+          id: engine_rpm
+          value: 0
+      - number.set:
+          id: coolant_temp
+          value: 90
+      - logger.log: "Gauge Sweep completed."
+
+  # All Off Safe State
+  - id: script_all_off
+    mode: single
+    then:
+      - number.set:
+          id: speed_kph
+          value: 0
+      - number.set:
+          id: engine_rpm
+          value: 0
+      - number.set:
+          id: coolant_temp
+          value: 70
+      - switch.turn_off: ind_brake_low
+      - switch.turn_off: ind_parking_brake
+      - switch.turn_off: ind_oil_low
+      - switch.turn_off: ind_airbag
+      - switch.turn_off: ind_cel
+      - switch.turn_off: ind_backlight
+      - switch.turn_off: ind_alarm
+      - switch.turn_off: ind_button
+      - switch.turn_off: ind_coolant_low
+      - switch.turn_off: ind_door
+      - switch.turn_off: ind_abs
+      - switch.turn_off: ind_right_turn
+      - switch.turn_off: ind_left_turn
+      - switch.turn_off: ind_alternator
+      - switch.turn_off: ind_hi_beams
+      - switch.turn_off: ind_ignition
+
+  # Ignition ON Preset (Mask 0xD940)
+  - id: script_ignition_on_preset
+    mode: single
+    then:
+      - switch.turn_off: ind_brake_low
+      - switch.turn_off: ind_parking_brake
+      - switch.turn_off: ind_oil_low
+      - switch.turn_off: ind_airbag
+      - switch.turn_off: ind_cel
+      - switch.turn_on: ind_backlight
+      - switch.turn_on: ind_alarm
+      - switch.turn_off: ind_button
+      - switch.turn_off: ind_coolant_low
+      - switch.turn_on: ind_door
+      - switch.turn_off: ind_abs
+      - switch.turn_off: ind_right_turn
+      - switch.turn_on: ind_left_turn
+      - switch.turn_off: ind_alternator
+      - switch.turn_on: ind_hi_beams
+      - switch.turn_on: ind_ignition
 
 # Live Telemetry Feedback Sensors
 sensor:
