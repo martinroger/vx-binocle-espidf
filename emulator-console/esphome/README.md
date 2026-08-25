@@ -1,6 +1,6 @@
 # ESPHome Binocle Vehicle Emulator Firmware
 
-Standalone, modern ESPHome firmware for the **VX Binocle Vehicle Emulator (ESP32-S3)**. This firmware replaces the external Node-RED dashboard and UART text console by running directly on the ESP32-S3, providing a real-time web dashboard, Home Assistant native API integration, bidirectional MQTT control, physical UART logging, and sub-hertz precision hardware MCPWM signal generation.
+Standalone, modern ESPHome firmware for the **VX Binocle Vehicle Emulator (ESP32-S3)**. This firmware replaces the external Node-RED dashboard and UART text console by running directly on the ESP32-S3, providing a real-time web dashboard, Home Assistant native API integration, physical UART logging, and sub-hertz precision hardware MCPWM signal generation.
 
 ---
 
@@ -21,7 +21,7 @@ Standalone, modern ESPHome firmware for the **VX Binocle Vehicle Emulator (ESP32
   - 19 discrete steps from 30.2 $\Omega$ (Full Tank) to 270.0 $\Omega$ (Empty Tank), plus raw low/high caliber load divider inputs.
 - **Instant Boot Standby**: Early boot sequence (`on_boot` priority 600) immediately applies mask `0xD940` (Ignition ON standby) and initial fuel resistor mask `0x7FFF` on power-up.
 - **Automated Routines & Presets**: Lamp Check / Cluster Self-Test, Gauge Sweep, Synchronized Hazard Flasher, All Off Safe State, and Ignition ON Preset.
-- **Complete Bidirectional MQTT & Home Assistant Integration**.
+- **Native Home Assistant API Integration**.
 
 ---
 
@@ -94,31 +94,4 @@ esphome run binocle-emulator.yaml
 # Monitor live serial/wireless logs
 esphome logs binocle-emulator.yaml
 ```
-
----
-
-## MQTT Topic Reference
-
-`topic_prefix: binocle-emulator`
-
-### 1. Switches & Power
-- **Command**: `binocle-emulator/switch/<entity>/command` (`ON`, `OFF`, `TOGGLE`)
-- **State**: `binocle-emulator/switch/<entity>/state` (`ON`, `OFF`)
-- Entities: `power_5v`, `hazard_flasher`, `ind_ignition`, `ind_hi_beams`, `ind_alternator`, `ind_left_turn`, `ind_right_turn`, `ind_abs`, `ind_door`, `ind_coolant_low`, `ind_button`, `ind_alarm`, `ind_backlight`, `ind_cel`, `ind_airbag`, `ind_oil_low`, `ind_parking_brake`, `ind_brake_low`.
-
-### 2. Sliders & Numbers
-- **Command**: `binocle-emulator/number/<entity>/command` (Payload: Float string)
-- **State**: `binocle-emulator/number/<entity>/state`
-- Entities: `speed_kph` (0..271), `speed_mph` (0..168), `engine_rpm` (0..9000), `coolant_temp` (70..130), `fuel_percent` (0..100), `low_res_divider` (0..8), `high_res_divider` (0..8).
-
-### 3. Fuel Resistor Selection
-- **Command / State**: `binocle-emulator/select/fuel_resistor_step/command` (e.g. `"Step 01 - 30.2 Ω (Full)"` .. `"Step 19 - 270.0 Ω (Empty)"`).
-
-### 4. Action Buttons
-- **Command**: `binocle-emulator/button/<entity>/command` (`PRESS`)
-- Entities: `btn_lamp_test`, `btn_gauge_sweep`, `btn_all_off`, `btn_ignition_on`.
-
-### 5. Custom JSON Migration Topics
-- **Batch PWM**: Send `{"speed": 120, "rpm": 3500, "temp": 90}` to `binocle-emulator/custom/pwm`.
-- **Expander 0 Mask**: Send `{"mask": 55616}` (0xD940) to `binocle-emulator/custom/set_mask_0`.
 
