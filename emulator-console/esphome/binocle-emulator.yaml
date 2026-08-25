@@ -1,0 +1,266 @@
+substitutions:
+  name: "binocle-emulator"
+  friendly_name: "Binocle Vehicle Emulator"
+
+  # GPIO Pin Assignments (Matching sdkconfig.defaults & Kconfig.projbuild)
+  pin_sda: "GPIO5"
+  pin_scl: "GPIO6"
+  pin_5v_enable: "GPIO8"
+  pin_pwm_speed: "GPIO10"
+  pin_pwm_rpm: "GPIO11"
+  pin_pwm_coolant: "GPIO12"
+
+  # I2C Addresses
+  i2c_addr_primary: "0x20"
+  i2c_addr_resistor: "0x21"
+
+  # Base Standby & Timing Parameters
+  coolant_base_freq_hz: "100"
+  speed_default_duty_pct: "33.0"
+  rpm_default_duty_pct: "50.0"
+
+  # Boot Standby Expander Masks
+  mask_exp0_standby: "0xD940" # Ignition ON standby (Pins 15, 14, 12, 11, 8, 6 active)
+  mask_exp1_default: "0x7FFF" # 30.2 Ohm initial resistance (Step 1)
+
+  # Conversion Coefficients (Matching common/coefficients.h)
+  coeff_speed_kph_to_freq_m: "4.088998"   # 31285.0 / 7651.0
+  coeff_speed_mph_to_freq_m: "6.580620"   # 17182.0 / 2611.0
+  coeff_rpm_to_freq_m: "0.03333333"       # 1.0 / 30.0
+  coeff_coolant_degc_to_duty_m: "1.408451" # 100.0 / 71.0
+  coeff_coolant_degc_to_duty_p: "-90.140845" # -100.0 * 64.0 / 71.0
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  on_boot:
+    priority: 600.0
+    then:
+      - logger.log: "Executing early boot standby initialization (Mask 0xD940 on Expander 0)..."
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+# Physical UART / USB-Serial Logging
+logger:
+  level: DEBUG
+  baud_rate: 115200
+
+# Wi-Fi Configuration with Fallback AP
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Binocle-Emulator-Fallback"
+    password: !secret ap_password
+
+captive_portal:
+
+# In-Browser Real-Time Web Server Dashboard with Live Terminal Log Viewer
+web_server:
+  port: 80
+  version: 3
+  log: true
+
+# Native Home Assistant Integration
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+# Over-The-Air Firmware Updates
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# mDNS for http://binocle-emulator.local discovery
+mdns:
+
+# I2C Bus Configuration
+i2c:
+  id: bus_i2c
+  sda: ${pin_sda}
+  scl: ${pin_scl}
+  scan: true
+  frequency: 400kHz
+
+# TCA9555 IO Expanders
+tca9555:
+  - id: expander_indicators
+    address: ${i2c_addr_primary}
+    i2c_id: bus_i2c
+  - id: expander_resistors
+    address: ${i2c_addr_resistor}
+    i2c_id: bus_i2c
+
+# 5V Power Rail & Discrete Indicator Switches
+switch:
+  # 5V Auxiliary Power Rail
+  - platform: gpio
+    name: "5V Power Rail"
+    id: power_5v
+    pin: ${pin_5v_enable}
+    icon: "mdi:power-socket-us"
+    restore_mode: ALWAYS_ON
+
+  # --- Expander 0 (0x20): 16 Discrete Vehicle Indicator Lines ---
+  - platform: gpio
+    name: "Low Brake Fluid"
+    id: ind_brake_low
+    pin:
+      tca9555: expander_indicators
+      number: 0
+      mode: OUTPUT
+    icon: "mdi:car-brake-fluid-level"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Parking Brake"
+    id: ind_parking_brake
+    pin:
+      tca9555: expander_indicators
+      number: 1
+      mode: OUTPUT
+    icon: "mdi:car-brake-parking"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Oil Pressure Low"
+    id: ind_oil_low
+    pin:
+      tca9555: expander_indicators
+      number: 2
+      mode: OUTPUT
+    icon: "mdi:oil"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Airbag Warning"
+    id: ind_airbag
+    pin:
+      tca9555: expander_indicators
+      number: 3
+      mode: OUTPUT
+    icon: "mdi:airbag"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Check Engine Light (CEL)"
+    id: ind_cel
+    pin:
+      tca9555: expander_indicators
+      number: 4
+      mode: OUTPUT
+    icon: "mdi:engine-outline"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Right Turn Indicator"
+    id: ind_right_turn
+    pin:
+      tca9555: expander_indicators
+      number: 5
+      mode: OUTPUT
+    icon: "mdi:arrow-right-bold-circle-outline"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Left Turn Indicator"
+    id: ind_left_turn
+    pin:
+      tca9555: expander_indicators
+      number: 6
+      mode: OUTPUT
+    icon: "mdi:arrow-left-bold-circle-outline"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+  - platform: gpio
+    name: "ABS Warning"
+    id: ind_abs
+    pin:
+      tca9555: expander_indicators
+      number: 7
+      mode: OUTPUT
+    icon: "mdi:car-brake-abs"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Door Ajar"
+    id: ind_door
+    pin:
+      tca9555: expander_indicators
+      number: 8
+      mode: OUTPUT
+    icon: "mdi:car-door"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+  - platform: gpio
+    name: "Low Coolant"
+    id: ind_coolant_low
+    pin:
+      tca9555: expander_indicators
+      number: 9
+      mode: OUTPUT
+    icon: "mdi:coolant-temperature"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Cluster Button / Trip"
+    id: ind_button
+    pin:
+      tca9555: expander_indicators
+      number: 10
+      mode: OUTPUT
+    icon: "mdi:gesture-tap-button"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Alarm Status"
+    id: ind_alarm
+    pin:
+      tca9555: expander_indicators
+      number: 11
+      mode: OUTPUT
+    icon: "mdi:shield-car"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+  - platform: gpio
+    name: "Cluster Backlight"
+    id: ind_backlight
+    pin:
+      tca9555: expander_indicators
+      number: 12
+      mode: OUTPUT
+    icon: "mdi:car-parking-lights"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+  - platform: gpio
+    name: "Alternator / Battery Charge"
+    id: ind_alternator
+    pin:
+      tca9555: expander_indicators
+      number: 13
+      mode: OUTPUT
+    icon: "mdi:car-battery"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "High Beams"
+    id: ind_hi_beams
+    pin:
+      tca9555: expander_indicators
+      number: 14
+      mode: OUTPUT
+    icon: "mdi:car-light-high-beam"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+  - platform: gpio
+    name: "Ignition"
+    id: ind_ignition
+    pin:
+      tca9555: expander_indicators
+      number: 15
+      mode: OUTPUT
+    icon: "mdi:key-wireless"
+    restore_mode: ALWAYS_ON # Active in 0xD940
