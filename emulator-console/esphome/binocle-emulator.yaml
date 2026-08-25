@@ -10,6 +10,11 @@ substitutions:
   pin_pwm_rpm: "GPIO11"
   pin_pwm_coolant: "GPIO12"
 
+  # Raw Integer GPIO numbers for C++ MCPWM drivers
+  pin_num_pwm_speed: "10"
+  pin_num_pwm_rpm: "11"
+  pin_num_pwm_coolant: "12"
+
   # I2C Addresses
   i2c_addr_primary: "0x20"
   i2c_addr_resistor: "0x21"
@@ -53,10 +58,15 @@ esphome:
   friendly_name: ${friendly_name}
   includes:
     - resistor_ladder.h
+    - custom_mcpwm.h
   on_boot:
     priority: 600.0
     then:
       - lambda: |-
+          ESP_LOGI("BOOT", "Initializing MCPWM outputs (Speed GPIO %d, RPM GPIO %d, Coolant GPIO %d)",
+                   ${pin_num_pwm_speed}, ${pin_num_pwm_rpm}, ${pin_num_pwm_coolant});
+          esphome::vehicle_emulator::McpwmManager::init_all(${pin_num_pwm_coolant}, ${pin_num_pwm_rpm}, ${pin_num_pwm_speed});
+          
           ESP_LOGI("BOOT", "Applying early boot standby masks: Expander 0 = 0xD940, Expander 1 = 0x7FFF");
           esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, 1);
 
@@ -346,7 +356,76 @@ select:
           float pct = 100.0f - ((float)(step - 1) / 18.0f) * 100.0f;
           id(fuel_percent).publish_state(pct);
 
+# --- Gauge Controllers & Caliber Dividers ---
 number:
+  # Vehicle Speed (km/h)
+  - platform: template
+    name: "Vehicle Speed (km/h)"
+    id: speed_kph
+    icon: "mdi:speedometer"
+    unit_of_measurement: "km/h"
+    min_value: 0
+    max_value: 271
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_speed_kph(x);
+          // Sync mph slider (mph = kph / 1.609344)
+          id(speed_mph).publish_state(roundf(x / 1.609344f));
+          id(sensor_speed_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED));
+
+  # Vehicle Speed (mph)
+  - platform: template
+    name: "Vehicle Speed (mph)"
+    id: speed_mph
+    icon: "mdi:speedometer"
+    unit_of_measurement: "mph"
+    min_value: 0
+    max_value: 168
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_speed_mph(x);
+          // Sync kph slider (kph = mph * 1.609344)
+          id(speed_kph).publish_state(roundf(x * 1.609344f));
+          id(sensor_speed_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED));
+
+  # Engine RPM
+  - platform: template
+    name: "Engine RPM"
+    id: engine_rpm
+    icon: "mdi:gauge"
+    unit_of_measurement: "RPM"
+    min_value: 0
+    max_value: 9000
+    step: 50
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_rpm(static_cast<int>(x));
+          id(sensor_rpm_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_RPM));
+
+  # Coolant Temperature (°C)
+  - platform: template
+    name: "Coolant Temperature"
+    id: coolant_temp
+    icon: "mdi:thermometer"
+    unit_of_measurement: "°C"
+    min_value: 70
+    max_value: 130
+    step: 1
+    initial_value: 90
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_coolant_degc(x);
+          id(sensor_coolant_duty).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_COOLANT));
+
   # Fuel Level Slider (0% to 100%)
   - platform: template
     name: "Fuel Level Percentage"
@@ -360,7 +439,6 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          // Map percentage (100% -> Step 1 / 30.2 Ohm, 0% -> Step 19 / 270 Ohm)
           int step = 19 - (int)round((x / 100.0f) * 18.0f);
           if (step < 1) step = 1;
           if (step > 19) step = 19;
@@ -408,7 +486,7 @@ number:
             id(sensor_fuel_resistance).publish_state(2000.0f / (float)divider);
           }
 
-# Resistance Sensor Feedback
+# Live Telemetry Feedback Sensors
 sensor:
   - platform: template
     name: "Fuel Sender Resistance"
@@ -416,4 +494,28 @@ sensor:
     icon: "mdi:omega"
     unit_of_measurement: "Ω"
     accuracy_decimals: 1
+    update_interval: never
+
+  - platform: template
+    name: "Speed Actual Frequency"
+    id: sensor_speed_freq
+    icon: "mdi:sine-wave"
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "RPM Actual Frequency"
+    id: sensor_rpm_freq
+    icon: "mdi:sine-wave"
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "Coolant Actual Duty"
+    id: sensor_coolant_duty
+    icon: "mdi:percent"
+    unit_of_measurement: "%"
+    accuracy_decimals: 2
     update_interval: never
