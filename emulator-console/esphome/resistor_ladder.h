@@ -6,13 +6,14 @@ namespace esphome {
 namespace vehicle_emulator {
 
 // 19 discrete resistor network masks and corresponding resistance values (Ohm)
+// Note: Cluster logic is inverted: ~270 Ohm is Full Tank, ~0 Ohm is Empty Tank.
 static const uint16_t FUEL_RES_MASKS[19] = {
-    0x7FFF, // Level 1:  30.2 Ohm (Full Tank)
+    0x7FFF, // Level 1:  30.2 Ohm (Empty Tank / near 0 Ohm)
     0x3F3F, // Level 2:  39.6 Ohm
     0x071F, // Level 3:  50.0 Ohm
     0x0F0F, // Level 4:  59.5 Ohm
     0x3F07, // Level 5:  70.9 Ohm
-    0x0707, // Level 6:  79.3 Ohm (3/4 Tank)
+    0x0707, // Level 6:  79.3 Ohm (1/4 Tank)
     0x0007, // Level 7:  90.0 Ohm
     0x1F03, // Level 8:  100.9 Ohm
     0x0703, // Level 9:  112.3 Ohm
@@ -20,12 +21,12 @@ static const uint16_t FUEL_RES_MASKS[19] = {
     0xFF01, // Level 11: 129.8 Ohm
     0x7F01, // Level 12: 138.8 Ohm
     0x3F01, // Level 13: 149.2 Ohm
-    0x1F01, // Level 14: 161.2 Ohm (1/4 Tank)
+    0x1F01, // Level 14: 161.2 Ohm (3/4 Tank)
     0x0F01, // Level 15: 175.3 Ohm
     0x0701, // Level 16: 192.2 Ohm
     0x0301, // Level 17: 212.6 Ohm
     0x0101, // Level 18: 237.9 Ohm
-    0x0001  // Level 19: 270.0 Ohm (Empty Tank)
+    0x0001  // Level 19: 270.0 Ohm (Full Tank)
 };
 
 static const float FUEL_RES_VALUES[19] = {
@@ -94,4 +95,3 @@ inline bool set_high_caliber_divider(i2c::I2CBus *bus, uint8_t i2c_addr, int div
 
 } // namespace vehicle_emulator
 } // namespace esphome
-

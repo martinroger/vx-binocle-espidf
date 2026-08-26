@@ -26,7 +26,7 @@ substitutions:
 
   # Boot Standby Expander Masks
   mask_exp0_standby: "0xD940" # Ignition ON standby
-  mask_exp1_default: "0x7FFF" # 30.2 Ohm initial resistance (Step 1)
+  mask_exp1_default: "0x0001" # 270.0 Ohm initial resistance (Step 19 Full Tank)
 
   # Indicator Polarity Inversion (true = Active Low, false = Active High)
   inv_ignition: "false"
@@ -336,14 +336,14 @@ select:
     id: fuel_resistor_step
     icon: "mdi:gas-station"
     optimistic: true
-    initial_option: "Step 01 - 30.2 Ω (Full)"
+    initial_option: "Step 19 - 270.0 Ω (Full)"
     options:
-      - "Step 01 - 30.2 Ω (Full)"
+      - "Step 01 - 30.2 Ω (Empty)"
       - "Step 02 - 39.6 Ω"
       - "Step 03 - 50.0 Ω"
       - "Step 04 - 59.5 Ω"
       - "Step 05 - 70.9 Ω"
-      - "Step 06 - 79.3 Ω (3/4 Tank)"
+      - "Step 06 - 79.3 Ω (1/4 Tank)"
       - "Step 07 - 90.0 Ω"
       - "Step 08 - 100.9 Ω"
       - "Step 09 - 112.3 Ω"
@@ -351,12 +351,12 @@ select:
       - "Step 11 - 129.8 Ω"
       - "Step 12 - 138.8 Ω"
       - "Step 13 - 149.2 Ω"
-      - "Step 14 - 161.2 Ω (1/4 Tank)"
+      - "Step 14 - 161.2 Ω (3/4 Tank)"
       - "Step 15 - 175.3 Ω"
       - "Step 16 - 192.2 Ω"
       - "Step 17 - 212.6 Ω"
       - "Step 18 - 237.9 Ω"
-      - "Step 19 - 270.0 Ω (Empty)"
+      - "Step 19 - 270.0 Ω (Full)"
     set_action:
       - lambda: |-
           int step = 1;
@@ -368,7 +368,8 @@ select:
           }
           esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);
           id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::FUEL_RES_VALUES[step - 1]);
-          float pct = 100.0f - ((float)(step - 1) / 18.0f) * 100.0f;
+          // Sync percentage slider (Step 1 = 0% Empty, Step 19 = 100% Full)
+          float pct = ((float)(step - 1) / 18.0f) * 100.0f;
           id(fuel_percent).publish_state(pct);
 
 # --- Gauge Controllers & Caliber Dividers ---
@@ -452,7 +453,8 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          int step = 19 - (int)round((x / 100.0f) * 18.0f);
+          // Map percentage: 0% -> Step 1 (30.2 Ohm / Empty), 100% -> Step 19 (270 Ohm / Full)
+          int step = 1 + (int)round((x / 100.0f) * 18.0f);
           if (step < 1) step = 1;
           if (step > 19) step = 19;
           esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);

@@ -18,8 +18,8 @@ Standalone, modern ESPHome firmware for the **VX Binocle Vehicle Emulator (ESP32
   - Home Assistant / Web UI logical state is always intuitive (`ON` = Warning Active / Light ON).
 - **19-Step Calibrated Fuel Sender Resistor Network**:
   - Controlled via Secondary TCA9555 (`0x21`).
-  - 19 discrete steps from 30.2 $\Omega$ (Full Tank) to 270.0 $\Omega$ (Empty Tank), plus raw low/high caliber load divider inputs.
-- **Instant Boot Standby**: Early boot sequence (`on_boot` priority 600) immediately applies mask `0xD940` (Ignition ON standby) and initial fuel resistor mask `0x7FFF` on power-up.
+  - 19 discrete steps from 30.2 $\Omega$ (Empty Tank) to 270.0 $\Omega$ (Full Tank), plus raw low/high caliber load divider inputs.
+- **Instant Boot Standby**: Early boot sequence (`on_boot` priority 600) immediately applies mask `0xD940` (Ignition ON standby) and initial fuel resistor mask `0x0001` (Full Tank) on power-up.
 - **Automated Routines & Presets**: Lamp Check / Cluster Self-Test, Gauge Sweep, Synchronized Hazard Flasher, All Off Safe State, and Ignition ON Preset.
 - **Native Home Assistant API Integration**.
 
