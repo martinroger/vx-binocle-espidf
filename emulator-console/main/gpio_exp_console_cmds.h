@@ -1011,15 +1011,20 @@ static int setLowResOut(int argc, char **argv) {
 		printf("Expander error\n");
 		return 1;
 	}
-	// Calculate switch mask
-	uint32_t outputMask = 0;
+
+	// Read current 16-bit mask from expander
+	uint16_t currentMask = (uint16_t)(expanders[1]->multiDigitalRead(0xFFFF));
+
+	// Calculate low caliber mask byte (bits 0..7)
+	uint8_t lowByte = 0;
 	for (int i = 0; i < setxxxResOut_args.divider->ival[0]; i++) {
-		outputMask = (outputMask << 1) | 1;
+		lowByte = (lowByte << 1) | 1;
 	}
-	printf("Mask : 0x%lx\n", outputMask);
+
+	// Preserve high caliber byte (bits 8..15) and update low caliber byte
+	uint16_t newMask = (currentMask & 0xFF00) | lowByte;
 
 	// Force GPIO output mode
-	printf("Forcing all GPIO in output mode.\n");
 	if (expanders[1]->multiPinMode(0xFFFF, OUTPUT) == false)
 		return 1;
 
@@ -1027,14 +1032,18 @@ static int setLowResOut(int argc, char **argv) {
 	if (expanders[1]->multiDigitalWrite(0xFFFF, LOW) == false)
 		return 1;
 
-	// Switch pins to output state (check logic)
-	if (expanders[1]->multiDigitalWrite(0xFFFF & outputMask, HIGH) == false)
+	// Switch pins to target state
+	if (expanders[1]->multiDigitalWrite(newMask, HIGH) == false)
 		return 1;
-	// Feedback
+
+	printf("Low caliber divider set to %u (branch mask: 0x%02X). Full mask: 0x%04X\n",
+		   setxxxResOut_args.divider->ival[0], lowByte, newMask);
+
+	// Feedback on equivalent resistance
 	if (setxxxResOut_args.divider->ival[0] == 0) {
-		printf("Resistor emulator set to OC condition (divider %u) \n", setxxxResOut_args.divider->ival[0]);
+		printf("Low caliber resistor emulator set to OC condition (divider 0)\n");
 	} else {
-		printf("Resistor emulator set to approx %.1f (270/%u) \n",
+		printf("Low caliber branch approx %.1f Ohm (270/%u)\n",
 			   (270.0 / ((float)setxxxResOut_args.divider->ival[0])), setxxxResOut_args.divider->ival[0]);
 	}
 	return 0;
@@ -1057,17 +1066,20 @@ static int setHighResOut(int argc, char **argv) {
 		printf("Expander error\n");
 		return 1;
 	}
-	// Calculate switch mask
-	uint32_t outputMask = 0;
+
+	// Read current 16-bit mask from expander
+	uint16_t currentMask = (uint16_t)(expanders[1]->multiDigitalRead(0xFFFF));
+
+	// Calculate high caliber mask byte (bits 8..15)
+	uint8_t highByte = 0;
 	for (int i = 0; i < setxxxResOut_args.divider->ival[0]; i++) {
-		outputMask = (outputMask << 1) | 1;
+		highByte = (highByte << 1) | 1;
 	}
 
-	outputMask = (outputMask << 8);
-	printf("Mask : 0x%lx\n", outputMask);
+	// Preserve low caliber byte (bits 0..7) and update high caliber byte
+	uint16_t newMask = (currentMask & 0x00FF) | (static_cast<uint16_t>(highByte) << 8);
 
 	// Force GPIO output mode
-	printf("Forcing all GPIO in output mode.\n");
 	if (expanders[1]->multiPinMode(0xFFFF, OUTPUT) == false)
 		return 1;
 
@@ -1075,14 +1087,18 @@ static int setHighResOut(int argc, char **argv) {
 	if (expanders[1]->multiDigitalWrite(0xFFFF, LOW) == false)
 		return 1;
 
-	// Switch pins to output state (check logic)
-	if (expanders[1]->multiDigitalWrite(0xFFFF & outputMask, HIGH) == false)
+	// Switch pins to target state
+	if (expanders[1]->multiDigitalWrite(newMask, HIGH) == false)
 		return 1;
-	// Feedback
+
+	printf("High caliber divider set to %u (branch mask: 0x%02X). Full mask: 0x%04X\n",
+		   setxxxResOut_args.divider->ival[0], highByte, newMask);
+
+	// Feedback on equivalent resistance
 	if (setxxxResOut_args.divider->ival[0] == 0) {
-		printf("Resistor emulator set to OC condition (divider %u) \n", setxxxResOut_args.divider->ival[0]);
+		printf("High caliber resistor emulator set to OC condition (divider 0)\n");
 	} else {
-		printf("Resistor emulator set to approx %.1f (2000/%u) \n",
+		printf("High caliber branch approx %.1f Ohm (2000/%u)\n",
 			   (2000.0 / ((float)setxxxResOut_args.divider->ival[0])), setxxxResOut_args.divider->ival[0]);
 	}
 	return 0;
@@ -1334,7 +1350,7 @@ static int getExpMask(int argc, char **argv) {
 	uint32_t expanderMask = (uint32_t)(expanders[getExpMask_args.exp_id->ival[0]]->multiDigitalRead(0xFFFF));
 
 	// Feedback
-	printf("Expander %u mask: %lx\n", getExpMask_args.exp_id->ival[0], expanderMask);
+	printf("Expander %u mask: 0x%04lX\n", (unsigned int)getExpMask_args.exp_id->ival[0], (unsigned long)expanderMask);
 	return 0;
 }
 
@@ -1397,7 +1413,7 @@ static int setExpMask(int argc, char **argv) {
 		return 1;
 
 	// Feedback
-	printf("Expander %u mask: %04x\n", setExpMask_args.exp_id->ival[0], setExpMask_args.mask->ival[0]);
+	printf("Expander %u mask: 0x%04X\n", (unsigned int)setExpMask_args.exp_id->ival[0], (unsigned int)setExpMask_args.mask->ival[0]);
 	return 0;
 }
 

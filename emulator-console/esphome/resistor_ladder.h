@@ -34,6 +34,59 @@ static const float FUEL_RES_VALUES[19] = {
     129.8f, 138.8f, 149.2f, 161.2f, 175.3f, 192.2f, 212.6f, 237.9f, 270.0f
 };
 
+// Read a 16-bit mask from TCA9555 at given address (Reg 0x00 Input Port 0 & Port 1)
+inline bool read_expander_mask(i2c::I2CBus *bus, uint8_t i2c_addr, uint16_t &mask) {
+    if (bus == nullptr) return false;
+    uint8_t reg = 0x00;
+    uint8_t data[2] = {0, 0};
+    if (bus->write_readv(i2c_addr, &reg, 1, data, 2) != i2c::ERROR_OK) {
+        ESP_LOGE("RESISTOR_LADDER", "Failed to read mask from TCA9555 at 0x%02X", i2c_addr);
+        return false;
+    }
+    mask = static_cast<uint16_t>(data[0]) | (static_cast<uint16_t>(data[1]) << 8);
+    ESP_LOGD("RESISTOR_LADDER", "TCA9555 (0x%02X) current mask is 0x%04X", i2c_addr, mask);
+    return true;
+}
+
+// Calculate equivalent resistance (Ohm) from a 16-bit resistor expander mask (0x21)
+// Low caliber divider: lower byte (bits 0..7) has active branches in parallel with 270 Ohm base load.
+// High caliber divider: upper byte (bits 8..15) has active branches in parallel with 2000 Ohm base load.
+inline float calculate_resistance_from_mask(uint16_t mask) {
+    // Check if mask matches one of the 19 standard calibrated fuel resistor steps
+    for (int i = 0; i < 19; i++) {
+        if (FUEL_RES_MASKS[i] == mask) {
+            return FUEL_RES_VALUES[i];
+        }
+    }
+
+    uint8_t low_byte = mask & 0xFF;
+    uint8_t high_byte = (mask >> 8) & 0xFF;
+
+    int count_low = 0;
+    for (int b = 0; b < 8; b++) {
+        if (low_byte & (1 << b)) count_low++;
+    }
+
+    int count_high = 0;
+    for (int b = 0; b < 8; b++) {
+        if (high_byte & (1 << b)) count_high++;
+    }
+
+    float conductance = 0.0f;
+    if (count_low > 0) {
+        conductance += ((float)count_low / 270.0f);
+    }
+    if (count_high > 0) {
+        conductance += ((float)count_high / 2000.0f);
+    }
+
+    if (conductance > 0.0f) {
+        return 1.0f / conductance;
+    }
+
+    return NAN; // Open circuit
+}
+
 // Write a 16-bit mask to TCA9555 at address 0x21 (resistor network expander)
 inline bool write_resistor_mask(i2c::I2CBus *bus, uint8_t i2c_addr, uint16_t mask) {
     if (bus == nullptr) return false;
@@ -68,29 +121,74 @@ inline bool set_fuel_step(i2c::I2CBus *bus, uint8_t i2c_addr, int step) {
     return write_resistor_mask(bus, i2c_addr, mask);
 }
 
-// Set low-caliber divider (0..8, 0 is open circuit, otherwise 270/d Ohm)
+// Set low-caliber divider (0..8, 0 is open circuit).
+// Reads current mask and preserves high-caliber byte (upper 8 bits).
 inline bool set_low_caliber_divider(i2c::I2CBus *bus, uint8_t i2c_addr, int divider) {
     if (divider < 0) divider = 0;
     if (divider > 8) divider = 8;
     
-    uint16_t mask = 0;
+    uint16_t current_mask = 0;
+    read_expander_mask(bus, i2c_addr, current_mask);
+
+    uint8_t low_byte = 0;
     for (int i = 0; i < divider; i++) {
-        mask = (mask << 1) | 1;
+        low_byte = (low_byte << 1) | 1;
     }
-    return write_resistor_mask(bus, i2c_addr, mask);
+
+    uint16_t new_mask = (current_mask & 0xFF00) | low_byte;
+    return write_resistor_mask(bus, i2c_addr, new_mask);
 }
 
-// Set high-caliber divider (0..8, 0 is open circuit, otherwise 2000/d Ohm)
+// Set high-caliber divider (0..8, 0 is open circuit).
+// Reads current mask and preserves low-caliber byte (lower 8 bits).
 inline bool set_high_caliber_divider(i2c::I2CBus *bus, uint8_t i2c_addr, int divider) {
     if (divider < 0) divider = 0;
     if (divider > 8) divider = 8;
     
-    uint16_t mask = 0;
+    uint16_t current_mask = 0;
+    read_expander_mask(bus, i2c_addr, current_mask);
+
+    uint8_t high_byte = 0;
     for (int i = 0; i < divider; i++) {
-        mask = (mask << 1) | 1;
+        high_byte = (high_byte << 1) | 1;
     }
-    mask = (mask << 8); // Shifted to upper byte for high caliber
-    return write_resistor_mask(bus, i2c_addr, mask);
+
+    uint16_t new_mask = (current_mask & 0x00FF) | (static_cast<uint16_t>(high_byte) << 8);
+    return write_resistor_mask(bus, i2c_addr, new_mask);
+}
+
+// Find the closest standard fuel step (1..19) for a given target resistance in Ohms
+inline int find_closest_fuel_step(float target_ohm) {
+    int best_step = 1;
+    float min_diff = 1e9f;
+    for (int i = 0; i < 19; i++) {
+        float diff = std::abs(FUEL_RES_VALUES[i] - target_ohm);
+        if (diff < min_diff) {
+            min_diff = diff;
+            best_step = i + 1;
+        }
+    }
+    return best_step;
+}
+
+// Extract the number of active branches (divider 0..8) from a low-caliber byte (bits 0..7)
+inline int get_low_caliber_divider_from_mask(uint16_t mask) {
+    uint8_t low_byte = mask & 0xFF;
+    int count = 0;
+    for (int b = 0; b < 8; b++) {
+        if (low_byte & (1 << b)) count++;
+    }
+    return count;
+}
+
+// Extract the number of active branches (divider 0..8) from a high-caliber byte (bits 8..15)
+inline int get_high_caliber_divider_from_mask(uint16_t mask) {
+    uint8_t high_byte = (mask >> 8) & 0xFF;
+    int count = 0;
+    for (int b = 0; b < 8; b++) {
+        if (high_byte & (1 << b)) count++;
+    }
+    return count;
 }
 
 } // namespace vehicle_emulator

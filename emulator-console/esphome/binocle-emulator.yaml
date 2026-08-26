@@ -367,10 +367,17 @@ select:
             }
           }
           esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);
-          id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::FUEL_RES_VALUES[step - 1]);
-          // Sync percentage slider (Step 1 = 0% Empty, Step 19 = 100% Full)
-          float pct = ((float)(step - 1) / 18.0f) * 100.0f;
-          id(fuel_percent).publish_state(pct);
+          
+          // Read back expander mask & update calculated resistance telemetry and dividers
+          uint16_t mask = 0;
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask)) {
+            char buf[10];
+            snprintf(buf, sizeof(buf), "0x%04X", mask);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask));
+            id(low_res_divider).publish_state(esphome::vehicle_emulator::get_low_caliber_divider_from_mask(mask));
+            id(high_res_divider).publish_state(esphome::vehicle_emulator::get_high_caliber_divider_from_mask(mask));
+          }
 
 # --- Gauge Controllers & Caliber Dividers ---
 number:
@@ -440,25 +447,34 @@ number:
           esphome::vehicle_emulator::McpwmManager::set_coolant_degc(x);
           id(sensor_coolant_duty).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_COOLANT));
 
-  # Fuel Level Slider (0% to 100%)
+  # Fuel Level Slider (0% = 0 Ohm, 100% = 250 Ohm, allowed up to 120% for 270+ Ohm)
   - platform: template
     name: "Fuel Level Percentage"
     id: fuel_percent
     icon: "mdi:fuel"
     unit_of_measurement: "%"
     min_value: 0
-    max_value: 100
+    max_value: 120
     step: 1
-    initial_value: 100
+    initial_value: 108
     optimistic: true
     set_action:
       - lambda: |-
-          // Map percentage: 0% -> Step 1 (30.2 Ohm / Empty), 100% -> Step 19 (270 Ohm / Full)
-          int step = 1 + (int)round((x / 100.0f) * 18.0f);
-          if (step < 1) step = 1;
-          if (step > 19) step = 19;
+          // Target resistance: 0% -> 0 Ohm, 100% -> 250 Ohm (R = pct * 2.5 Ohm)
+          float target_ohm = x * 2.5f;
+          int step = esphome::vehicle_emulator::find_closest_fuel_step(target_ohm);
           esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);
-          id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::FUEL_RES_VALUES[step - 1]);
+          
+          // Read back expander mask & update calculated resistance telemetry and dividers
+          uint16_t mask = 0;
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask)) {
+            char buf[10];
+            snprintf(buf, sizeof(buf), "0x%04X", mask);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask));
+            id(low_res_divider).publish_state(esphome::vehicle_emulator::get_low_caliber_divider_from_mask(mask));
+            id(high_res_divider).publish_state(esphome::vehicle_emulator::get_high_caliber_divider_from_mask(mask));
+          }
           id(fuel_resistor_step).publish_state(id(fuel_resistor_step)->traits.get_options()[step - 1]);
 
   # Low-Caliber Resistor Divider (0..8, 0 is open circuit)
@@ -475,10 +491,14 @@ number:
       - lambda: |-
           int divider = (int)x;
           esphome::vehicle_emulator::set_low_caliber_divider(id(bus_i2c), ${i2c_addr_resistor}, divider);
-          if (divider == 0) {
-            id(sensor_fuel_resistance).publish_state(NAN);
-          } else {
-            id(sensor_fuel_resistance).publish_state(270.0f / (float)divider);
+          
+          // Read back expander mask & update calculated resistance telemetry
+          uint16_t mask = 0;
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask)) {
+            char buf[10];
+            snprintf(buf, sizeof(buf), "0x%04X", mask);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask));
           }
 
   # High-Caliber Resistor Divider (0..8, 0 is open circuit)
@@ -495,10 +515,14 @@ number:
       - lambda: |-
           int divider = (int)x;
           esphome::vehicle_emulator::set_high_caliber_divider(id(bus_i2c), ${i2c_addr_resistor}, divider);
-          if (divider == 0) {
-            id(sensor_fuel_resistance).publish_state(NAN);
-          } else {
-            id(sensor_fuel_resistance).publish_state(2000.0f / (float)divider);
+          
+          // Read back expander mask & update calculated resistance telemetry
+          uint16_t mask = 0;
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask)) {
+            char buf[10];
+            snprintf(buf, sizeof(buf), "0x%04X", mask);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask));
           }
 
 # --- Action Buttons & Automated Routines ---
@@ -535,6 +559,29 @@ button:
     on_press:
       - script.execute: script_ignition_on_preset
 
+  # Read Current Expander Masks
+  - platform: template
+    name: "Read Expander Masks"
+    id: btn_read_exp_masks
+    icon: "mdi:chip"
+    on_press:
+      - lambda: |-
+          uint16_t mask0 = 0, mask1 = 0;
+          char buf[10];
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_primary}, mask0)) {
+            snprintf(buf, sizeof(buf), "0x%04X", mask0);
+            id(sensor_exp0_mask).publish_state(buf);
+            ESP_LOGI("EXPANDER", "Expander 0 (0x20) mask: %s", buf);
+          }
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask1)) {
+            snprintf(buf, sizeof(buf), "0x%04X", mask1);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask1));
+            id(low_res_divider).publish_state(esphome::vehicle_emulator::get_low_caliber_divider_from_mask(mask1));
+            id(high_res_divider).publish_state(esphome::vehicle_emulator::get_high_caliber_divider_from_mask(mask1));
+            ESP_LOGI("EXPANDER", "Expander 1 (0x21) mask: %s", buf);
+          }
+
 # Automation Scripts for Sequences & Tests
   - platform: template
     name: Restart to OTA
@@ -564,51 +611,55 @@ script:
     mode: single
     then:
       - logger.log: Starting Cluster Lamp Test sequence...
-      - switch.turn_on: ind_brake_low
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_brake_low
-      - switch.turn_on: ind_parking_brake
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_parking_brake
-      - switch.turn_on: ind_oil_low
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_oil_low
-      - switch.turn_on: ind_airbag
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_airbag
-      - switch.turn_on: ind_cel
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_cel
-      - switch.turn_on: ind_backlight
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_backlight
-      - switch.turn_on: ind_alarm
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_alarm
-      - switch.turn_on: ind_button
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_button
-      - switch.turn_on: ind_coolant_low
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_coolant_low
-      - switch.turn_on: ind_door
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_door
-      - switch.turn_on: ind_abs
-      - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_abs
+
       - switch.turn_on: ind_right_turn
       - delay: !lambda return ${light_test_delay};
       - switch.turn_off: ind_right_turn
-      - switch.turn_on: ind_left_turn
+
+      - switch.turn_on: ind_parking_brake
       - delay: !lambda return ${light_test_delay};
-      - switch.turn_off: ind_left_turn
+      - switch.turn_off: ind_parking_brake
+
+      - switch.turn_on: ind_brake_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_brake_low
+
+      - switch.turn_on: ind_abs
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_abs
+
+      - switch.turn_on: ind_airbag
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_airbag
+
+      - switch.turn_on: ind_oil_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_oil_low
+
+      - switch.turn_on: ind_coolant_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_coolant_low
+
       - switch.turn_on: ind_alternator
       - delay: !lambda return ${light_test_delay};
       - switch.turn_off: ind_alternator
+
+      - switch.turn_on: ind_cel
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_cel
+
+      - switch.turn_on: ind_backlight
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_backlight
+
       - switch.turn_on: ind_hi_beams
       - delay: !lambda return ${light_test_delay};
       - switch.turn_off: ind_hi_beams
+
+      - switch.turn_on: ind_left_turn
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_left_turn
+
       - script.execute: script_ignition_on_preset
   - id: script_gauge_sweep
     mode: single
@@ -711,6 +762,12 @@ sensor:
     unit_of_measurement: "Ω"
     accuracy_decimals: 1
     update_interval: never
+    on_value:
+      - lambda: |-
+          if (!std::isnan(x) && x >= 0.0f) {
+            float pct = (x / 250.0f) * 100.0f;
+            id(fuel_percent).publish_state(pct);
+          }
 
   - platform: template
     name: "Speed Actual Frequency"
@@ -734,4 +791,17 @@ sensor:
     icon: "mdi:percent"
     unit_of_measurement: "%"
     accuracy_decimals: 2
+    update_interval: never
+
+text_sensor:
+  - platform: template
+    name: "Expander 0 Mask"
+    id: sensor_exp0_mask
+    icon: "mdi:chip"
+    update_interval: never
+
+  - platform: template
+    name: "Expander 1 Mask"
+    id: sensor_exp1_mask
+    icon: "mdi:chip"
     update_interval: never
