@@ -638,7 +638,16 @@ static esp_err_t set_boot_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
-/// @brief Formats an NVS entry value into JSON escaped string
+/**
+ * @brief Formats an NVS entry value into a JSON escaped string representation.
+ * 
+ * @param[in] part_name NVS partition label (pass NULL or NVS_DEFAULT_PART_NAME for default partition)
+ * @param[in] namespace_name NVS namespace name
+ * @param[in] key NVS key identifier
+ * @param[in] type NVS data type identifier
+ * @param[out] val_buf Target buffer to store the formatted JSON value string
+ * @param[in] val_buf_len Capacity in bytes of the target buffer
+ */
 static void format_nvs_value_json(const char *part_name, const char *namespace_name, const char *key, nvs_type_t type, char *val_buf, size_t val_buf_len)
 {
 	nvs_handle_t h;
@@ -776,6 +785,12 @@ static void format_nvs_value_json(const char *part_name, const char *namespace_n
 	nvs_close(h);
 }
 
+/**
+ * @brief Converts an NVS data type enum to its human-readable string representation.
+ * 
+ * @param[in] type NVS type enum
+ * @return const char* String description of the type (e.g. "uint8", "string", "blob")
+ */
 static const char *nvs_type_to_str(nvs_type_t type)
 {
 	switch (type)
@@ -805,9 +820,12 @@ static const char *nvs_type_to_str(nvs_type_t type)
 	}
 }
 
-/// @brief Handler to scan and list all NVS entries across all NVS partitions
-/// @param req GET /nvs/list
-/// @return ESP_OK
+/**
+ * @brief HTTP GET handler to scan and stream all NVS entries across all partitions as JSON.
+ * 
+ * @param[in] req HTTP request context (GET /nvs/list)
+ * @return esp_err_t ESP_OK on success or error code on communication failure
+ */
 static esp_err_t nvs_list_get_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
@@ -864,9 +882,12 @@ static esp_err_t nvs_list_get_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
-/// @brief Handler to completely wipe all NVS partitions and re-initialize them
-/// @param req POST /nvs/wipe
-/// @return ESP_OK
+/**
+ * @brief HTTP POST handler to erase and re-initialize all NVS storage partitions.
+ * 
+ * @param[in] req HTTP request context (POST /nvs/wipe)
+ * @return esp_err_t ESP_OK on success or error code on communication failure
+ */
 static esp_err_t nvs_wipe_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s - Wiping all NVS partitions", req->method, req->uri);
