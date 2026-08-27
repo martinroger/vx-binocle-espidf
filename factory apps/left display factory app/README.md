@@ -1,32 +1,18 @@
-# _Sample project_
+# Left Display Factory App (LDB Factory)
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+## Overview
+The **LDB Factory App** is the calibration, self-test, and recovery firmware for the Left Display Board. It provides Wi-Fi captive portal access for display alignment, touch/button calibration, and firmware OTA uploads.
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+## Key Capabilities
+- **Wi-Fi AP & mDNS**: Broadcasts `ldb-factory.local`.
+- **Display Test Patterns**: Generates primary RGB color screens, grid alignment patterns, and font readability tests.
+- **OTA Updates**: Web-based partition flashing for easy field updates.
 
-
-
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
-
-## Example folder contents
-
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
-
-Below is short explanation of remaining files in the project folder.
-
+## Building & Flashing
+```bash
+idf.py set-target esp32s3
+idf.py build
+idf.py flash monitor
 ```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+
+For detailed architecture, see [TOO.MD](TOO.MD).
