@@ -1,0 +1,807 @@
+substitutions:
+  name: "binocle-emulator"
+  friendly_name: "Binocle Vehicle Emulator"
+
+  # GPIO Pin Assignments (Matching sdkconfig.defaults & Kconfig.projbuild)
+  pin_sda: "GPIO5"
+  pin_scl: "GPIO6"
+  pin_5v_enable: "GPIO8"
+  pin_pwm_speed: "GPIO10"
+  pin_pwm_rpm: "GPIO11"
+  pin_pwm_coolant: "GPIO12"
+
+  # Raw Integer GPIO numbers for C++ MCPWM drivers
+  pin_num_pwm_speed: "10"
+  pin_num_pwm_rpm: "11"
+  pin_num_pwm_coolant: "12"
+
+  # I2C Addresses
+  i2c_addr_primary: "0x20"
+  i2c_addr_resistor: "0x21"
+
+  # Base Standby & Timing Parameters
+  coolant_base_freq_hz: "100"
+  speed_default_duty_pct: "33.0"
+  rpm_default_duty_pct: "50.0"
+
+  # Boot Standby Expander Masks
+  mask_exp0_standby: "0xD940" # Ignition ON standby
+  mask_exp1_default: "0x0001" # 270.0 Ohm initial resistance (Step 19 Full Tank)
+
+  # Indicator Polarity Inversion (true = Active Low, false = Active High)
+  inv_ignition: "false"
+  inv_hi_beams: "true"
+  inv_alternator: "false"
+  inv_left_turn: "true"
+  inv_right_turn: "true"
+  inv_abs: "false"
+  inv_door: "false"
+  inv_coolant_low: "true"
+  inv_button: "false"
+  inv_alarm: "false"
+  inv_backlight: "false"
+  inv_cel: "false"
+  inv_airbag: "false"
+  inv_oil_low: "false"
+  inv_parking_brake: "false"
+  inv_brake_low: "false"
+
+  # Conversion Coefficients (Matching common/coefficients.h)
+  coeff_speed_kph_to_freq_m: "4.088998"   # 31285.0 / 7651.0
+  coeff_speed_mph_to_freq_m: "6.580620"   # 17182.0 / 2611.0
+  coeff_rpm_to_freq_m: "0.03333333"       # 1.0 / 30.0
+  coeff_coolant_degc_to_duty_m: "1.408451" # 100.0 / 71.0
+  coeff_coolant_degc_to_duty_p: "-90.140845" # -100.0 * 64.0 / 71.0
+  light_test_delay: "600"
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  includes:
+    - resistor_ladder.h
+    - custom_mcpwm.h
+  on_boot:
+    priority: 600
+    then:
+      - lambda: |
+          ESP_LOGI("BOOT", "Initializing MCPWM outputs (Speed GPIO %d, RPM GPIO %d, Coolant GPIO %d)",
+                   ${pin_num_pwm_speed}, ${pin_num_pwm_rpm}, ${pin_num_pwm_coolant});
+          esphome::vehicle_emulator::McpwmManager::init_all(${pin_num_pwm_coolant}, ${pin_num_pwm_rpm}, ${pin_num_pwm_speed});
+
+          ESP_LOGI("BOOT", "Applying early boot standby masks: Expander 0 = 0xD940, Expander 1 = 0x7FFF");
+          //esphome::vehicle_emulator::write_resistor_mask(id(bus_i2c),${i2c_addr_primary},0xD940);
+          //esphome::vehicle_emulator::write_resistor_mask(id(bus_i2c),${i2c_addr_resistor},0x7FFF);
+      - button.press: btn_ignition_on
+
+esp32:
+  board: esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+# Physical UART / USB-Serial Logging
+logger:
+  level: DEBUG
+  baud_rate: 115200
+
+# Wi-Fi Configuration with Fallback AP
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Binocle-Emulator-Fallback"
+    password: !secret ap_password
+
+captive_portal:
+
+# In-Browser Real-Time Web Server Dashboard with Live Terminal Log Viewer
+web_server:
+  port: 80
+  version: 3
+  log: true
+
+# Native Home Assistant Integration
+api:
+  encryption:
+    key: !secret binocle_emulator__encryption_key
+
+# Over-The-Air Firmware Updates
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+# mDNS for http://binocle-emulator.local discovery
+mdns:
+
+# I2C Bus Configuration
+i2c:
+  id: bus_i2c
+  sda: ${pin_sda}
+  scl: ${pin_scl}
+  scan: true
+  frequency: 400kHz
+
+# TCA9555 IO Expanders
+tca9555:
+  - id: expander_indicators
+    address: ${i2c_addr_primary}
+    i2c_id: bus_i2c
+  - id: expander_resistors
+    address: ${i2c_addr_resistor}
+    i2c_id: bus_i2c
+
+# 5V Power Rail, Indicator Switches & Hazard Flasher
+switch:
+  # 5V Auxiliary Power Rail
+  - platform: gpio
+    name: "5V Power Rail"
+    id: power_5v
+    pin: ${pin_5v_enable}
+    icon: "mdi:power-socket-us"
+    restore_mode: ALWAYS_OFF
+
+  # Synchronized Hazard Flasher
+  - platform: template
+    name: "Hazard Flasher"
+    id: hazard_flasher
+    icon: "mdi:hazard-lights"
+    optimistic: true
+    turn_on_action:
+      - script.execute: script_hazard_flash
+    turn_off_action:
+      - script.stop: script_hazard_flash
+      - switch.turn_off: ind_left_turn
+      - switch.turn_off: ind_right_turn
+
+  # --- Expander 0 (0x20): 16 Discrete Vehicle Indicator Lines ---
+  - platform: gpio
+    name: "Low Brake Fluid"
+    id: ind_brake_low
+    pin:
+      tca9555: expander_indicators
+      number: 0
+      mode: OUTPUT
+      inverted: ${inv_brake_low}
+    icon: "mdi:car-brake-fluid-level"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Parking Brake"
+    id: ind_parking_brake
+    pin:
+      tca9555: expander_indicators
+      number: 1
+      mode: OUTPUT
+      inverted: ${inv_parking_brake}
+    icon: "mdi:car-brake-parking"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Oil Pressure Low"
+    id: ind_oil_low
+    pin:
+      tca9555: expander_indicators
+      number: 2
+      mode: OUTPUT
+      inverted: ${inv_oil_low}
+    icon: "mdi:oil"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Airbag Warning"
+    id: ind_airbag
+    pin:
+      tca9555: expander_indicators
+      number: 3
+      mode: OUTPUT
+      inverted: ${inv_airbag}
+    icon: "mdi:airbag"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Check Engine Light (CEL)"
+    id: ind_cel
+    pin:
+      tca9555: expander_indicators
+      number: 4
+      mode: OUTPUT
+      inverted: ${inv_cel}
+    icon: "mdi:engine-outline"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Cluster Backlight"
+    id: ind_backlight
+    pin:
+      tca9555: expander_indicators
+      number: 5
+      mode: OUTPUT
+      inverted: ${inv_backlight}
+    icon: "mdi:car-parking-lights"
+    restore_mode: ALWAYS_OFF # Active in 0xD940
+
+  - platform: gpio
+    name: "Alarm Status"
+    id: ind_alarm
+    pin:
+      tca9555: expander_indicators
+      number: 6
+      mode: OUTPUT
+      inverted: ${inv_alarm}
+    icon: "mdi:shield-car"
+    restore_mode: ALWAYS_OFF # Active in 0xD940
+
+  - platform: gpio
+    name: "Cluster Button - Trip"
+    id: ind_button
+    pin:
+      tca9555: expander_indicators
+      number: 7
+      mode: OUTPUT
+      inverted: ${inv_button}
+    icon: "mdi:gesture-tap-button"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Low Coolant"
+    id: ind_coolant_low
+    pin:
+      tca9555: expander_indicators
+      number: 8
+      mode: OUTPUT
+      inverted: ${inv_coolant_low}
+    icon: "mdi:coolant-temperature"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Door Ajar"
+    id: ind_door
+    pin:
+      tca9555: expander_indicators
+      number: 9
+      mode: OUTPUT
+      inverted: ${inv_door}
+    icon: "mdi:car-door"
+    restore_mode: ALWAYS_OFF # Active in 0xD940
+
+  - platform: gpio
+    name: "ABS Warning"
+    id: ind_abs
+    pin:
+      tca9555: expander_indicators
+      number: 10
+      mode: OUTPUT
+      inverted: ${inv_abs}
+    icon: "mdi:car-brake-abs"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Right Turn Indicator"
+    id: ind_right_turn
+    pin:
+      tca9555: expander_indicators
+      number: 11
+      mode: OUTPUT
+      inverted: ${inv_right_turn}
+    icon: "mdi:arrow-right-bold-circle-outline"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "Left Turn Indicator"
+    id: ind_left_turn
+    pin:
+      tca9555: expander_indicators
+      number: 12
+      mode: OUTPUT
+      inverted: ${inv_left_turn}
+    icon: "mdi:arrow-left-bold-circle-outline"
+    restore_mode: ALWAYS_OFF # Active in 0xD940
+
+  - platform: gpio
+    name: "Alternator - Battery Charge"
+    id: ind_alternator
+    pin:
+      tca9555: expander_indicators
+      number: 13
+      mode: OUTPUT
+      inverted: ${inv_alternator}
+    icon: "mdi:car-battery"
+    restore_mode: ALWAYS_OFF
+
+  - platform: gpio
+    name: "High Beams"
+    id: ind_hi_beams
+    pin:
+      tca9555: expander_indicators
+      number: 14
+      mode: OUTPUT
+      inverted: ${inv_hi_beams}
+    icon: "mdi:car-light-high"
+    restore_mode: ALWAYS_OFF # Active in 0xD940
+
+  - platform: gpio
+    name: "Ignition"
+    id: ind_ignition
+    pin:
+      tca9555: expander_indicators
+      number: 15
+      mode: OUTPUT
+      inverted: ${inv_ignition}
+    icon: "mdi:key-wireless"
+    restore_mode: ALWAYS_ON # Active in 0xD940
+
+# --- Phase 3: Fuel Level & Resistor Network Controls ---
+select:
+  - platform: template
+    name: "Fuel Resistor Step"
+    id: fuel_resistor_step
+    icon: "mdi:gas-station"
+    optimistic: true
+    initial_option: "Step 19 - 270.0 Ω (Full)"
+    options:
+      - "Step 01 - 30.2 Ω (Empty)"
+      - "Step 02 - 39.6 Ω"
+      - "Step 03 - 50.0 Ω"
+      - "Step 04 - 59.5 Ω"
+      - "Step 05 - 70.9 Ω"
+      - "Step 06 - 79.3 Ω (1/4 Tank)"
+      - "Step 07 - 90.0 Ω"
+      - "Step 08 - 100.9 Ω"
+      - "Step 09 - 112.3 Ω"
+      - "Step 10 - 118.9 Ω (1/2 Tank)"
+      - "Step 11 - 129.8 Ω"
+      - "Step 12 - 138.8 Ω"
+      - "Step 13 - 149.2 Ω"
+      - "Step 14 - 161.2 Ω (3/4 Tank)"
+      - "Step 15 - 175.3 Ω"
+      - "Step 16 - 192.2 Ω"
+      - "Step 17 - 212.6 Ω"
+      - "Step 18 - 237.9 Ω"
+      - "Step 19 - 270.0 Ω (Full)"
+    set_action:
+      - lambda: |-
+          int step = 1;
+          for (size_t i = 0; i < fuel_resistor_step->traits.get_options().size(); i++) {
+            if (fuel_resistor_step->traits.get_options()[i] == x) {
+              step = i + 1;
+              break;
+            }
+          }
+          esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);
+          
+          // Read back expander mask & update calculated resistance telemetry and dividers
+          uint16_t mask = 0;
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask)) {
+            char buf[10];
+            snprintf(buf, sizeof(buf), "0x%04X", mask);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask));
+            id(low_res_divider).publish_state(esphome::vehicle_emulator::get_low_caliber_divider_from_mask(mask));
+            id(high_res_divider).publish_state(esphome::vehicle_emulator::get_high_caliber_divider_from_mask(mask));
+          }
+
+# --- Gauge Controllers & Caliber Dividers ---
+number:
+  # Vehicle Speed (km⁄h)
+  - platform: template
+    name: "Vehicle Speed (km⁄h)"
+    id: speed_kph
+    icon: "mdi:speedometer"
+    unit_of_measurement: "km/h"
+    min_value: 0
+    max_value: 271
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_speed_kph(x);
+          id(speed_mph).publish_state(roundf(x / 1.609344f));
+          id(sensor_speed_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED));
+
+  # Vehicle Speed (mph)
+  - platform: template
+    name: "Vehicle Speed (mph)"
+    id: speed_mph
+    icon: "mdi:speedometer"
+    unit_of_measurement: "mph"
+    min_value: 0
+    max_value: 168
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_speed_mph(x);
+          id(speed_kph).publish_state(roundf(x * 1.609344f));
+          id(sensor_speed_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED));
+
+  # Engine RPM
+  - platform: template
+    name: "Engine RPM"
+    id: engine_rpm
+    icon: "mdi:gauge"
+    unit_of_measurement: "RPM"
+    min_value: 0
+    max_value: 9000
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_rpm(static_cast<int>(x));
+          id(sensor_rpm_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_RPM));
+
+  # Coolant Temperature (°C)
+  - platform: template
+    name: "Coolant Temperature"
+    id: coolant_temp
+    icon: "mdi:thermometer"
+    unit_of_measurement: "°C"
+    min_value: 70
+    max_value: 130
+    step: 1
+    initial_value: 90
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_coolant_degc(x);
+          id(sensor_coolant_duty).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_COOLANT));
+
+  # Fuel Level Slider (0% = 0 Ohm, 100% = 250 Ohm, allowed up to 120% for 270+ Ohm)
+  - platform: template
+    name: "Fuel Level Percentage"
+    id: fuel_percent
+    icon: "mdi:fuel"
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 120
+    step: 1
+    initial_value: 108
+    optimistic: true
+    set_action:
+      - lambda: |-
+          // Target resistance: 0% -> 0 Ohm, 100% -> 250 Ohm (R = pct * 2.5 Ohm)
+          float target_ohm = x * 2.5f;
+          int step = esphome::vehicle_emulator::find_closest_fuel_step(target_ohm);
+          esphome::vehicle_emulator::set_fuel_step(id(bus_i2c), ${i2c_addr_resistor}, step);
+          
+          // Read back expander mask & update calculated resistance telemetry and dividers
+          uint16_t mask = 0;
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask)) {
+            char buf[10];
+            snprintf(buf, sizeof(buf), "0x%04X", mask);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask));
+            id(low_res_divider).publish_state(esphome::vehicle_emulator::get_low_caliber_divider_from_mask(mask));
+            id(high_res_divider).publish_state(esphome::vehicle_emulator::get_high_caliber_divider_from_mask(mask));
+          }
+          id(fuel_resistor_step).publish_state(id(fuel_resistor_step)->traits.get_options()[step - 1]);
+
+  # Low-Caliber Resistor Divider (0..8, 0 is open circuit)
+  - platform: template
+    name: "Low Caliber Divider"
+    id: low_res_divider
+    icon: "mdi:resistor"
+    min_value: 0
+    max_value: 8
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          int divider = (int)x;
+          esphome::vehicle_emulator::set_low_caliber_divider(id(bus_i2c), ${i2c_addr_resistor}, divider);
+          
+          // Read back expander mask & update calculated resistance telemetry
+          uint16_t mask = 0;
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask)) {
+            char buf[10];
+            snprintf(buf, sizeof(buf), "0x%04X", mask);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask));
+          }
+
+  # High-Caliber Resistor Divider (0..8, 0 is open circuit)
+  - platform: template
+    name: "High Caliber Divider"
+    id: high_res_divider
+    icon: "mdi:resistor"
+    min_value: 0
+    max_value: 8
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          int divider = (int)x;
+          esphome::vehicle_emulator::set_high_caliber_divider(id(bus_i2c), ${i2c_addr_resistor}, divider);
+          
+          // Read back expander mask & update calculated resistance telemetry
+          uint16_t mask = 0;
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask)) {
+            char buf[10];
+            snprintf(buf, sizeof(buf), "0x%04X", mask);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask));
+          }
+
+# --- Action Buttons & Automated Routines ---
+button:
+  # Lamp Test / Cluster Self-Test Routine
+  - platform: template
+    name: "Lamp Test (All Indicators ON)"
+    id: btn_lamp_test
+    icon: "mdi:car-light-dimmed"
+    on_press:
+      - script.execute: script_lamp_test
+
+  # Gauge Sweep Routine (0% -> 100% -> 0%)
+  - platform: template
+    name: "Gauge Sweep (Speed - RPM - Temp)"
+    id: btn_gauge_sweep
+    icon: "mdi:rotate-right"
+    on_press:
+      - script.execute: script_gauge_sweep
+
+  # All Off - Safe State
+  - platform: template
+    name: "All Off - Safe State"
+    id: btn_all_off
+    icon: "mdi:power"
+    on_press:
+      - script.execute: script_all_off
+
+  # Ignition ON Standby Preset (Mask 0xD940)
+  - platform: template
+    name: "Ignition ON Preset"
+    id: btn_ignition_on
+    icon: "mdi:restart"
+    on_press:
+      - script.execute: script_ignition_on_preset
+
+  # Read Current Expander Masks
+  - platform: template
+    name: "Read Expander Masks"
+    id: btn_read_exp_masks
+    icon: "mdi:chip"
+    on_press:
+      - lambda: |-
+          uint16_t mask0 = 0, mask1 = 0;
+          char buf[10];
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_primary}, mask0)) {
+            snprintf(buf, sizeof(buf), "0x%04X", mask0);
+            id(sensor_exp0_mask).publish_state(buf);
+            ESP_LOGI("EXPANDER", "Expander 0 (0x20) mask: %s", buf);
+          }
+          if (esphome::vehicle_emulator::read_expander_mask(id(bus_i2c), ${i2c_addr_resistor}, mask1)) {
+            snprintf(buf, sizeof(buf), "0x%04X", mask1);
+            id(sensor_exp1_mask).publish_state(buf);
+            id(sensor_fuel_resistance).publish_state(esphome::vehicle_emulator::calculate_resistance_from_mask(mask1));
+            id(low_res_divider).publish_state(esphome::vehicle_emulator::get_low_caliber_divider_from_mask(mask1));
+            id(high_res_divider).publish_state(esphome::vehicle_emulator::get_high_caliber_divider_from_mask(mask1));
+            ESP_LOGI("EXPANDER", "Expander 1 (0x21) mask: %s", buf);
+          }
+
+# Automation Scripts for Sequences & Tests
+  - platform: template
+    name: Restart to OTA
+    id: btn_ota_restart
+    icon: "mdi:download-circle-outline"
+    on_press:
+      - then:
+          - script.execute: script_ota_mode_switch
+script:
+  # Hazard blinker timer loop (1.5 Hz sync)
+  - id: script_hazard_flash
+    mode: restart
+    then:
+      - while:
+          condition:
+            lambda: "return id(hazard_flasher).state;"
+          then:
+            - switch.turn_on: ind_left_turn
+            - switch.turn_on: ind_right_turn
+            - delay: 350ms
+            - switch.turn_off: ind_left_turn
+            - switch.turn_off: ind_right_turn
+            - delay: 350ms
+
+  # Lamp test sequence
+  - id: script_lamp_test
+    mode: single
+    then:
+      - logger.log: Starting Cluster Lamp Test sequence...
+
+      - switch.turn_on: ind_right_turn
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_right_turn
+
+      - switch.turn_on: ind_parking_brake
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_parking_brake
+
+      - switch.turn_on: ind_brake_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_brake_low
+
+      - switch.turn_on: ind_abs
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_abs
+
+      - switch.turn_on: ind_airbag
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_airbag
+
+      - switch.turn_on: ind_oil_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_oil_low
+
+      - switch.turn_on: ind_coolant_low
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_coolant_low
+
+      - switch.turn_on: ind_alternator
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_alternator
+
+      - switch.turn_on: ind_cel
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_cel
+
+      - switch.turn_on: ind_backlight
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_backlight
+
+      - switch.turn_on: ind_hi_beams
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_hi_beams
+
+      - switch.turn_on: ind_left_turn
+      - delay: !lambda return ${light_test_delay};
+      - switch.turn_off: ind_left_turn
+
+      - script.execute: script_ignition_on_preset
+  - id: script_gauge_sweep
+    mode: single
+    then:
+      - logger.log: "Starting Gauge Sweep sequence..."
+      - number.set:
+          id: speed_kph
+          value: 200
+      - number.set:
+          id: engine_rpm
+          value: 7000
+      - number.set:
+          id: coolant_temp
+          value: 120
+      - delay: 2500ms
+      - number.set:
+          id: speed_kph
+          value: 0
+      - number.set:
+          id: engine_rpm
+          value: 0
+      - number.set:
+          id: coolant_temp
+          value: 90
+      - logger.log: "Gauge Sweep completed."
+
+  # All Off Safe State
+  - id: script_all_off
+    mode: single
+    then:
+      - number.set:
+          id: speed_kph
+          value: 0
+      - number.set:
+          id: engine_rpm
+          value: 0
+      - number.set:
+          id: coolant_temp
+          value: 70
+      - switch.turn_off: ind_brake_low
+      - switch.turn_off: ind_parking_brake
+      - switch.turn_off: ind_oil_low
+      - switch.turn_off: ind_airbag
+      - switch.turn_off: ind_cel
+      - switch.turn_off: ind_backlight
+      - switch.turn_off: ind_alarm
+      - switch.turn_off: ind_button
+      - switch.turn_off: ind_coolant_low
+      - switch.turn_off: ind_door
+      - switch.turn_off: ind_abs
+      - switch.turn_off: ind_right_turn
+      - switch.turn_off: ind_left_turn
+      - switch.turn_off: ind_alternator
+      - switch.turn_off: ind_hi_beams
+      - switch.turn_off: ind_ignition
+
+  # Ignition ON Preset (Mask 0xD940)
+  - id: script_ignition_on_preset
+    mode: single
+    then:
+      - switch.turn_off: ind_brake_low
+      - switch.turn_off: ind_parking_brake
+      - switch.turn_off: ind_oil_low
+      - switch.turn_off: ind_airbag
+      - switch.turn_off: ind_cel
+      - switch.turn_off: ind_backlight
+      - switch.turn_off: ind_alarm
+      - switch.turn_off: ind_button
+      - switch.turn_off: ind_coolant_low
+      - switch.turn_off: ind_door
+      - switch.turn_off: ind_abs
+      - switch.turn_off: ind_right_turn
+      - switch.turn_off: ind_left_turn
+      - switch.turn_off: ind_alternator
+      - switch.turn_off: ind_hi_beams
+      - switch.turn_on: ind_ignition
+      - number.to_min: speed_kph
+      - number.to_min: coolant_temp
+      - number.to_min: engine_rpm
+
+# Live Telemetry Feedback Sensors
+  - id: script_ota_mode_switch
+    mode: single
+    then:
+      - switch.turn_on: ind_button
+      - switch.turn_on: ind_hi_beams
+      - switch.turn_off: ind_ignition
+      - delay:
+          milliseconds: '200'
+      - switch.turn_on: ind_ignition
+      - delay:
+          seconds: '10'
+      - switch.turn_off: ind_button
+      - switch.turn_off: ind_hi_beams
+sensor:
+  - platform: template
+    name: "Fuel Sender Resistance"
+    id: sensor_fuel_resistance
+    icon: "mdi:omega"
+    unit_of_measurement: "Ω"
+    accuracy_decimals: 1
+    update_interval: never
+    on_value:
+      - lambda: |-
+          if (!std::isnan(x) && x >= 0.0f) {
+            float pct = (x / 250.0f) * 100.0f;
+            id(fuel_percent).publish_state(pct);
+          }
+
+  - platform: template
+    name: "Speed Actual Frequency"
+    id: sensor_speed_freq
+    icon: "mdi:sine-wave"
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "RPM Actual Frequency"
+    id: sensor_rpm_freq
+    icon: "mdi:sine-wave"
+    unit_of_measurement: "Hz"
+    accuracy_decimals: 2
+    update_interval: never
+
+  - platform: template
+    name: "Coolant Actual Duty"
+    id: sensor_coolant_duty
+    icon: "mdi:percent"
+    unit_of_measurement: "%"
+    accuracy_decimals: 2
+    update_interval: never
+
+text_sensor:
+  - platform: template
+    name: "Expander 0 Mask"
+    id: sensor_exp0_mask
+    icon: "mdi:chip"
+    update_interval: never
+
+  - platform: template
+    name: "Expander 1 Mask"
+    id: sensor_exp1_mask
+    icon: "mdi:chip"
+    update_interval: never
