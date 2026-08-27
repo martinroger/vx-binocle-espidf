@@ -1,32 +1,20 @@
-# _Sample project_
+# Interface Board (ITF)
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+## Overview
+The **Interface Board (ITF)** is the primary sensor acquisition node of the VX Binocle system. It captures physical vehicle signals (wheel speed pulses, ignition pulses, fuel resistance, analog sensor voltages, and discrete switch inputs) and broadcasts standardized CAN frames over the TWAI bus.
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+## Hardware Architecture
+- **Microcontroller**: ESP32-S3 (240 MHz dual-core, 8 MB Flash, 2 MB PSRAM).
+- **Analog Front-End**: Texas Instruments ADS1115 (16-bit I2C ADC) for precise fuel level, battery, and auxiliary voltage sampling.
+- **I/O Expansion**: NXP/TI TCA9555 16-bit I2C GPIO expander for discrete vehicle switch inputs (lights, indicators, handbrake, etc.).
+- **Pulse Ingestion**: ESP32-S3 MCPWM capture channels for high-frequency wheel speed and engine RPM pulses.
+- **Bus Transceiver**: 3.3V CAN/TWAI transceiver with termination.
 
-
-
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
-
-## Example folder contents
-
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
-
-Below is short explanation of remaining files in the project folder.
-
+## Building & Flashing
+```bash
+idf.py set-target esp32s3
+idf.py build
+idf.py flash monitor
 ```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+
+For detailed architecture, signal processing loops, and telemetry timing, see [TOO.MD](TOO.MD).

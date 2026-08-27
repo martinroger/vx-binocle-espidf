@@ -1,32 +1,19 @@
-# _Sample project_
+# Left Display Board (LDB)
 
-(See the README.md file in the upper level 'examples' directory for more information about examples.)
+## Overview
+The **Left Display Board (LDB)** drives the primary digital instrument cluster screen located in the left binocle pod. It renders real-time engine RPM, vehicle speed, coolant temperature, odometer/trip information, and critical warning icons using LVGL v9.
 
-This is the simplest buildable example. The example is used by command `idf.py create-project`
-that copies the project to user specified path and set it's name. For more information follow the [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project)
+## Hardware Architecture
+- **Microcontroller**: ESP32-S3 (240 MHz dual-core, 8 MB Flash, 8 MB Octal PSRAM).
+- **Display Controller**: High-resolution LCD panel driven via ESP32 Display Panel (`esp32_display_panel`).
+- **Audio Buzzer**: Hardware PWM buzzer on GPIO 4 for over-temperature and critical fault audio alarms.
+- **CAN Interface**: On-board TWAI transceiver listening to `ITF_values`, `ITF_status`, and `ITF_debug`.
 
-
-
-## How to use example
-We encourage the users to use the example as a template for the new projects.
-A recommended way is to follow the instructions on a [docs page](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/build-system.html#start-a-new-project).
-
-## Example folder contents
-
-The project **sample_project** contains one source file in C language [main.c](main/main.c). The file is located in folder [main](main).
-
-ESP-IDF projects are built using CMake. The project build configuration is contained in `CMakeLists.txt`
-files that provide set of directives and instructions describing the project's source files and targets
-(executable, library, or both). 
-
-Below is short explanation of remaining files in the project folder.
-
+## Building & Flashing
+```bash
+idf.py set-target esp32s3
+idf.py build
+idf.py flash monitor
 ```
-├── CMakeLists.txt
-├── main
-│   ├── CMakeLists.txt
-│   └── main.c
-└── README.md                  This is the file you are currently reading
-```
-Additionally, the sample project contains Makefile and component.mk files, used for the legacy Make based build system. 
-They are not used or needed when building with CMake and idf.py.
+
+For complete UI rendering pipeline and CAN dispatch details, see [TOO.MD](TOO.MD).
