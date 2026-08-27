@@ -5,6 +5,7 @@ The **LDB Factory App** is the calibration, self-test, and recovery firmware for
 
 ## Key Capabilities
 - **Wi-Fi AP & mDNS**: Broadcasts `ldb-factory.local`.
+- **NVS Inspection & Wipe**: Scans all active NVS partitions and entries; supports full NVS wipe.
 - **Display Test Patterns**: Generates primary RGB color screens, grid alignment patterns, and font readability tests.
 - **OTA Updates**: Web-based partition flashing for easy field updates.
 

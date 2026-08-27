@@ -5,7 +5,7 @@ The **ITF Factory App** provides a dedicated provisioning, calibration, and main
 
 ## Key Capabilities
 - **Wi-Fi AP & mDNS**: Broadcasts `itf-factory.local` for instant browser access.
-- **NVS Provisioning**: Auto-populates default constants if uninitialized; persists pulses/km, wheel radius, and sensor lookup curves.
+- **NVS Provisioning & Inspection**: Auto-populates default constants if uninitialized; scans and displays all partitioned NVS keys/namespaces; provides safe full NVS wipe.
 - **Controlled Power-Down**: Gracefully turns off the 5V boost regulator prior to rebooting into the main application.
 
 ## Building & Flashing

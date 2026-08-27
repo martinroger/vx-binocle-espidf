@@ -41,6 +41,39 @@
         <pre id="result"></pre>
     </details>
 
+    <details>
+        <summary>NVS storage content</summary>
+        <p>
+            <button type="button" onclick="refreshNvsContent()">Scan / Refresh NVS</button>
+            <span id="nvs_count" class="notice"></span>
+        </p>
+        <div style="overflow-x:auto;">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Partition</th>
+                        <th>Namespace</th>
+                        <th>Key</th>
+                        <th>Type</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody id="nvs_tbody">
+                    <tr><td colspan="5">Click "Scan / Refresh NVS" to load entries.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </details>
+
+    <details>
+        <summary>Flush NVS storage</summary>
+        <p class="notice">
+            ⚠️ <strong>Warning:</strong> Flashing/wiping NVS will erase all configuration keys, theme settings, brightness, and speed units (MPH/KPH) across all NVS partitions.
+        </p>
+        <button type="button" onclick="wipeNvsStorage()" style="background-color: #d73a4a; color: white;">Wipe All NVS Storage</button>
+        <pre id="nvs_wipe_result"></pre>
+    </details>
+
     <div>
         <p class="notice"> The <code>Factory</code> partition is the currently running one. <br>After flashing
             successfully one of the OTA slots, this selection will be automatically updated.</p>
@@ -71,6 +104,68 @@
                 document.getElementById('bootsel').value = j.bootPart;
                 document.getElementById('target').value = j.recOTAPart
             });
+        }
+
+        function refreshNvsContent() {
+            const tbody = document.getElementById('nvs_tbody');
+            const countLabel = document.getElementById('nvs_count');
+            countLabel.textContent = ' Scanning NVS...';
+            fetch('/nvs/list')
+                .then(r => {
+                    if (!r.ok) throw new Error('HTTP status ' + r.status);
+                    return r.json();
+                })
+                .then(entries => {
+                    tbody.innerHTML = '';
+                    if (!entries || entries.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5"><em>No entries found in NVS storage.</em></td></tr>';
+                        countLabel.textContent = ' (0 entries found)';
+                        return;
+                    }
+                    countLabel.textContent = ` (${entries.length} entries found)`;
+                    entries.forEach(e => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `<td><code>${escapeHtml(e.partition)}</code></td>` +
+                                       `<td><code>${escapeHtml(e.namespace)}</code></td>` +
+                                       `<td><strong>${escapeHtml(e.key)}</strong></td>` +
+                                       `<td><small>${escapeHtml(e.type)}</small></td>` +
+                                       `<td><code>${escapeHtml(String(e.value))}</code></td>`;
+                        tbody.appendChild(tr);
+                    });
+                })
+                .catch(err => {
+                    countLabel.textContent = ' (Error loading)';
+                    tbody.innerHTML = `<tr><td colspan="5" style="color: red;">Error scanning NVS: ${escapeHtml(err.message)}</td></tr>`;
+                });
+        }
+
+        function wipeNvsStorage() {
+            if (!confirm('⚠️ Are you sure you want to completely erase ALL NVS storage partitions?\n\nThis will reset all theme options, brightness levels, and custom settings!')) {
+                return;
+            }
+            const logOutput = document.getElementById('nvs_wipe_result');
+            logOutput.textContent = 'Wiping all NVS storage partitions...';
+            fetch('/nvs/wipe', { method: 'POST' })
+                .then(r => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(res => {
+                    logOutput.textContent = `✅ ${res.message || 'NVS wiped successfully.'}`;
+                    refreshNvsContent();
+                })
+                .catch(err => {
+                    logOutput.textContent = `❌ Error wiping NVS: ${err.message}`;
+                });
+        }
+
+        function escapeHtml(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
         }
 
         function doUpload() {
@@ -121,6 +216,7 @@
 
         window.addEventListener('load', function () {
             refreshPartitions();
+            refreshNvsContent();
             fetch('/version').then(r => r.json()).then(j => {
                 document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date)
             });

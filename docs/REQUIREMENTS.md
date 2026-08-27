@@ -30,7 +30,7 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 
 ### 2.3 Factory Calibration & Web Provisioning
 - **REQ-FAC-001 (WiFi AP & Web Portal)**: Launch captive Wi-Fi AP and HTTP server with mDNS service discovery (`itf-factory.local`, `ldb-factory.local`, `rdb-factory.local`).
-- **REQ-FAC-002 (NVS Calibration Management)**: Read, validate, and persist calibration constants (pulses/km, fuel resistance curve, temperature lookup, gear ratios) into NVS.
+- **REQ-FAC-002 (NVS Calibration & Storage Management)**: Read, validate, persist calibration constants (pulses/km, fuel resistance curve, temperature lookup, gear ratios), scan all partitioned NVS keys/namespaces, and support full NVS storage wipe across all factory recovery apps.
 - **REQ-FAC-003 (Safe Power Sequencing)**: Gracefully de-energize 5V peripheral stages prior to software reboot or OTA partition activation.
 
 ### 2.4 Vehicle Emulator Suite
@@ -67,7 +67,7 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 | **REQ-DSP-003** | Displays | [`left_screen/main/main.cpp`](../left_screen/main/main.cpp), [`right_screen/main/main.cpp`](../right_screen/main/main.cpp) | Simulated over-temperature signal test |
 | **REQ-DSP-004** | Displays | [`left_screen/main/start_animation.hpp`](../left_screen/main/start_animation.hpp) | Visual ignition boot inspection |
 | **REQ-FAC-001** | Factory Apps | [`factory apps/ITF factory app/main/main.cpp`](../factory%20apps/ITF%20factory%20app/main/main.cpp) | Browser access & mDNS resolution |
-| **REQ-FAC-002** | Factory Apps | [`factory apps/ITF factory app/main/main.cpp`](../factory%20apps/ITF%20factory%20app/main/main.cpp), [`index.html`](../factory%20apps/ITF%20factory%20app/main/web/index.html) | Form validation and NVS readback |
+| **REQ-FAC-002** | Factory Apps | [`factory apps/ITF factory app/main/main.cpp`](../factory%20apps/ITF%20factory%20app/main/main.cpp), [`factory apps/left display factory app/main/main.cpp`](../factory%20apps/left%20display%20factory%20app/main/main.cpp), [`factory apps/right display factory app/main/main.cpp`](../factory%20apps/right%20display%20factory%20app/main/main.cpp) | NVS scan table verification & partition wipe test |
 | **REQ-FAC-003** | Factory Apps | [`factory apps/ITF factory app/main/main.cpp`](../factory%20apps/ITF%20factory%20app/main/main.cpp) | Oscilloscope power rail decay check |
 | **REQ-EMU-001** | Emulator | [`emulator-console/main/pwm_gen_helpers.h`](../emulator-console/main/pwm_gen_helpers.h), [`esphome/custom_mcpwm.h`](../emulator-console/esphome/custom_mcpwm.h) | Frequency counter & duty cycle verification |
 | **REQ-EMU-002** | Emulator | [`emulator-console/esphome/resistor_ladder.h`](../emulator-console/esphome/resistor_ladder.h) | Digital multimeter resistance audit |

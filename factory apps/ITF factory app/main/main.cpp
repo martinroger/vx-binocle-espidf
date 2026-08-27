@@ -1775,13 +1775,282 @@ static esp_err_t set_trip_odo_post_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+/// @brief Formats an NVS entry value into JSON escaped string
+static void format_nvs_value_json(const char *part_name, const char *namespace_name, const char *key, nvs_type_t type, char *val_buf, size_t val_buf_len)
+{
+	nvs_handle_t h;
+	esp_err_t err = ESP_FAIL;
+	if (part_name != NULL && strcmp(part_name, NVS_DEFAULT_PART_NAME) != 0)
+	{
+		err = nvs_open_from_partition(part_name, namespace_name, NVS_READONLY, &h);
+	}
+	else
+	{
+		err = nvs_open(namespace_name, NVS_READONLY, &h);
+	}
+
+	if (err != ESP_OK)
+	{
+		snprintf(val_buf, val_buf_len, "\"<err: %s>\"", esp_err_to_name(err));
+		return;
+	}
+
+	switch (type)
+	{
+	case NVS_TYPE_U8:
+	{
+		uint8_t v = 0;
+		if (nvs_get_u8(h, key, &v) == ESP_OK)
+			snprintf(val_buf, val_buf_len, "\"%u\"", v);
+		else
+			snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+		break;
+	}
+	case NVS_TYPE_I8:
+	{
+		int8_t v = 0;
+		if (nvs_get_i8(h, key, &v) == ESP_OK)
+			snprintf(val_buf, val_buf_len, "\"%d\"", v);
+		else
+			snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+		break;
+	}
+	case NVS_TYPE_U16:
+	{
+		uint16_t v = 0;
+		if (nvs_get_u16(h, key, &v) == ESP_OK)
+			snprintf(val_buf, val_buf_len, "\"%u\"", v);
+		else
+			snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+		break;
+	}
+	case NVS_TYPE_I16:
+	{
+		int16_t v = 0;
+		if (nvs_get_i16(h, key, &v) == ESP_OK)
+			snprintf(val_buf, val_buf_len, "\"%d\"", v);
+		else
+			snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+		break;
+	}
+	case NVS_TYPE_U32:
+	{
+		uint32_t v = 0;
+		if (nvs_get_u32(h, key, &v) == ESP_OK)
+			snprintf(val_buf, val_buf_len, "\"%lu\"", (unsigned long)v);
+		else
+			snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+		break;
+	}
+	case NVS_TYPE_I32:
+	{
+		int32_t v = 0;
+		if (nvs_get_i32(h, key, &v) == ESP_OK)
+			snprintf(val_buf, val_buf_len, "\"%ld\"", (long)v);
+		else
+			snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+		break;
+	}
+	case NVS_TYPE_U64:
+	{
+		uint64_t v = 0;
+		if (nvs_get_u64(h, key, &v) == ESP_OK)
+			snprintf(val_buf, val_buf_len, "\"%llu\"", (unsigned long long)v);
+		else
+			snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+		break;
+	}
+	case NVS_TYPE_I64:
+	{
+		int64_t v = 0;
+		if (nvs_get_i64(h, key, &v) == ESP_OK)
+			snprintf(val_buf, val_buf_len, "\"%lld\"", (long long)v);
+		else
+			snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+		break;
+	}
+	case NVS_TYPE_STR:
+	{
+		size_t req_len = 0;
+		if (nvs_get_str(h, key, NULL, &req_len) == ESP_OK && req_len > 0)
+		{
+			char *str_val = (char *)malloc(req_len);
+			if (str_val && nvs_get_str(h, key, str_val, &req_len) == ESP_OK)
+			{
+				snprintf(val_buf, val_buf_len, "\"%s\"", str_val);
+				free(str_val);
+			}
+			else
+			{
+				if (str_val)
+					free(str_val);
+				snprintf(val_buf, val_buf_len, "\"<read_err>\"");
+			}
+		}
+		else
+		{
+			snprintf(val_buf, val_buf_len, "\"\"");
+		}
+		break;
+	}
+	case NVS_TYPE_BLOB:
+	{
+		size_t req_len = 0;
+		if (nvs_get_blob(h, key, NULL, &req_len) == ESP_OK)
+		{
+			snprintf(val_buf, val_buf_len, "\"<blob: %u bytes>\"", (unsigned int)req_len);
+		}
+		else
+		{
+			snprintf(val_buf, val_buf_len, "\"<blob: ? bytes>\"");
+		}
+		break;
+	}
+	default:
+		snprintf(val_buf, val_buf_len, "\"<unknown_type>\"");
+		break;
+	}
+	nvs_close(h);
+}
+
+static const char *nvs_type_to_str(nvs_type_t type)
+{
+	switch (type)
+	{
+	case NVS_TYPE_U8:
+		return "uint8";
+	case NVS_TYPE_I8:
+		return "int8";
+	case NVS_TYPE_U16:
+		return "uint16";
+	case NVS_TYPE_I16:
+		return "int16";
+	case NVS_TYPE_U32:
+		return "uint32";
+	case NVS_TYPE_I32:
+		return "int32";
+	case NVS_TYPE_U64:
+		return "uint64";
+	case NVS_TYPE_I64:
+		return "int64";
+	case NVS_TYPE_STR:
+		return "string";
+	case NVS_TYPE_BLOB:
+		return "blob";
+	default:
+		return "any/unknown";
+	}
+}
+
+/// @brief Handler to scan and list all NVS entries across all NVS partitions
+/// @param req GET /nvs/list
+/// @return ESP_OK
+static esp_err_t nvs_list_get_handler(httpd_req_t *req)
+{
+	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+
+	httpd_resp_set_type(req, "application/json");
+	httpd_resp_send_chunk(req, "[", 1);
+
+	bool first_entry = true;
+	char chunk[512];
+
+	esp_partition_iterator_t part_it = esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
+	while (part_it != NULL)
+	{
+		const esp_partition_t *part = esp_partition_get(part_it);
+		if (part != NULL)
+		{
+			ESP_LOGI(__func__, "Scanning NVS partition: %s", part->label);
+			nvs_iterator_t it = NULL;
+			esp_err_t res = nvs_entry_find(part->label, NULL, NVS_TYPE_ANY, &it);
+			while (res == ESP_OK && it != NULL)
+			{
+				nvs_entry_info_t info;
+				nvs_entry_info(it, &info);
+
+				char val_str[128];
+				format_nvs_value_json(part->label, info.namespace_name, info.key, info.type, val_str, sizeof(val_str));
+
+				int len = snprintf(chunk, sizeof(chunk),
+								   "%s{\"partition\":\"%s\",\"namespace\":\"%s\",\"key\":\"%s\",\"type\":\"%s\",\"value\":%s}",
+								   first_entry ? "" : ",",
+								   part->label,
+								   info.namespace_name,
+								   info.key,
+								   nvs_type_to_str(info.type),
+								   val_str);
+				if (len > 0)
+				{
+					httpd_resp_send_chunk(req, chunk, len);
+					first_entry = false;
+				}
+
+				res = nvs_entry_next(&it);
+			}
+			if (it != NULL)
+			{
+				nvs_release_iterator(it);
+			}
+		}
+		part_it = esp_partition_next(part_it);
+	}
+
+	httpd_resp_send_chunk(req, "]", 1);
+	httpd_resp_send_chunk(req, NULL, 0);
+	return ESP_OK;
+}
+
+/// @brief Handler to completely wipe all NVS partitions and re-initialize them
+/// @param req POST /nvs/wipe
+/// @return ESP_OK
+static esp_err_t nvs_wipe_post_handler(httpd_req_t *req)
+{
+	ESP_LOGI(__func__, "Req: %d URI: %s - Wiping all NVS partitions", req->method, req->uri);
+
+	// Deinit default NVS before erase
+	nvs_flash_deinit();
+
+	// Erase default NVS
+	esp_err_t err = nvs_flash_erase();
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Failed to erase default NVS: %s", esp_err_to_name(err));
+	}
+	err = nvs_flash_init();
+	if (err != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Failed to re-init default NVS: %s", esp_err_to_name(err));
+	}
+
+	// Iterate over all other NVS data partitions
+	esp_partition_iterator_t part_it = esp_partition_find(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_NVS, NULL);
+	while (part_it != NULL)
+	{
+		const esp_partition_t *part = esp_partition_get(part_it);
+		if (part != NULL && strcmp(part->label, NVS_DEFAULT_PART_NAME) != 0)
+		{
+			ESP_LOGI(__func__, "Erasing and re-initializing custom NVS partition: %s", part->label);
+			nvs_flash_deinit_partition(part->label);
+			nvs_flash_erase_partition(part->label);
+			nvs_flash_init_partition(part->label);
+		}
+		part_it = esp_partition_next(part_it);
+	}
+
+	httpd_resp_set_type(req, "application/json");
+	const char *resp = "{\"status\":\"OK\",\"message\":\"All NVS partitions erased and reinitialized successfully.\"}";
+	httpd_resp_sendstr(req, resp);
+	return ESP_OK;
+}
+
 /// @brief Web Server initialization handler
 /// @param  None
 /// @return Handle to webserver if successfully started, NULL otherwise.
 static httpd_handle_t start_webserver(void)
 {
 	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-	config.max_uri_handlers = 20;
+	config.max_uri_handlers = 24;
 	config.stack_size = 8192;
 	httpd_handle_t server = NULL;
 	if (httpd_start(&server, &config) != ESP_OK)
@@ -1815,6 +2084,10 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &set_trip_odo_uri);
 	httpd_uri_t set_cal_uri = {.uri = "/set_cal", .method = HTTP_POST, .handler = set_cal_post_handler};
 	httpd_register_uri_handler(server, &set_cal_uri);
+	httpd_uri_t nvs_list_uri = {.uri = "/nvs/list", .method = HTTP_GET, .handler = nvs_list_get_handler};
+	httpd_register_uri_handler(server, &nvs_list_uri);
+	httpd_uri_t nvs_wipe_uri = {.uri = "/nvs/wipe", .method = HTTP_POST, .handler = nvs_wipe_post_handler};
+	httpd_register_uri_handler(server, &nvs_wipe_uri);
 	return server;
 }
 

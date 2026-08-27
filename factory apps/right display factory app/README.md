@@ -5,6 +5,7 @@ The **RDB Factory App** provides the provisioning, calibration, and OTA environm
 
 ## Key Capabilities
 - **Wi-Fi AP & mDNS**: Broadcasts `rdb-factory.local`.
+- **NVS Inspection & Wipe**: Scans all active NVS partitions and entries; supports full NVS wipe.
 - **Display Test Patterns**: Generates full-screen RGB and geometry calibration grids.
 - **Web OTA**: Web browser-based firmware upgrades.
 
