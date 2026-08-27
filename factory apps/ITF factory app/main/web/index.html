@@ -16,14 +16,12 @@
     <details>
         <summary>Odometer and trip</summary>
         <p>
-            Odometer : <mark id="odometer">-</mark> m <input id="new_odo" type="number"> <button type="button"
-                onclick="fetch('/set_trip_odo?new_odo='+document.getElementById('new_odo').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
-                odometer</button>
+            Odometer : <mark id="odometer">-</mark> m <input id="new_odo" type="number" min="0" step="1"> <button type="button"
+                onclick="updateOdometer()">Set odometer</button>
             <br>
 
-            Trip : <mark id="trip">-</mark> m <input id="new_trip" type="number"> <button type="button"
-                onclick="fetch('/set_trip_odo?new_trip='+document.getElementById('new_trip').value,{method:'POST'}).then(()=>fetch('/odometer').then(r => r.json()).then(j => { document.getElementById('odometer').innerText = j.odometer_m; document.getElementById('trip').innerText = j.trip_m }))">Set
-                trip</button>
+            Trip : <mark id="trip">-</mark> m <input id="new_trip" type="number" min="0" step="1"> <button type="button"
+                onclick="updateTrip()">Set trip</button>
         </p>
     </details>
 
@@ -31,14 +29,14 @@
         <summary>Calibration values</summary>
         <p>
             Fuel level correction factor : <mark><span id="fuel_level_corr">-</span>/1000</mark> <input
-                id="new_fuel_level_corr" type="number"> <button type="button"
-                onclick="fetch('/set_cal?new_fuel_level_corr='+document.getElementById('new_fuel_level_corr').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+                id="new_fuel_level_corr" type="number" min="1" max="65535" step="1"> <button type="button"
+                onclick="updateCalParam('new_fuel_level_corr')">Update</button><br>
             Low fuel alarm threshold : <mark><span id="low_fuel_threshold">-</span>%</mark> <input
-                id="new_low_fuel_threshold" type="number"> <button type="button"
-                onclick="fetch('/set_cal?new_low_fuel_threshold='+document.getElementById('new_low_fuel_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+                id="new_low_fuel_threshold" type="number" min="0" max="100" step="1"> <button type="button"
+                onclick="updateCalParam('new_low_fuel_threshold')">Update</button><br>
             Overtemp warning : <mark><span id="overtemp_threshold">-</span>°C</mark> <input id="new_overtemp_threshold"
-                type="number"> <button type="button"
-                onclick="fetch('/set_cal?new_overtemp_threshold='+document.getElementById('new_overtemp_threshold').value,{method:'POST'}).then(()=>refreshCalVariables())">Update</button><br>
+                type="number" min="0" max="250" step="1"> <button type="button"
+                onclick="updateCalParam('new_overtemp_threshold')">Update</button><br>
         </p>
     </details>
 
@@ -105,18 +103,71 @@
 
 
     <script>
+        function updateOdometer() {
+            var val = document.getElementById('new_odo').value;
+            if (val === '' || isNaN(val)) {
+                alert('Please enter a valid odometer number');
+                return;
+            }
+            fetch('/set_trip_odo?new_odo=' + encodeURIComponent(val), { method: 'POST' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Update failed');
+                    return fetch('/odometer');
+                })
+                .then(r => r.json())
+                .then(j => {
+                    document.getElementById('odometer').innerText = j.odometer_m;
+                    document.getElementById('trip').innerText = j.trip_m;
+                })
+                .catch(e => alert('Error setting odometer: ' + e.message));
+        }
+
+        function updateTrip() {
+            var val = document.getElementById('new_trip').value;
+            if (val === '' || isNaN(val)) {
+                alert('Please enter a valid trip number');
+                return;
+            }
+            fetch('/set_trip_odo?new_trip=' + encodeURIComponent(val), { method: 'POST' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Update failed');
+                    return fetch('/odometer');
+                })
+                .then(r => r.json())
+                .then(j => {
+                    document.getElementById('odometer').innerText = j.odometer_m;
+                    document.getElementById('trip').innerText = j.trip_m;
+                })
+                .catch(e => alert('Error setting trip: ' + e.message));
+        }
+
+        function updateCalParam(inputId) {
+            var input = document.getElementById(inputId);
+            var val = input.value;
+            if (val === '' || isNaN(val)) {
+                alert('Please enter a valid number');
+                return;
+            }
+            fetch('/set_cal?' + inputId + '=' + encodeURIComponent(val), { method: 'POST' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Update failed');
+                    refreshCalVariables();
+                })
+                .catch(e => alert('Error updating parameter: ' + e.message));
+        }
+
         function refreshCalVariables() {
             fetch('/calibration').then(r => r.json()).then(j => {
-                if (j.fuel_level_corr) {
-                    document.getElementById('fuel_level_corr').innerText = j.fuel_level_corr || '-';
+                if (j.fuel_level_corr !== undefined) {
+                    document.getElementById('fuel_level_corr').innerText = j.fuel_level_corr;
                     document.getElementById('new_fuel_level_corr').value = parseInt(j.fuel_level_corr);
                 }
-                if (j.low_fuel_threshold) {
-                    document.getElementById('low_fuel_threshold').innerText = j.low_fuel_threshold || '-';
+                if (j.low_fuel_threshold !== undefined) {
+                    document.getElementById('low_fuel_threshold').innerText = j.low_fuel_threshold;
                     document.getElementById('new_low_fuel_threshold').value = parseInt(j.low_fuel_threshold);
                 }
-                if (j.overtemp_threshold) {
-                    document.getElementById('overtemp_threshold').innerText = j.overtemp_threshold || '-';
+                if (j.overtemp_threshold !== undefined) {
+                    document.getElementById('overtemp_threshold').innerText = j.overtemp_threshold;
                     document.getElementById('new_overtemp_threshold').value = parseInt(j.overtemp_threshold);
                 }
             });
