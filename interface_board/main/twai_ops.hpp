@@ -223,7 +223,13 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
 
         float fuel_level_raw = sma_get_avg(fuel_level_SMA);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        float fuel_level_pc = lround(((float)(fuel_lvl_comp_factor / 1000.0) * COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P) * 10.0) / 10.0;
+        float vref_3v3 = adc_raw_buffer[3] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE; // Reading the 3V3 value for later
+        // Computing the measured resistance
+        float fuel_level_R = COEFF_K_FACTOR_LOW_SENSE * fuel_level_raw/(adc_raw_buffer[3] > 0 ? adc_raw_buffer[3] : (3.3/(ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE)));
+        // Computing the fuel level percentage, no offset or compensation factor
+        float fuel_level_pc = 100.0*fuel_level_R/COEFF_FUEL_FULL_R;
+        // Previous implementation
+        // float fuel_level_pc = lround(((float)(fuel_lvl_comp_factor / 1000.0) * COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P) * 10.0) / 10.0;
         if (fuel_level_pc > 100.0)
             fuel_level_pc = 100;
         if (fuel_level_pc < 0)
