@@ -29,8 +29,8 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 - **REQ-DSP-004 (Startup Animation)**: Execute synchronized gauge sweep and indicator self-test animation upon ignition power-on.
 
 ### 2.3 Factory Calibration & Web Provisioning
-- **REQ-FAC-001 (WiFi AP & Web Portal)**: Launch captive Wi-Fi AP and HTTP server with mDNS service discovery (`itf-factory.local`, `ldb-factory.local`, `rdb-factory.local`).
-- **REQ-FAC-002 (NVS Calibration Management)**: Read, validate, and persist calibration constants (pulses/km, fuel resistance curve, temperature lookup, gear ratios) into NVS.
+- **REQ-FAC-001 (WiFi AP & Web Portal)**: Launch captive Wi-Fi AP and HTTP server with mDNS service discovery (`interface-board.local`, `ldb-factory.local`, `rdb-factory.local`).
+- **REQ-FAC-002 (NVS Calibration Management)**: Read, validate, and persist calibration constants (odometer/trip, fuel full sender baseline resistance `fuel_full_r`, fuel self-learning toggle `fuel_learn_en`, low fuel warning threshold `lo_fuel_thr`, and coolant overtemp threshold `overtemp_th`) into NVS via REST endpoints (`/calibration`, `/set_cal`, `/api/settings`) and web UI.
 - **REQ-FAC-003 (Safe Power Sequencing)**: Gracefully de-energize 5V peripheral stages prior to software reboot or OTA partition activation.
 
 ### 2.4 Vehicle Emulator Suite

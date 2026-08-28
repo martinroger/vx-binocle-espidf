@@ -693,8 +693,8 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 		{
 			long val = atol(full_r_ptr);
 			if (val < 0) val = -val;
-			if (val < 50) val = 50;
-			if (val > 5000) val = 5000;
+			if (val < 150) val = 150;
+			if (val > 350) val = 350;
 			nvs_set_u16(h, "fuel_full_r", (uint16_t)val);
 			fuel_full_r = (uint16_t)val;
 			ESP_LOGI(__func__, "NVS key 'fuel_full_r' set to %u Ohm", (uint16_t)val);

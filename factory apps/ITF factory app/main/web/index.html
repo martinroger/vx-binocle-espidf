@@ -28,9 +28,11 @@
     <details>
         <summary>Calibration values</summary>
         <p>
-            Fuel level correction factor : <mark><span id="fuel_level_corr">-</span>/1000</mark> <input
-                id="new_fuel_level_corr" type="number" min="1" max="65535" step="1"> <button type="button"
-                onclick="updateCalParam('new_fuel_level_corr')">Update</button><br>
+            Fuel self-learning : <label><input id="fuel_learn_en" type="checkbox" onchange="toggleFuelLearn(this.checked)"> <span id="fuel_learn_status">Enabled</span></label><br>
+            Fuel full baseline resistance : <mark><span id="fuel_full_r">-</span> &Omega;</mark> <input
+                id="new_fuel_full_r" type="number" min="150" max="350" step="1"> <button type="button"
+                onclick="updateCalParam('new_fuel_full_r')">Update</button> <button type="button"
+                onclick="resetFuelFullR()">Reset to 250 &Omega;</button><br>
             Low fuel alarm threshold : <mark><span id="low_fuel_threshold">-</span>%</mark> <input
                 id="new_low_fuel_threshold" type="number" min="0" max="100" step="1"> <button type="button"
                 onclick="updateCalParam('new_low_fuel_threshold')">Update</button><br>
@@ -141,11 +143,43 @@
                 .catch(e => alert('Error setting trip: ' + e.message));
         }
 
+        function toggleFuelLearn(enabled) {
+            var val = enabled ? 1 : 0;
+            document.getElementById('fuel_learn_status').innerText = enabled ? 'Enabled' : 'Disabled';
+            fetch('/set_cal?new_fuel_learn_en=' + val, { method: 'POST' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Update failed');
+                    refreshCalVariables();
+                })
+                .catch(e => {
+                    alert('Error updating fuel self-learning: ' + e.message);
+                    refreshCalVariables();
+                });
+        }
+
+        function resetFuelFullR() {
+            fetch('/set_cal?new_fuel_full_r=250', { method: 'POST' })
+                .then(r => {
+                    if (!r.ok) throw new Error('Reset failed');
+                    refreshCalVariables();
+                })
+                .catch(e => alert('Error resetting fuel full resistance: ' + e.message));
+        }
+
         function updateCalParam(inputId) {
             var input = document.getElementById(inputId);
             var val = input.value;
             if (val === '' || isNaN(val)) {
                 alert('Please enter a valid number');
+                return;
+            }
+            var num = Number(val);
+            if (input.min !== '' && num < Number(input.min)) {
+                alert('Value must be at least ' + input.min);
+                return;
+            }
+            if (input.max !== '' && num > Number(input.max)) {
+                alert('Value must be at most ' + input.max);
                 return;
             }
             fetch('/set_cal?' + inputId + '=' + encodeURIComponent(val), { method: 'POST' })
@@ -158,9 +192,14 @@
 
         function refreshCalVariables() {
             fetch('/calibration').then(r => r.json()).then(j => {
-                if (j.fuel_level_corr !== undefined) {
-                    document.getElementById('fuel_level_corr').innerText = j.fuel_level_corr;
-                    document.getElementById('new_fuel_level_corr').value = parseInt(j.fuel_level_corr);
+                if (j.fuel_learn_en !== undefined) {
+                    var isEn = (j.fuel_learn_en === 1 || j.fuel_learn_en === true);
+                    document.getElementById('fuel_learn_en').checked = isEn;
+                    document.getElementById('fuel_learn_status').innerText = isEn ? 'Enabled' : 'Disabled';
+                }
+                if (j.fuel_full_r !== undefined) {
+                    document.getElementById('fuel_full_r').innerText = j.fuel_full_r;
+                    document.getElementById('new_fuel_full_r').value = parseInt(j.fuel_full_r);
                 }
                 if (j.low_fuel_threshold !== undefined) {
                     document.getElementById('low_fuel_threshold').innerText = j.low_fuel_threshold;
