@@ -154,6 +154,32 @@ inline void dbg_itf_adc_raw_PKG(void *pvParameters)
     }
 }
 #endif
+#ifdef CONFIG_DBG_PULSE_COUNTS_MSG
+TaskHandle_t dbg_itf_pulse_counts_PKG_hdl;
+
+/// @brief Packaging task for debug pulse counts message
+/// @param pvParameters
+inline void dbg_itf_pulse_counts_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_pulse_counts_t binocan_dbg_itf_pulse_counts;
+    binocan_dbg_itf_pulse_counts_init(&binocan_dbg_itf_pulse_counts);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_PULSE_COUNTS_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH};
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_PULSE_COUNTS_CYCLE_TIME_MS));
+        binocan_dbg_itf_pulse_counts.dbg_rpm_pulses = binocan_dbg_itf_pulse_counts_dbg_rpm_pulses_encode(pwm_cap_rpm.cumulative_pulse_counter);
+        binocan_dbg_itf_pulse_counts.dbg_speed_pulses = binocan_dbg_itf_pulse_counts_dbg_speed_pulses_encode(pwm_cap_speed.cumulative_pulse_counter);
+        binocan_dbg_itf_pulse_counts_pack(tx_msg.data, &binocan_dbg_itf_pulse_counts, BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(__func__, "Could not queue debug pulse counts message in queue");
+        }
+    }
+}
+#endif
 
 /// @brief Packaging task for base_slow_metrics
 /// @param pvParameters
@@ -565,6 +591,13 @@ inline esp_err_t twai_ops_init()
     if (xTaskCreatePinnedToCore(dbg_itf_adc_raw_PKG, "DBG_ITF_ADC", 4096, NULL, 3, &dbg_itf_adc_raw_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create debug ADC package task");
+    }
+#endif
+
+#ifdef CONFIG_DBG_PULSE_COUNTS_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_pulse_counts_PKG, "DBG_ITF_PLS", 4096, NULL, 3, &dbg_itf_pulse_counts_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create debug pulse counts package task");
     }
 #endif
 

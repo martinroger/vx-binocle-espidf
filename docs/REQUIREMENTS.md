@@ -19,7 +19,7 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 - **REQ-ITF-002 (Engine RPM Pulse Capture)**: Measure ignition/tacho pulse frequency via MCPWM capture and calculate engine RPM based on cylinder count.
 - **REQ-ITF-003 (Analog Signal Ingestion)**: Sample fuel sender voltage, coolant temperature sensor, oil pressure, and board voltage via external 16-bit ADC (ADS1115) and internal ADC.
 - **REQ-ITF-004 (Signal Filtering)**: Apply Simple Moving Average (SMA) filtering with bounded raw signals to eliminate jitter.
-- **REQ-ITF-005 (CAN Telemetry Broadcast)**: Broadcast standard CAN messages (`ITF_status`, `ITF_values`, `ITF_debug`) over TWAI at periodic rates (20ms, 50ms, 100ms).
+- **REQ-ITF-005 (CAN Telemetry Broadcast)**: Broadcast standard CAN messages (`ITF_status`, `ITF_values`, `ITF_odometer`, `ITF_board_version`) and configurable debug telemetry (`DBG_ITF_speed`, `DBG_ITF_RPM`, `DBG_ITF_coolant`, `DBG_ITF_ADC_raw`, `DBG_ITF_pulse_counts`) over TWAI at periodic rates (20ms, 50ms, 100ms, 250ms, 1000ms).
 - **REQ-ITF-006 (Persistent Odometer)**: Maintain high-resolution vehicle odometer and trip distance in non-volatile storage (NVS) with wear-leveling.
 
 ### 2.2 Left & Right Displays (LDB & RDB)

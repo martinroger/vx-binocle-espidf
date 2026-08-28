@@ -42,4 +42,9 @@ graph TD
 The TWAI daemon broadcasts frames according to standard schedules:
 - **`ITF_values` (20 ms)**: Real-time speed, RPM, and critical drive dynamics.
 - **`ITF_status` (50 ms)**: Coolant temperature, fuel level, battery voltage, and discrete indicators.
-- **`ITF_debug` (100 ms)**: Raw ADC voltages, SMA debug metrics, and internal loop counters with bounded value ranges.
+- **`ITF_debug` (100 ms)**: Debug telemetry broadcast tasks (enabled conditionally via Kconfig):
+  - `DBG_ITF_speed` (`0x300`): Raw speed frequency and duty cycle.
+  - `DBG_ITF_RPM` (`0x301`): Raw RPM frequency and duty cycle.
+  - `DBG_ITF_coolant` (`0x302`): Coolant sensor PWM frequency and duty cycle.
+  - `DBG_ITF_ADC_raw` (`0x303`): Unfiltered ADC voltages for fuel sender and 12V rail.
+  - `DBG_ITF_pulse_counts` (`0x304`): Cumulative monotonic pulse counts for RPM and vehicle speed signals.
