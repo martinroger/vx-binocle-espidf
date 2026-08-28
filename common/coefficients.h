@@ -25,6 +25,10 @@
 
 #define COEFF_PULSES_TO_MILES (double)(COEFF_FREQ_TO_SPEED_MPH_M / 3600) // Conversion factor from pulses to travelled miles
 
+#define COEFF_K_FACTOR_LOW_SENSE (double)357.85 // Conversion factor to calculate Rsensor when the low caliber is enabled
+#define COEFF_K_FACTOR_HI_SENSE (double)3673.88 // Conversion factor to calculate Rsensor when the high caliber is enabled
+
+// This will be deprecated as it is imprecise
 #define COEFF_LOW_CALIBER_CURRENT (double)9.232   // Sense current for low caliber resistance sensor, in mA
 #define COEFF_HIGH_CALIBER_CURRENT (double)0.8992 // Sense current for high caliber resistance sensor, in mA
 
