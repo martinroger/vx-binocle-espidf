@@ -22,6 +22,7 @@ typedef struct
     uint32_t neg_edge_ts;                  // Tick timestamp of the last negative edge
     uint32_t deltaT;                       // Tick difference between the last negative and positive edge
     uint32_t pulse_counter;                // Pulse counter used to determined travelled distance
+    uint32_t cumulative_pulse_counter = 0; // Cumulative pulse counter since boot
     float duty_cycle = 0.0;                // Computed duty cycle
     float frequency = 0.0;                 // Computed frequency
     gptimer_handle_t timeout_detect_timer; // Handle to general purpose timer used to detect timeout
@@ -99,6 +100,7 @@ static inline bool IRAM_ATTR mcpwm_capture_cb_generic(mcpwm_cap_channel_handle_t
         target_pwm_signal->period_ticks = target_pwm_signal->pos_edge_ts - target_pwm_signal->prev_pos_edge_ts;
         // Increase the pulse counter
         target_pwm_signal->pulse_counter++;
+        target_pwm_signal->cumulative_pulse_counter++;
     }
     else if (edata->cap_edge == MCPWM_CAP_EDGE_NEG) // Event data is a negative edge
     {

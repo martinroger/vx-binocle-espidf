@@ -123,6 +123,13 @@ menu "Interface board configuration"
             default false
             help
                 Enables debug output for ADC-related messages.
+
+        config DBG_PULSE_COUNTS_MSG
+            bool "Enable pulse counts debug messages"
+            depends on ENABLE_DEBUG_MSG
+            default false
+            help
+                Enables debug output for RPM and speed pulse count messages.
     endmenu
 
     menu "IO Expander configuration"
