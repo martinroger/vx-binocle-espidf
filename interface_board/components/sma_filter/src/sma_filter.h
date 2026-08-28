@@ -58,6 +58,14 @@ extern "C"
     float sma_get_avg(sma_handle_t *sma);
 
     /**
+     * @brief Reset all values in the SMA filter buffer to a new start value
+     *
+     * @param sma Handle to the SMA filter
+     * @param value The value to fill the buffer with
+     */
+    void sma_reset(sma_handle_t *sma, int16_t value);
+
+    /**
      * @brief Deinitialize the SMA filter and free resources
      * * @param sma Handle to the SMA filter
      */
