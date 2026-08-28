@@ -8,25 +8,56 @@ volatile int16_t adc_raw_buffer[4] = {0}; // Buffer to hold raw ADC measurements
 static TaskHandle_t adc_conversion_Hdl;        // Task handle for ADC conversion task
 static SemaphoreHandle_t adc_access_Semaphore; // Semaphore to protect ADC access
 
+/// @brief Thread-safe synchronous single ADC channel measurement
+/// @param channel_num Channel ID (0 to 3) to read from
+/// @return Raw ADC measurement
+inline int16_t adc_sample_channel_threadsafe(uint8_t channel_num)
+{
+    int16_t val = 0;
+    if (xSemaphoreTake(adc_access_Semaphore, pdMS_TO_TICKS(100)) == pdTRUE)
+    {
+        val = adc_measure_channel_raw(channel_num);
+        if (channel_num < 4)
+        {
+            adc_raw_buffer[channel_num] = val;
+        }
+        xSemaphoreGive(adc_access_Semaphore);
+    }
+    else
+    {
+        ESP_LOGW(__func__, "Could not acquire ADC semaphore for synchronous channel %u read", channel_num);
+        if (channel_num < 4)
+        {
+            val = adc_raw_buffer[channel_num];
+        }
+    }
+    return val;
+}
+
+/// @brief Sample all 4 ADC channels in a thread-safe manner and update adc_raw_buffer
+inline void adc_sample_all_channels_threadsafe(void)
+{
+    if (xSemaphoreTake(adc_access_Semaphore, pdMS_TO_TICKS(100)) == pdTRUE)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            adc_raw_buffer[i] = adc_measure_channel_raw(i);
+        }
+        xSemaphoreGive(adc_access_Semaphore);
+    }
+    else
+    {
+        ESP_LOGW(__func__, "Already sampling from ADC / could not acquire Semaphore!");
+    }
+}
+
 /// @brief ADC pickup task, protected by local Semaphore for ADC access
 /// @param pvParameters 
 inline void adc_conversion_task(void *pvParameters)
 {
     while (1)
     {
-        // Lock in case of parallel request to access ADC
-        if (xSemaphoreTake(adc_access_Semaphore, pdMS_TO_TICKS(1)) == pdTRUE)
-        {
-            for (int i = 0; i < 4; i++)
-            {
-                adc_raw_buffer[i] = adc_measure_channel_raw(i);
-            }
-            xSemaphoreGive(adc_access_Semaphore);
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Already sampling from ADC !");
-        }
+        adc_sample_all_channels_threadsafe();
         // Wait the necessary amount of time for doing all the conversions, if longer than desired polling rate
         vTaskDelay(pdMS_TO_TICKS((4 * conversion_interval_ms > CONFIG_ADC_POLLING_RATE_MS) ? 4 * conversion_interval_ms : CONFIG_ADC_POLLING_RATE_MS));
     }
@@ -54,18 +85,7 @@ inline esp_err_t initialize_ADC_processor()
     }
 
     // Do a first read
-    if (xSemaphoreTake(adc_access_Semaphore, pdMS_TO_TICKS(1)) == pdTRUE)
-    {
-        for (int i = 0; i < 4; i++)
-        {
-            adc_raw_buffer[i] = adc_measure_channel_raw(i);
-        }
-        xSemaphoreGive(adc_access_Semaphore);
-    }
-    else
-    {
-        ESP_LOGW(__func__, "Already sampling from ADC !");
-    }
+    adc_sample_all_channels_threadsafe();
 
     // Sanity check that the polling rate is not faster than what is achievable.
     if (CONFIG_ADC_POLLING_RATE_MS < 4 * conversion_interval_ms)

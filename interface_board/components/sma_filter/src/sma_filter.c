@@ -138,6 +138,24 @@ float sma_get_avg(sma_handle_t *sma)
     return avg;
 }
 
+void sma_reset(sma_handle_t *sma, int16_t value)
+{
+    if (sma == NULL || xSemaphoreTake(sma->mutex, portMAX_DELAY) != pdTRUE)
+    {
+        ESP_LOGE(TAG, "Could not reset SMA");
+        return;
+    }
+    for (int i = 0; i < sma->size; i++)
+    {
+        sma->buffer[i] = value;
+    }
+    sma->latest = value;
+    sma->head = 0;
+    sma->sum = (int32_t)value * sma->size;
+    sma->count = sma->size;
+    xSemaphoreGive(sma->mutex);
+}
+
 void sma_deinit(sma_handle_t *sma)
 {
     if (sma == NULL)
