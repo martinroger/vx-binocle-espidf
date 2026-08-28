@@ -28,11 +28,20 @@
 #define COEFF_K_FACTOR_LOW_SENSE (double)357.85 // Conversion factor to calculate Rsensor when the low caliber is enabled
 #define COEFF_K_FACTOR_HI_SENSE (double)3673.88 // Conversion factor to calculate Rsensor when the high caliber is enabled
 
+#define COEFF_FUEL_SWITCH_TO_HI_R (double)325.0 // Threshold in Ohms to switch from Low to High caliber
+#define COEFF_FUEL_SWITCH_TO_LOW_R (double)300.0 // Threshold in Ohms to switch from High to Low caliber
+#define COEFF_FUEL_OC_R (double)3400.0 // Open-circuit detection threshold in Ohms in High caliber mode
+#define COEFF_FUEL_LEARN_MAX_FACTOR (double)1.10 // Max upper boundary factor (10%) for self-learning fuel_full_r
+
+#define COEFF_VREF_MIN_V (double)3.0 // Minimum acceptable 3V3 reference voltage
+#define COEFF_VREF_MAX_V (double)3.6 // Maximum acceptable 3V3 reference voltage
+#define COEFF_VREF_DEFAULT_V (double)3.3 // Default 3V3 reference fallback voltage
+
 // This will be deprecated as it is imprecise
 #define COEFF_LOW_CALIBER_CURRENT (double)9.232   // Sense current for low caliber resistance sensor, in mA
 #define COEFF_HIGH_CALIBER_CURRENT (double)0.8992 // Sense current for high caliber resistance sensor, in mA
 
-#define COEFF_FUEL_FULL_R 250.0 // Value for the full tank resistance
+#define COEFF_FUEL_FULL_R 250.0 // Default value for the full tank resistance in Ohms
 #define COEFF_FUEL_FULL_V (COEFF_FUEL_FULL_R * COEFF_LOW_CALIBER_CURRENT / 1000.0) // Voltage value at full tank
 
 #define COEFF_FUEL_PC_TO_V_M (double)(COEFF_FUEL_FULL_V / 100.0) // Conversion scale for fuel percentage to ADC input voltage

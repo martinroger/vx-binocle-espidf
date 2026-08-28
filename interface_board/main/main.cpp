@@ -101,6 +101,24 @@ esp_err_t init_5V_ctrl(void)
     return ret;
 }
 
+/// @brief Initialiser for fuel resistance sensing caliber GPIO
+/// @return ESP_OK if all set up correctly, ESP_FAIL otherwise
+esp_err_t init_fuel_sense_ctrl(void)
+{
+    esp_err_t ret = ESP_FAIL;
+    ESP_LOGI(TAG, "Initializing fuel sensing caliber control pin (GPIO %d)", CONFIG_SET_HIGH_CAL_GPIO);
+    ret = gpio_set_direction((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, GPIO_MODE_OUTPUT);
+    ret = gpio_set_pull_mode((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, GPIO_PULLDOWN_ONLY);
+    ret = gpio_pulldown_en((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
+    ret = gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);
+    interface_board_st.EN_hi_R_sense_ST = false;
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Issue setting up fuel sensing caliber pin");
+    }
+    return ret;
+}
+
 /// @brief Enables (after initialisation) the main 5V power supply, necessary for CAN communication and RDB
 /// @param
 /// @return ESP_OK if all started OK, ESP_FAIL otherwise.
@@ -348,6 +366,11 @@ extern "C" void app_main(void)
         ESP_LOGW(TAG, "Could not fire up secondary 5V output. Continuing in Invalid.");
         attemptRollBack();
     }
+    if (init_fuel_sense_ctrl() != ESP_OK)
+    {
+        ESP_LOGW(TAG, "Could not initialize fuel sense caliber pin. Continuing in Invalid.");
+        attemptRollBack();
+    }
 
     // Start TWAI
     if (initCAN(NULL) != ESP_OK)
@@ -416,22 +439,42 @@ extern "C" void app_main(void)
             }
             else // "storage" namespace is open for business
             {
-                // FUel compensation factor
-                nvs_err = nvs_get_u16(nvs_h, "fuel_comp", &fuel_lvl_comp_factor);
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND) // Write if not found
+                // Fuel self-learning enable flag
+                uint8_t learn_en_u8 = fuel_learn_en ? 1 : 0;
+                nvs_err = nvs_get_u8(nvs_h, "fuel_learn_en", &learn_en_u8);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
                 {
-                    ESP_LOGW(TAG, "Fuel compensation factor not found in memory, initializing");
-                    nvs_err = nvs_set_u16(nvs_h, "fuel_comp", fuel_lvl_comp_factor);
+                    ESP_LOGW(TAG, "Fuel learn enable flag not found in memory, initializing to true");
+                    learn_en_u8 = 1;
+                    nvs_err = nvs_set_u8(nvs_h, "fuel_learn_en", learn_en_u8);
                     if (nvs_err != ESP_OK)
                     {
-                        ESP_LOGE(TAG, "Could not set Fuel Comp in NVS");
+                        ESP_LOGE(TAG, "Could not set fuel_learn_en in NVS");
                         attemptRollBack();
                     }
                     else
                         nvs_commit(nvs_h);
                 }
+                fuel_learn_en = (learn_en_u8 != 0);
+                ESP_LOGI(TAG, "Fuel self-learning enabled: %s", fuel_learn_en ? "YES" : "NO");
 
-                ESP_LOGI(TAG, "Fuel compensation factor : %u / 1000", fuel_lvl_comp_factor);
+                // Fuel full resistance (Ohms)
+                nvs_err = nvs_get_u16(nvs_h, "fuel_full_r", &fuel_full_r);
+                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
+                {
+                    ESP_LOGW(TAG, "Fuel full resistance not found in memory, initializing to %u Ohm", (uint16_t)COEFF_FUEL_FULL_R);
+                    fuel_full_r = (uint16_t)COEFF_FUEL_FULL_R;
+                    nvs_err = nvs_set_u16(nvs_h, "fuel_full_r", fuel_full_r);
+                    if (nvs_err != ESP_OK)
+                    {
+                        ESP_LOGE(TAG, "Could not set fuel_full_r in NVS");
+                        attemptRollBack();
+                    }
+                    else
+                        nvs_commit(nvs_h);
+                }
+                ESP_LOGI(TAG, "Fuel full resistance: %u Ohm", fuel_full_r);
+
                 // Low fuel threshold
                 nvs_err = nvs_get_u16(nvs_h, "lo_fuel_thr", &fuel_low_level_threshold_pc); // Write if not found
                 if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
@@ -463,7 +506,7 @@ extern "C" void app_main(void)
                         nvs_commit(nvs_h);
                 }
 
-                ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", fuel_low_level_threshold_pc);
+                ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", coolant_overtemp_threshold_degC);
                 nvs_close(nvs_h);
             }
         }
