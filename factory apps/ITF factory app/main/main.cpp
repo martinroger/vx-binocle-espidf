@@ -70,7 +70,8 @@ struct board_ST
 
 } interface_board_st;
 
-uint16_t fuel_lvl_comp_factor = 1000; // Is divided by 1000.0 later
+bool fuel_learn_en = true;
+uint16_t fuel_full_r = 250;
 uint16_t fuel_low_level_threshold_pc = 20;
 uint16_t coolant_overtemp_threshold_degC = 106;
 
@@ -551,16 +552,31 @@ static esp_err_t odometer_get_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
-/// @brief Handler for the request of the calibration variables
-/// @param req GET /calibration
+static const char *find_param_val(const char *src, const char *key1, const char *key2 = NULL, const char *key3 = NULL)
+{
+	if (!src) return NULL;
+	const char *p = strstr(src, key1);
+	if (!p && key2) p = strstr(src, key2);
+	if (!p && key3) p = strstr(src, key3);
+	if (!p) return NULL;
+
+	// Advance past matched key
+	if (strstr(src, key1) == p) p += strlen(key1);
+	else if (key2 && strstr(src, key2) == p) p += strlen(key2);
+	else if (key3 && strstr(src, key3) == p) p += strlen(key3);
+
+	while (*p == '=' || *p == ':' || *p == '"' || *p == ' ' || *p == '\t')
+		p++;
+	return p;
+}
+
+/// @brief Handler for the request of the calibration variables / settings
+/// @param req GET /calibration or GET /api/settings
 /// @return
 static esp_err_t calibration_get_handler(httpd_req_t *req)
 {
-	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+	ESP_LOGI(__func__, "GET handler invoked: Method=%d URI=%s", req->method, req->uri);
 
-	// uint16_t fuel_lvl_comp_factor; // Is divided by 1000.0 later
-	// uint16_t fuel_low_level_threshold_pc;
-	// uint16_t coolant_overtemp_threshold_degC;
 	nvs_handle_t h;
 	esp_err_t err = ESP_FAIL;
 
@@ -571,35 +587,61 @@ static esp_err_t calibration_get_handler(httpd_req_t *req)
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS open failed");
 		return ESP_FAIL;
 	}
-	if (nvs_get_u16(h, "fuel_comp", &fuel_lvl_comp_factor) == ESP_ERR_NVS_NOT_FOUND)
+	uint8_t learn_en_u8 = 1;
+	if (nvs_get_u8(h, "fuel_learn_en", &learn_en_u8) == ESP_ERR_NVS_NOT_FOUND)
 	{
-		ESP_LOGW(__func__, "Could not find the fuel level compensation factor in nvs.");
-		fuel_lvl_comp_factor = 1000;
+		ESP_LOGW(__func__, "Could not find fuel_learn_en in nvs, using default: 1");
+		learn_en_u8 = 1;
 	}
-	if (nvs_get_u16(h, "lo_fuel_th", &fuel_low_level_threshold_pc) == ESP_ERR_NVS_NOT_FOUND)
+	fuel_learn_en = (learn_en_u8 != 0);
+
+	if (nvs_get_u16(h, "fuel_full_r", &fuel_full_r) == ESP_ERR_NVS_NOT_FOUND)
 	{
-		ESP_LOGW(__func__, "Could not find the low fuel level threshold in nvs.");
+		ESP_LOGW(__func__, "Could not find fuel_full_r in nvs, using default: 250");
+		fuel_full_r = 250;
+	}
+	if (nvs_get_u16(h, "lo_fuel_thr", &fuel_low_level_threshold_pc) == ESP_ERR_NVS_NOT_FOUND)
+	{
+		ESP_LOGW(__func__, "Could not find lo_fuel_thr in nvs, using default: 20");
 		fuel_low_level_threshold_pc = 20;
 	}
 	if (nvs_get_u16(h, "overtemp_th", &coolant_overtemp_threshold_degC) == ESP_ERR_NVS_NOT_FOUND)
 	{
-		ESP_LOGW(__func__, "Could not find the coolant overtemperature threshold in nvs.");
-		coolant_overtemp_threshold_degC = 103;
+		ESP_LOGW(__func__, "Could not find overtemp_th in nvs, using default: 106");
+		coolant_overtemp_threshold_degC = 106;
 	}
 	nvs_close(h);
 	char out[256];
-	snprintf(out, sizeof(out), "{\"fuel_level_corr\":%u,\"low_fuel_threshold\":%u,\"overtemp_threshold\":%u}", fuel_lvl_comp_factor, fuel_low_level_threshold_pc, coolant_overtemp_threshold_degC);
+	snprintf(out, sizeof(out), "{\"fuel_learn_en\":%u,\"fuel_full_r\":%u,\"low_fuel_threshold\":%u,\"overtemp_threshold\":%u}",
+	         fuel_learn_en ? 1 : 0, fuel_full_r, fuel_low_level_threshold_pc, coolant_overtemp_threshold_degC);
+	ESP_LOGI(__func__, "Returning calibration JSON payload: %s", out);
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, out);
 	return ESP_OK;
 }
 
-/// @brief Handler for the request to set calibration values
-/// @param req POST /set_cal
+/// @brief Handler for the request to set calibration / settings values
+/// @param req POST /set_cal or POST /api/settings
 /// @return
 static esp_err_t set_cal_post_handler(httpd_req_t *req)
 {
-	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
+	ESP_LOGI(__func__, "POST handler invoked: Method=%d URI=%s Content-Length=%d", req->method, req->uri, req->content_len);
+
+	char body_buf[512] = {0};
+	if (req->content_len > 0)
+	{
+		size_t to_read = std::min((size_t)req->content_len, sizeof(body_buf) - 1);
+		int received = httpd_req_recv(req, body_buf, to_read);
+		if (received > 0)
+		{
+			body_buf[received] = '\0';
+			ESP_LOGI(__func__, "Read %d bytes from POST body: %s", received, body_buf);
+		}
+		if (req->content_len > (int)to_read)
+		{
+			drain_remaining_body(req);
+		}
+	}
 
 	nvs_handle_t h;
 	esp_err_t nvserr = nvs_open("storage", NVS_READWRITE, &h);
@@ -609,110 +651,115 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not load NVS");
 		return ESP_FAIL;
 	}
-	// Prepare pointers to substrings
-	const char *new_fuel_level_corr_ptr = strstr(req->uri, "new_fuel_level_corr=");
-	const char *new_low_fuel_th_ptr = strstr(req->uri, "new_low_fuel_threshold=");
-	const char *new_overtemp_th_ptr = strstr(req->uri, "new_overtemp_threshold=");
-	long detectedNumber = 0;
-	// Check if "new_fuel_level_corr=" is a valid pointer (detected)
-	if (new_fuel_level_corr_ptr != NULL)
+
+	bool updated = false;
+
+	// 1. Fuel learn enable
+	const char *learn_ptr = find_param_val(req->uri, "new_fuel_learn_en", "fuel_learn_en");
+	if (!learn_ptr && body_buf[0] != '\0')
 	{
-		// Construct pointer at the first supposed numerical character
-		const char *newFLCFToParse = new_fuel_level_corr_ptr + sizeof("new_fuel_level_corr=") - 1;
-		if (newFLCFToParse[0] == '\0' || newFLCFToParse[0] == '&')
+		learn_ptr = find_param_val(body_buf, "\"fuel_learn_en\"", "fuel_learn_en", "new_fuel_learn_en");
+	}
+	if (learn_ptr != NULL && *learn_ptr != '\0' && *learn_ptr != '&')
+	{
+		uint8_t en = 0;
+		if (*learn_ptr == '1' || strncmp(learn_ptr, "true", 4) == 0 || strncmp(learn_ptr, "TRUE", 4) == 0)
 		{
-			ESP_LOGE(__func__, "Empty value supplied for new_fuel_level_corr");
-			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty value in set request");
-			nvs_close(h);
-			return ESP_FAIL;
+			en = 1;
 		}
-		// atol is not checking anything. Let's check that at least the first character is either numerical or +-
-		if ((newFLCFToParse[0] == '-') || (newFLCFToParse[0] == '+') || ((newFLCFToParse[0] >= '0') && (newFLCFToParse[0] <= '9')))
+		else if (*learn_ptr == '0' || strncmp(learn_ptr, "false", 5) == 0 || strncmp(learn_ptr, "FALSE", 5) == 0)
 		{
-			ESP_LOGI(__func__, "Numeral or compatible detected, atol sorta safe to use.");
-			detectedNumber = atol(newFLCFToParse);
-			if (detectedNumber < 0)
-				detectedNumber *= -1;
-			if (detectedNumber > UINT16_MAX)
-				detectedNumber = UINT16_MAX;
-			nvs_set_u16(h, "fuel_comp", (uint16_t)detectedNumber);
-			ESP_LOGI(__func__, "Fuel Level Compensation factor updated to %u /1000", (uint16_t)detectedNumber);
-			nvs_commit(h);
+			en = 0;
 		}
 		else
 		{
-			ESP_LOGE(__func__, "Invalid starting character '%c' (0x%02X) for atol, reporting error", newFLCFToParse[0], (unsigned char)newFLCFToParse[0]);
-			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in set request");
-			nvs_close(h);
-			return ESP_FAIL;
+			en = (atol(learn_ptr) != 0) ? 1 : 0;
+		}
+		nvs_set_u8(h, "fuel_learn_en", en);
+		fuel_learn_en = (en != 0);
+		ESP_LOGI(__func__, "NVS key 'fuel_learn_en' set to %u (%s)", en, en ? "ENABLED" : "DISABLED");
+		updated = true;
+	}
+
+	// 2. Fuel full resistance
+	const char *full_r_ptr = find_param_val(req->uri, "new_fuel_full_r", "fuel_full_r");
+	if (!full_r_ptr && body_buf[0] != '\0')
+	{
+		full_r_ptr = find_param_val(body_buf, "\"fuel_full_r\"", "fuel_full_r", "new_fuel_full_r");
+	}
+	if (full_r_ptr != NULL && *full_r_ptr != '\0' && *full_r_ptr != '&')
+	{
+		if ((*full_r_ptr >= '0' && *full_r_ptr <= '9') || *full_r_ptr == '+' || *full_r_ptr == '-')
+		{
+			long val = atol(full_r_ptr);
+			if (val < 0) val = -val;
+			if (val < 50) val = 50;
+			if (val > 5000) val = 5000;
+			nvs_set_u16(h, "fuel_full_r", (uint16_t)val);
+			fuel_full_r = (uint16_t)val;
+			ESP_LOGI(__func__, "NVS key 'fuel_full_r' set to %u Ohm", (uint16_t)val);
+			updated = true;
 		}
 	}
-	if (new_low_fuel_th_ptr != NULL)
+
+	// 3. Low fuel threshold
+	const char *low_fuel_ptr = find_param_val(req->uri, "new_low_fuel_threshold", "low_fuel_threshold", "lo_fuel_thr");
+	if (!low_fuel_ptr) low_fuel_ptr = find_param_val(req->uri, "new_low_fuel_th");
+	if (!low_fuel_ptr && body_buf[0] != '\0')
 	{
-		const char *newLFTToParse = new_low_fuel_th_ptr + sizeof("new_low_fuel_threshold=") - 1;
-		if (newLFTToParse[0] == '\0' || newLFTToParse[0] == '&')
+		low_fuel_ptr = find_param_val(body_buf, "\"low_fuel_threshold\"", "low_fuel_threshold", "lo_fuel_thr");
+	}
+	if (low_fuel_ptr != NULL && *low_fuel_ptr != '\0' && *low_fuel_ptr != '&')
+	{
+		if ((*low_fuel_ptr >= '0' && *low_fuel_ptr <= '9') || *low_fuel_ptr == '+' || *low_fuel_ptr == '-')
 		{
-			ESP_LOGE(__func__, "Empty value supplied for new_low_fuel_threshold");
-			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty value in set request");
-			nvs_close(h);
-			return ESP_FAIL;
-		}
-		if ((newLFTToParse[0] == '-') || (newLFTToParse[0] == '+') || ((newLFTToParse[0] >= '0') && (newLFTToParse[0] <= '9')))
-		{
-			detectedNumber = atol(newLFTToParse);
-			if (detectedNumber < 0)
-				detectedNumber *= -1;
-			if (detectedNumber > UINT16_MAX)
-				detectedNumber = UINT16_MAX;
-			nvs_set_u16(h, "lo_fuel_th", (uint16_t)detectedNumber);
-			ESP_LOGI(__func__, "Low fuel level threshold updated to %u %%", (uint16_t)detectedNumber);
-			nvs_commit(h);
-		}
-		else
-		{
-			ESP_LOGE(__func__, "Invalid starting character '%c' (0x%02X) for atol, reporting error", newLFTToParse[0], (unsigned char)newLFTToParse[0]);
-			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in set request");
-			nvs_close(h);
-			return ESP_FAIL;
+			long val = atol(low_fuel_ptr);
+			if (val < 0) val = -val;
+			if (val > 100) val = 100;
+			nvs_set_u16(h, "lo_fuel_thr", (uint16_t)val);
+			fuel_low_level_threshold_pc = (uint16_t)val;
+			ESP_LOGI(__func__, "NVS key 'lo_fuel_thr' set to %u %%", (uint16_t)val);
+			updated = true;
 		}
 	}
-	if (new_overtemp_th_ptr != NULL)
+
+	// 4. Coolant overtemp threshold
+	const char *overtemp_ptr = find_param_val(req->uri, "new_overtemp_threshold", "overtemp_threshold", "overtemp_th");
+	if (!overtemp_ptr && body_buf[0] != '\0')
 	{
-		const char *newOVTToParse = new_overtemp_th_ptr + sizeof("new_overtemp_threshold=") - 1;
-		if (newOVTToParse[0] == '\0' || newOVTToParse[0] == '&')
+		overtemp_ptr = find_param_val(body_buf, "\"overtemp_threshold\"", "overtemp_threshold", "overtemp_th");
+	}
+	if (overtemp_ptr != NULL && *overtemp_ptr != '\0' && *overtemp_ptr != '&')
+	{
+		if ((*overtemp_ptr >= '0' && *overtemp_ptr <= '9') || *overtemp_ptr == '+' || *overtemp_ptr == '-')
 		{
-			ESP_LOGE(__func__, "Empty value supplied for new_overtemp_threshold");
-			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty value in set request");
-			nvs_close(h);
-			return ESP_FAIL;
-		}
-		if ((newOVTToParse[0] == '-') || (newOVTToParse[0] == '+') || ((newOVTToParse[0] >= '0') && (newOVTToParse[0] <= '9')))
-		{
-			detectedNumber = atol(newOVTToParse);
-			if (detectedNumber < 0)
-				detectedNumber *= -1;
-			if (detectedNumber > UINT16_MAX)
-				detectedNumber = UINT16_MAX;
-			nvs_set_u16(h, "overtemp_th", (uint16_t)detectedNumber);
-			ESP_LOGI(__func__, "Coolant overtemp threshold updated to %u °C", (uint16_t)detectedNumber);
-			nvs_commit(h);
-		}
-		else
-		{
-			ESP_LOGE(__func__, "Invalid starting character '%c' (0x%02X) for atol, reporting error", newOVTToParse[0], (unsigned char)newOVTToParse[0]);
-			httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid characters in set request");
-			nvs_close(h);
-			return ESP_FAIL;
+			long val = atol(overtemp_ptr);
+			if (val < 0) val = -val;
+			if (val > 250) val = 250;
+			nvs_set_u16(h, "overtemp_th", (uint16_t)val);
+			coolant_overtemp_threshold_degC = (uint16_t)val;
+			ESP_LOGI(__func__, "NVS key 'overtemp_th' set to %u °C", (uint16_t)val);
+			updated = true;
 		}
 	}
-	if (new_low_fuel_th_ptr == NULL && new_fuel_level_corr_ptr == NULL && new_overtemp_th_ptr == NULL) // Gibberish in the request
+
+	if (!updated)
 	{
-		ESP_LOGE(__func__, "Invalid update request, no valid calibration input.");
-		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Malformed request, no correct tags");
+		ESP_LOGE(__func__, "Invalid update request: no recognized calibration keys in URI (%s) or body (%s)", req->uri, body_buf);
+		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Malformed request, no valid parameter found");
 		nvs_close(h);
 		return ESP_FAIL;
 	}
-	// Close NVS if nothing returned before
+
+	esp_err_t commit_err = nvs_commit(h);
+	if (commit_err != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Failed to commit NVS changes: %s", esp_err_to_name(commit_err));
+	}
+	else
+	{
+		ESP_LOGI(__func__, "Successfully committed updated calibration settings to NVS storage.");
+	}
 	nvs_close(h);
 	httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
 	return ESP_OK;
@@ -2105,6 +2152,10 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &set_trip_odo_uri);
 	httpd_uri_t set_cal_uri = {.uri = "/set_cal", .method = HTTP_POST, .handler = set_cal_post_handler};
 	httpd_register_uri_handler(server, &set_cal_uri);
+	httpd_uri_t settings_get_uri = {.uri = "/api/settings", .method = HTTP_GET, .handler = calibration_get_handler};
+	httpd_register_uri_handler(server, &settings_get_uri);
+	httpd_uri_t settings_post_uri = {.uri = "/api/settings", .method = HTTP_POST, .handler = set_cal_post_handler};
+	httpd_register_uri_handler(server, &settings_post_uri);
 	httpd_uri_t nvs_list_uri = {.uri = "/nvs/list", .method = HTTP_GET, .handler = nvs_list_get_handler};
 	httpd_register_uri_handler(server, &nvs_list_uri);
 	httpd_uri_t nvs_wipe_uri = {.uri = "/nvs/wipe", .method = HTTP_POST, .handler = nvs_wipe_post_handler};
@@ -2185,24 +2236,30 @@ extern "C" void app_main(void)
 	nvs_handle_t h_storage;
 	if (nvs_open("storage", NVS_READWRITE, &h_storage) == ESP_OK)
 	{
-		uint16_t val16 = 0;
-		if (nvs_get_u16(h_storage, "fuel_comp", &val16) == ESP_ERR_NVS_NOT_FOUND)
+		uint8_t val8 = 0;
+		if (nvs_get_u8(h_storage, "fuel_learn_en", &val8) == ESP_ERR_NVS_NOT_FOUND)
 		{
-			nvs_set_u16(h_storage, "fuel_comp", 1000);
-			ESP_LOGI(__func__, "Populated default NVS key fuel_comp: 1000");
+			nvs_set_u8(h_storage, "fuel_learn_en", 1);
+			ESP_LOGI(__func__, "Populated default NVS key fuel_learn_en: 1");
 		}
-		if (nvs_get_u16(h_storage, "lo_fuel_th", &val16) == ESP_ERR_NVS_NOT_FOUND)
+		uint16_t val16 = 0;
+		if (nvs_get_u16(h_storage, "fuel_full_r", &val16) == ESP_ERR_NVS_NOT_FOUND)
 		{
-			nvs_set_u16(h_storage, "lo_fuel_th", 20);
-			ESP_LOGI(__func__, "Populated default NVS key lo_fuel_th: 20");
+			nvs_set_u16(h_storage, "fuel_full_r", 250);
+			ESP_LOGI(__func__, "Populated default NVS key fuel_full_r: 250");
+		}
+		if (nvs_get_u16(h_storage, "lo_fuel_thr", &val16) == ESP_ERR_NVS_NOT_FOUND)
+		{
+			nvs_set_u16(h_storage, "lo_fuel_thr", 20);
+			ESP_LOGI(__func__, "Populated default NVS key lo_fuel_thr: 20");
 		}
 		if (nvs_get_u16(h_storage, "overtemp_th", &val16) == ESP_ERR_NVS_NOT_FOUND)
 		{
 			nvs_set_u16(h_storage, "overtemp_th", 106);
 			ESP_LOGI(__func__, "Populated default NVS key overtemp_th: 106");
 		}
-		int8_t val8 = 0;
-		if (nvs_get_i8(h_storage, "lastPart", &val8) == ESP_ERR_NVS_NOT_FOUND)
+		int8_t val_i8 = 0;
+		if (nvs_get_i8(h_storage, "lastPart", &val_i8) == ESP_ERR_NVS_NOT_FOUND)
 		{
 			nvs_set_i8(h_storage, "lastPart", -1);
 			ESP_LOGI(__func__, "Populated default NVS key lastPart: -1");
