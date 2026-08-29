@@ -130,6 +130,13 @@ menu "Interface board configuration"
             default false
             help
                 Enables debug output for RPM and speed pulse count messages.
+
+        config DBG_FUEL_MSG
+            bool "Enable fuel debug messages"
+            depends on ENABLE_DEBUG_MSG
+            default false
+            help
+                Enables debug output for dynamic fuel sensing and resistance messages (0x305).
     endmenu
 
     menu "IO Expander configuration"

@@ -131,7 +131,7 @@ inline void dbg_itf_coolant_PKG(void *pvParameters)
 #ifdef CONFIG_DBG_ADC_MSG
 TaskHandle_t dbg_itf_adc_raw_PKG_hdl;
 
-/// @brief Packaging task for debug ADC raw message
+/// @brief Packaging task for debug ADC raw message (3.3V Vref & 12V board supply)
 /// @param pvParameters
 inline void dbg_itf_adc_raw_PKG(void *pvParameters)
 {
@@ -144,9 +144,9 @@ inline void dbg_itf_adc_raw_PKG(void *pvParameters)
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_ADC_RAW_CYCLE_TIME_MS));
-        float fuel_raw_v = adc_raw_buffer[0] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float v3v3_raw_v = adc_raw_buffer[3] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float lv_raw_v = adc_raw_buffer[1] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        binocan_dbg_itf_adc_raw.dbg_fuel_raw_v = binocan_dbg_itf_adc_raw_dbg_fuel_raw_v_encode(fuel_raw_v);
+        binocan_dbg_itf_adc_raw.dbg_3_v3_raw_v = binocan_dbg_itf_adc_raw_dbg_3_v3_raw_v_encode(v3v3_raw_v);
         binocan_dbg_itf_adc_raw.dbg_12_v_raw_v = binocan_dbg_itf_adc_raw_dbg_12_v_raw_v_encode(lv_raw_v);
         binocan_dbg_itf_adc_raw_pack(tx_msg.data, &binocan_dbg_itf_adc_raw, BINOCAN_DBG_ITF_ADC_RAW_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
@@ -178,6 +178,67 @@ inline void dbg_itf_pulse_counts_PKG(void *pvParameters)
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(__func__, "Could not queue debug pulse counts message in queue");
+        }
+    }
+}
+#endif
+#ifdef CONFIG_DBG_FUEL_MSG
+TaskHandle_t dbg_itf_fuel_PKG_hdl;
+
+/// @brief Packaging task for debug fuel message (0x305: raw V, unfiltered %, fuel_full_r, measured R)
+/// @param pvParameters
+inline void dbg_itf_fuel_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_fuel_t binocan_dbg_itf_fuel;
+    binocan_dbg_itf_fuel_init(&binocan_dbg_itf_fuel);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_FUEL_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_FUEL_LENGTH};
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_FUEL_CYCLE_TIME_MS));
+
+        int16_t raw_ch0 = adc_raw_buffer[0];
+        float fuel_raw_v = (float)raw_ch0 * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+
+        // Vref (3.3V) validation on ADC channel 3
+        int16_t vref_raw = adc_raw_buffer[3];
+        float vref_3v3 = (float)vref_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float vref_raw_valid = 0.0f;
+        if (vref_3v3 >= (float)COEFF_VREF_MIN_V && vref_3v3 <= (float)COEFF_VREF_MAX_V && vref_raw > 0)
+        {
+            vref_raw_valid = (float)vref_raw;
+        }
+        else
+        {
+            vref_raw_valid = (float)(COEFF_VREF_DEFAULT_V * ADS111X_MAX_VALUE / ads111x_gain_values[ADS111X_GAIN_4V096]);
+        }
+
+        bool is_hi_cal = (gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO) != 0);
+        double k_factor = is_hi_cal ? COEFF_K_FACTOR_HI_SENSE : COEFF_K_FACTOR_LOW_SENSE;
+        float fuel_level_R = (float)(k_factor * (float)raw_ch0 / vref_raw_valid);
+        if (fuel_level_R < 0.0f)
+            fuel_level_R = 0.0f;
+        if (fuel_level_R > 4095.0f)
+            fuel_level_R = 4095.0f;
+
+        float raw_pc = (fuel_full_r > 0) ? (100.0f * fuel_level_R / (float)fuel_full_r) : 0.0f;
+        if (raw_pc > 100.0f)
+            raw_pc = 100.0f;
+        if (raw_pc < 0.0f)
+            raw_pc = 0.0f;
+        uint8_t unfiltered_pc = (uint8_t)lround(raw_pc);
+
+        binocan_dbg_itf_fuel.dbg_fuel_raw_v = binocan_dbg_itf_fuel_dbg_fuel_raw_v_encode(fuel_raw_v);
+        binocan_dbg_itf_fuel.dbg_fuel_level_unfiltered = binocan_dbg_itf_fuel_dbg_fuel_level_unfiltered_encode(unfiltered_pc);
+        binocan_dbg_itf_fuel.dbg_fuel_full_r = binocan_dbg_itf_fuel_dbg_fuel_full_r_encode(fuel_full_r);
+        binocan_dbg_itf_fuel.dbg_fuel_r = binocan_dbg_itf_fuel_dbg_fuel_r_encode((uint16_t)lround(fuel_level_R));
+
+        binocan_dbg_itf_fuel_pack(tx_msg.data, &binocan_dbg_itf_fuel, BINOCAN_DBG_ITF_FUEL_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(__func__, "Could not queue debug fuel message in queue");
         }
     }
 }
@@ -703,6 +764,13 @@ inline esp_err_t twai_ops_init()
     if (xTaskCreatePinnedToCore(dbg_itf_pulse_counts_PKG, "DBG_ITF_PLS", 4096, NULL, 3, &dbg_itf_pulse_counts_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create debug pulse counts package task");
+    }
+#endif
+
+#ifdef CONFIG_DBG_FUEL_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_fuel_PKG, "DBG_ITF_FUEL", 4096, NULL, 3, &dbg_itf_fuel_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create debug fuel package task");
     }
 #endif
 

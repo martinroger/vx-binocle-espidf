@@ -52,5 +52,6 @@ The TWAI daemon broadcasts frames according to standard schedules:
   - `DBG_ITF_speed` (`0x300`): Raw speed frequency and duty cycle.
   - `DBG_ITF_RPM` (`0x301`): Raw RPM frequency and duty cycle.
   - `DBG_ITF_coolant` (`0x302`): Coolant sensor PWM frequency and duty cycle.
-  - `DBG_ITF_ADC_raw` (`0x303`): Unfiltered ADC voltages for fuel sender and 12V rail.
+  - `DBG_ITF_ADC_raw` (`0x303`): Unfiltered supply rail voltages (3.3V $V_{dd}$ reference and 12V board rail).
   - `DBG_ITF_pulse_counts` (`0x304`): Cumulative monotonic pulse counts for RPM and vehicle speed signals.
+  - `DBG_ITF_fuel` (`0x305`): Raw fuel sender voltage, unfiltered fuel percentage, active/learned $R_{full}$ baseline, and dynamic sender resistance ($\Omega$).
