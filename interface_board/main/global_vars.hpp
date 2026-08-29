@@ -28,7 +28,9 @@ bool rollBackPossible; // Is rollback possible ?
 bool firstBoot;        // Is this the first boot after OTA ?
 
 // Placeholders editable in factory mode
-uint16_t fuel_lvl_comp_factor = 1000; // Is divided by 1000.0 later
+uint16_t fuel_full_r = (uint16_t)COEFF_FUEL_FULL_R; // Learned or calibrated full tank resistance in Ohms (Default: 250)
+bool fuel_learn_en = true;                          // Enable/disable self-learning of fuel_full_r
+bool fuel_sensor_open_circuit = false;              // Fuel sender open circuit flag (>3.4kOhm)
 uint16_t fuel_low_level_threshold_pc = 20;
 uint16_t coolant_overtemp_threshold_degC = 106;
 

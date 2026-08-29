@@ -30,10 +30,16 @@ graph TD
 - **Engine RPM**: Ignition pulse period is converted to revolutions per minute based on cylinder pulses per crankshaft revolution.
 - **Pulse Accumulator**: Accumulated wheel pulses increment the high-resolution trip and odometer registers (`odometer.c`).
 
-### 2.2 Analog Ingestion & Moving Average Filter
-- ADS1115 samples analog channels continuously at configured data rates.
-- The raw ADC samples are pushed into a 4-entry circular buffer.
-- Simple Moving Average (SMA) filtering (`sma_filter.c`) is executed synchronously inside the CAN transmission task to prevent race conditions.
+### 2.2 Analog Ingestion & Dual-Caliber Fuel Sensing
+- ADS1115 samples analog channels continuously at configured data rates (Channel 0: Fuel sender, Channel 1: 12V rail, Channel 3: 3.3V reference $V_{dd}$).
+- **Ratiometric Compensation**: Fuel sender resistance is computed against the live $V_{dd}$ reference reading on Channel 3 ($R_{load} = \text{COEFF\_FUEL\_CORRECTION\_MULT} \cdot K \cdot \text{raw}_{fuel} / \text{raw}_{3v3}$), with fallback to ideal 3.3V if measured $V_{ref} \notin [3.0\text{V}, 3.6\text{V}]$.
+- **Dynamic Dual-Caliber Switching**:
+  - Low caliber ($K_{lo} = 357.85$) switches to High caliber ($K_{hi} = 3673.88$) via GPIO 15 when $R > 300\,\Omega$.
+  - High caliber switches back to Low caliber when $R < 275\,\Omega$.
+  - Caliber switching evaluates instantaneous ADC counts to switch within <500 ms and synchronously re-samples and reseeds the Simple Moving Average (SMA) filter.
+- **Safety & Self-Learning**:
+  - Open-circuit condition ($R > 3.4\text{ k}\Omega$) sets fuel level to 100% and latches the `lowFuel` telltale.
+  - When `fuel_learn_en` is enabled in NVS, the board learns higher full-tank resistance values within a 10% SMA-averaged window ($\text{fuel\_full\_r} < R_{sma} \le 1.10 \times \text{fuel\_full\_r}$) and commits to NVS `fuel_full_r`.
 
 ---
 
@@ -42,4 +48,10 @@ graph TD
 The TWAI daemon broadcasts frames according to standard schedules:
 - **`ITF_values` (20 ms)**: Real-time speed, RPM, and critical drive dynamics.
 - **`ITF_status` (50 ms)**: Coolant temperature, fuel level, battery voltage, and discrete indicators.
-- **`ITF_debug` (100 ms)**: Raw ADC voltages, SMA debug metrics, and internal loop counters with bounded value ranges.
+- **`ITF_debug` (100 ms)**: Debug telemetry broadcast tasks (enabled conditionally via Kconfig):
+  - `DBG_ITF_speed` (`0x300`): Raw speed frequency and duty cycle.
+  - `DBG_ITF_RPM` (`0x301`): Raw RPM frequency and duty cycle.
+  - `DBG_ITF_coolant` (`0x302`): Coolant sensor PWM frequency and duty cycle.
+  - `DBG_ITF_ADC_raw` (`0x303`): Unfiltered supply rail voltages (3.3V $V_{dd}$ reference and 12V board rail).
+  - `DBG_ITF_pulse_counts` (`0x304`): Cumulative monotonic pulse counts for RPM and vehicle speed signals.
+  - `DBG_ITF_fuel` (`0x305`): Raw fuel sender voltage, unfiltered fuel percentage, active/learned $R_{full}$ baseline, and dynamic sender resistance ($\Omega$).

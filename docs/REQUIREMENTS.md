@@ -17,9 +17,9 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 ### 2.1 Interface Board (ITF)
 - **REQ-ITF-001 (Speed Pulse Capture)**: Accurately measure vehicle wheel speed pulse trains via MCPWM capture / PCNT and convert to km/h using configured wheel circumference and pulses-per-km.
 - **REQ-ITF-002 (Engine RPM Pulse Capture)**: Measure ignition/tacho pulse frequency via MCPWM capture and calculate engine RPM based on cylinder count.
-- **REQ-ITF-003 (Analog Signal Ingestion)**: Sample fuel sender voltage, coolant temperature sensor, oil pressure, and board voltage via external 16-bit ADC (ADS1115) and internal ADC.
+- **REQ-ITF-003 (Analog Signal Ingestion & Dual-Caliber Fuel Sensing)**: Sample fuel sender resistance via dynamic dual-caliber sensing (GPIO 15 control, $K_{lo}/K_{hi}$ ratiometric reference against ADC Ch 3 $V_{dd}$, with $3.0\text{V}-3.6\text{V}$ sanity window and open-circuit detection $>3.4\text{k}\Omega$). Support NVS-backed full-tank maximum resistance self-learning gated by `fuel_learn_en` with a 10% SMA-averaged window. Sample coolant temperature, oil pressure, and board voltage via external 16-bit ADC (ADS1115) and internal ADC.
 - **REQ-ITF-004 (Signal Filtering)**: Apply Simple Moving Average (SMA) filtering with bounded raw signals to eliminate jitter.
-- **REQ-ITF-005 (CAN Telemetry Broadcast)**: Broadcast standard CAN messages (`ITF_status`, `ITF_values`, `ITF_debug`) over TWAI at periodic rates (20ms, 50ms, 100ms).
+- **REQ-ITF-005 (CAN Telemetry Broadcast)**: Broadcast standard CAN messages (`ITF_status`, `ITF_values`, `ITF_odometer`, `ITF_board_version`) and configurable debug telemetry (`DBG_ITF_speed`, `DBG_ITF_RPM`, `DBG_ITF_coolant`, `DBG_ITF_ADC_raw`, `DBG_ITF_pulse_counts`, `DBG_ITF_fuel`) over TWAI at periodic rates (20ms, 50ms, 100ms, 200ms, 250ms, 1000ms).
 - **REQ-ITF-006 (Persistent Odometer)**: Maintain high-resolution vehicle odometer and trip distance in non-volatile storage (NVS) with wear-leveling.
 
 ### 2.2 Left & Right Displays (LDB & RDB)
@@ -29,8 +29,8 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 - **REQ-DSP-004 (Startup Animation)**: Execute synchronized gauge sweep and indicator self-test animation upon ignition power-on.
 
 ### 2.3 Factory Calibration & Web Provisioning
-- **REQ-FAC-001 (WiFi AP & Web Portal)**: Launch captive Wi-Fi AP and HTTP server with mDNS service discovery (`itf-factory.local`, `ldb-factory.local`, `rdb-factory.local`).
-- **REQ-FAC-002 (NVS Calibration & Storage Management)**: Read, validate, persist calibration constants (pulses/km, fuel resistance curve, temperature lookup, gear ratios), scan all partitioned NVS keys/namespaces, and support full NVS storage wipe across all factory recovery apps.
+- **REQ-FAC-001 (WiFi AP & Web Portal)**: Launch captive Wi-Fi AP and HTTP server with mDNS service discovery (`interface-board.local`, `ldb-factory.local`, `rdb-factory.local`).
+- **REQ-FAC-002 (NVS Calibration & Storage Management)**: Read, validate, and persist calibration constants (odometer/trip, fuel full sender baseline resistance `fuel_full_r`, fuel self-learning toggle `fuel_learn_en`, low fuel warning threshold `lo_fuel_thr`, and coolant overtemp threshold `overtemp_th`) into NVS via REST endpoints (`/calibration`, `/set_cal`, `/api/settings`) and web UI; scan all partitioned NVS keys/namespaces, and support full NVS storage wipe across all factory recovery apps.
 - **REQ-FAC-003 (Safe Power Sequencing)**: Gracefully de-energize 5V peripheral stages prior to software reboot or OTA partition activation.
 
 ### 2.4 Vehicle Emulator Suite

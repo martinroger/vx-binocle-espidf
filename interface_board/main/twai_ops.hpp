@@ -23,6 +23,8 @@
 #include "binocan.h"
 #include "active_hi_low_processor.h"
 #include "adc_processor.h"
+#include "nvs.h"
+#include "nvs_flash.h"
 
 #pragma region FreeRTOS tasks for CAN packaging
 // FreeRTOS handles
@@ -129,7 +131,7 @@ inline void dbg_itf_coolant_PKG(void *pvParameters)
 #ifdef CONFIG_DBG_ADC_MSG
 TaskHandle_t dbg_itf_adc_raw_PKG_hdl;
 
-/// @brief Packaging task for debug ADC raw message
+/// @brief Packaging task for debug ADC raw message (3.3V Vref & 12V board supply)
 /// @param pvParameters
 inline void dbg_itf_adc_raw_PKG(void *pvParameters)
 {
@@ -142,14 +144,101 @@ inline void dbg_itf_adc_raw_PKG(void *pvParameters)
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_ADC_RAW_CYCLE_TIME_MS));
-        float fuel_raw_v = adc_raw_buffer[0] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float v3v3_raw_v = adc_raw_buffer[3] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float lv_raw_v = adc_raw_buffer[1] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        binocan_dbg_itf_adc_raw.dbg_fuel_raw_v = binocan_dbg_itf_adc_raw_dbg_fuel_raw_v_encode(fuel_raw_v);
+        binocan_dbg_itf_adc_raw.dbg_3_v3_raw_v = binocan_dbg_itf_adc_raw_dbg_3_v3_raw_v_encode(v3v3_raw_v);
         binocan_dbg_itf_adc_raw.dbg_12_v_raw_v = binocan_dbg_itf_adc_raw_dbg_12_v_raw_v_encode(lv_raw_v);
         binocan_dbg_itf_adc_raw_pack(tx_msg.data, &binocan_dbg_itf_adc_raw, BINOCAN_DBG_ITF_ADC_RAW_LENGTH);
         if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
         {
             ESP_LOGW(__func__, "Could not queue debug ADC raw message in queue");
+        }
+    }
+}
+#endif
+#ifdef CONFIG_DBG_PULSE_COUNTS_MSG
+TaskHandle_t dbg_itf_pulse_counts_PKG_hdl;
+
+/// @brief Packaging task for debug pulse counts message
+/// @param pvParameters
+inline void dbg_itf_pulse_counts_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_pulse_counts_t binocan_dbg_itf_pulse_counts;
+    binocan_dbg_itf_pulse_counts_init(&binocan_dbg_itf_pulse_counts);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_PULSE_COUNTS_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH};
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_PULSE_COUNTS_CYCLE_TIME_MS));
+        binocan_dbg_itf_pulse_counts.dbg_rpm_pulses = binocan_dbg_itf_pulse_counts_dbg_rpm_pulses_encode(pwm_cap_rpm.cumulative_pulse_counter);
+        binocan_dbg_itf_pulse_counts.dbg_speed_pulses = binocan_dbg_itf_pulse_counts_dbg_speed_pulses_encode(pwm_cap_speed.cumulative_pulse_counter);
+        binocan_dbg_itf_pulse_counts_pack(tx_msg.data, &binocan_dbg_itf_pulse_counts, BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(__func__, "Could not queue debug pulse counts message in queue");
+        }
+    }
+}
+#endif
+#ifdef CONFIG_DBG_FUEL_MSG
+TaskHandle_t dbg_itf_fuel_PKG_hdl;
+
+/// @brief Packaging task for debug fuel message (0x305: raw V, unfiltered %, fuel_full_r, measured R)
+/// @param pvParameters
+inline void dbg_itf_fuel_PKG(void *pvParameters)
+{
+    binocan_dbg_itf_fuel_t binocan_dbg_itf_fuel;
+    binocan_dbg_itf_fuel_init(&binocan_dbg_itf_fuel);
+    twai_message_t tx_msg = {
+        .identifier = BINOCAN_DBG_ITF_FUEL_FRAME_ID,
+        .data_length_code = BINOCAN_DBG_ITF_FUEL_LENGTH};
+
+    while (true)
+    {
+        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_FUEL_CYCLE_TIME_MS));
+
+        int16_t raw_ch0 = adc_raw_buffer[0];
+        float fuel_raw_v = (float)raw_ch0 * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+
+        // Vref (3.3V) validation on ADC channel 3
+        int16_t vref_raw = adc_raw_buffer[3];
+        float vref_3v3 = (float)vref_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float vref_raw_valid = 0.0f;
+        if (vref_3v3 >= (float)COEFF_VREF_MIN_V && vref_3v3 <= (float)COEFF_VREF_MAX_V && vref_raw > 0)
+        {
+            vref_raw_valid = (float)vref_raw;
+        }
+        else
+        {
+            vref_raw_valid = (float)(COEFF_VREF_DEFAULT_V * ADS111X_MAX_VALUE / ads111x_gain_values[ADS111X_GAIN_4V096]);
+        }
+
+        bool is_hi_cal = (gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO) != 0);
+        double k_factor = is_hi_cal ? COEFF_K_FACTOR_HI_SENSE : COEFF_K_FACTOR_LOW_SENSE;
+        float fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)raw_ch0 / vref_raw_valid);
+        if (fuel_level_R < 0.0f)
+            fuel_level_R = 0.0f;
+        if (fuel_level_R > 4095.0f)
+            fuel_level_R = 4095.0f;
+
+        float raw_pc = (fuel_full_r > 0) ? (100.0f * fuel_level_R / (float)fuel_full_r) : 0.0f;
+        if (raw_pc > 100.0f)
+            raw_pc = 100.0f;
+        if (raw_pc < 0.0f)
+            raw_pc = 0.0f;
+        uint8_t unfiltered_pc = (uint8_t)lround(raw_pc);
+
+        binocan_dbg_itf_fuel.dbg_fuel_raw_v = binocan_dbg_itf_fuel_dbg_fuel_raw_v_encode(fuel_raw_v);
+        binocan_dbg_itf_fuel.dbg_fuel_level_unfiltered = binocan_dbg_itf_fuel_dbg_fuel_level_unfiltered_encode(unfiltered_pc);
+        binocan_dbg_itf_fuel.dbg_fuel_full_r = binocan_dbg_itf_fuel_dbg_fuel_full_r_encode(fuel_full_r);
+        binocan_dbg_itf_fuel.dbg_fuel_r = binocan_dbg_itf_fuel_dbg_fuel_r_encode((uint16_t)lround(fuel_level_R));
+
+        binocan_dbg_itf_fuel_pack(tx_msg.data, &binocan_dbg_itf_fuel, BINOCAN_DBG_ITF_FUEL_LENGTH);
+        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        {
+            ESP_LOGW(__func__, "Could not queue debug fuel message in queue");
         }
     }
 }
@@ -172,7 +261,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
     esp_err_t compute_err;
 
     sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
-    sma_handle_t *lv_vol__func__e_SMA = sma_init_full(CONFIG_LV_SMA_SIZE, adc_raw_buffer[1]);
+    sma_handle_t *lv_voltage_SMA = sma_init_full(CONFIG_LV_SMA_SIZE, adc_raw_buffer[1]);
 
     while (true)
     {
@@ -190,26 +279,139 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         // Comment in for debug
         ESP_LOGD(__func__, "Coolant: %.2f - %.2f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0, coolant_degC);
 
-        // Collect the SMA values
-        sma_add(fuel_level_SMA, adc_raw_buffer[0]);
-        sma_add(lv_vol__func__e_SMA, adc_raw_buffer[1]);
+        // Vref (3.3V) validation on ADC channel 3
+        int16_t vref_raw = adc_raw_buffer[3];
+        float vref_3v3 = (float)vref_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
+        float vref_raw_valid = 0.0f;
+        if (vref_3v3 >= (float)COEFF_VREF_MIN_V && vref_3v3 <= (float)COEFF_VREF_MAX_V && vref_raw > 0)
+        {
+            vref_raw_valid = (float)vref_raw;
+        }
+        else
+        {
+            // Fallback to ideal 3.3V equivalent raw count
+            vref_raw_valid = (float)(COEFF_VREF_DEFAULT_V * ADS111X_MAX_VALUE / ads111x_gain_values[ADS111X_GAIN_4V096]);
+            ESP_LOGW(__func__, "Measured Vref (%.2fV) out of bounds [%.1fV, %.1fV], using fallback %.1fV", vref_3v3, COEFF_VREF_MIN_V, COEFF_VREF_MAX_V, COEFF_VREF_DEFAULT_V);
+        }
 
+        // Check active caliber state
+        bool is_hi_cal = (gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO) != 0);
+        interface_board_st.EN_hi_R_sense_ST = is_hi_cal;
 
-        float fuel_level_raw = sma_get_avg(fuel_level_SMA);
+        double k_factor = is_hi_cal ? COEFF_K_FACTOR_HI_SENSE : COEFF_K_FACTOR_LOW_SENSE;
+
+        // Instantaneous resistance calculation for fast caliber switching
+        float raw_instant = (float)adc_raw_buffer[0];
+        float instant_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * raw_instant / vref_raw_valid);
+
+        float fuel_level_raw = 0.0f;
+        float fuel_level_R = 0.0f;
+
+        // Caliber switching hysteresis check based on instantaneous reading
+        if (!is_hi_cal && instant_R > (float)COEFF_FUEL_SWITCH_TO_HI_R)
+        {
+            // Switch from Low to High caliber
+            ESP_LOGI(__func__, "Instant fuel resistance %.1f Ohm > %.1f Ohm, switching to HIGH caliber sensing", instant_R, COEFF_FUEL_SWITCH_TO_HI_R);
+            gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 1);
+            interface_board_st.EN_hi_R_sense_ST = true;
+            is_hi_cal = true;
+
+            // Wait for settling & ADC conversion interval
+            vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 5));
+
+            // Synchronous fresh sample and SMA filter reseed
+            int16_t fresh_raw = adc_sample_channel_threadsafe(0);
+            sma_reset(fuel_level_SMA, fresh_raw);
+            fuel_level_raw = (float)fresh_raw;
+
+            // Recompute resistance with High Caliber K-factor
+            fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * COEFF_K_FACTOR_HI_SENSE * fuel_level_raw / vref_raw_valid);
+        }
+        else if (is_hi_cal && instant_R < (float)COEFF_FUEL_SWITCH_TO_LOW_R)
+        {
+            // Switch from High to Low caliber
+            ESP_LOGI(__func__, "Instant fuel resistance %.1f Ohm < %.1f Ohm, switching to LOW caliber sensing", instant_R, COEFF_FUEL_SWITCH_TO_LOW_R);
+            gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);
+            interface_board_st.EN_hi_R_sense_ST = false;
+            is_hi_cal = false;
+
+            // Wait for settling & ADC conversion interval
+            vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 5));
+
+            // Synchronous fresh sample and SMA filter reseed
+            int16_t fresh_raw = adc_sample_channel_threadsafe(0);
+            sma_reset(fuel_level_SMA, fresh_raw);
+            fuel_level_raw = (float)fresh_raw;
+
+            // Recompute resistance with Low Caliber K-factor
+            fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * COEFF_K_FACTOR_LOW_SENSE * fuel_level_raw / vref_raw_valid);
+        }
+        else
+        {
+            // Normal steady state: add sample to SMA and compute smoothed values
+            sma_add(fuel_level_SMA, adc_raw_buffer[0]);
+            fuel_level_raw = sma_get_avg(fuel_level_SMA);
+            fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * fuel_level_raw / vref_raw_valid);
+        }
+
+        // Collect the LV SMA value and compute fuel voltage
+        sma_add(lv_voltage_SMA, adc_raw_buffer[1]);
         float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
-        float fuel_level_pc = lround(((float)(fuel_lvl_comp_factor / 1000.0) * COEFF_FUEL_V_TO_PC_M * fuel_level_v + COEFF_FUEL_V_TO_PC_P) * 10.0) / 10.0;
-        if (fuel_level_pc > 100.0)
-            fuel_level_pc = 100;
-        if (fuel_level_pc < 0)
-            fuel_level_pc = 0;
-        interface_board_st.lowFuel = (fuel_level_pc < fuel_low_level_threshold_pc ? true : false);
 
-        float lv_raw = sma_get_avg(lv_vol__func__e_SMA);
+        // Open circuit safety check and fuel percentage calculation
+        float fuel_level_pc = 0.0f;
+        if (is_hi_cal && fuel_level_R > (float)COEFF_FUEL_OC_R)
+        {
+            fuel_sensor_open_circuit = true;
+            fuel_level_pc = 100.0f;
+            interface_board_st.lowFuel = true;
+            ESP_LOGD(__func__, "Fuel sender open-circuit detected (R = %.1f Ohm > %.1f Ohm)", fuel_level_R, COEFF_FUEL_OC_R);
+        }
+        else
+        {
+            fuel_sensor_open_circuit = false;
+
+            // SMA-averaged self-learning of full tank resistance (fuel_full_r)
+            if (fuel_learn_en && fuel_level_R > (float)fuel_full_r && fuel_level_R <= (float)(fuel_full_r * COEFF_FUEL_LEARN_MAX_FACTOR))
+            {
+                uint16_t new_learned_r = (uint16_t)lround(fuel_level_R);
+                ESP_LOGI(__func__, "Self-learning: updating fuel_full_r from %u Ohm to %u Ohm", fuel_full_r, new_learned_r);
+                fuel_full_r = new_learned_r;
+
+                // Persist to NVS storage namespace
+                nvs_handle_t nvs_h;
+                if (nvs_open("storage", NVS_READWRITE, &nvs_h) == ESP_OK)
+                {
+                    if (nvs_set_u16(nvs_h, "fuel_full_r", fuel_full_r) == ESP_OK)
+                    {
+                        nvs_commit(nvs_h);
+                        ESP_LOGI(__func__, "Persisted fuel_full_r (%u Ohm) to NVS", fuel_full_r);
+                    }
+                    else
+                    {
+                        ESP_LOGW(__func__, "Failed to persist fuel_full_r to NVS");
+                    }
+                    nvs_close(nvs_h);
+                }
+            }
+
+            fuel_level_pc = 100.0f * fuel_level_R / (float)fuel_full_r;
+            if (fuel_level_pc > 100.0f)
+                fuel_level_pc = 100.0f;
+            if (fuel_level_pc < 0.0f)
+                fuel_level_pc = 0.0f;
+
+            interface_board_st.lowFuel = (fuel_level_pc < (float)fuel_low_level_threshold_pc);
+        }
+
+        float lv_raw = sma_get_avg(lv_voltage_SMA);
         float lv_raw_v = lv_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float lv_v = lround((lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P) * 10.0) / 10.0;
 
-        // Comment in for debug
-        ESP_LOGD(__func__, "Fuel : %.2f - %.3fV/%.3f - %.2fR- %.2fpc\t|\t 12V: %.2f - %.2fV - %.2fV", fuel_level_raw, fuel_level_v, COEFF_FUEL_FULL_V, 1000.0 * fuel_level_v / COEFF_LOW_CALIBER_CURRENT, fuel_level_pc, lv_raw, lv_raw_v, lv_v);
+        // Debug output
+        ESP_LOGD(__func__, "Fuel : raw=%.1f vref=%.3fV R=%.1f Ohm (full=%u Ohm, cal=%s) -> %.1fpc | lowFuel=%d OC=%d\t|\t12V: %.2fV",
+                 fuel_level_raw, vref_3v3, fuel_level_R, fuel_full_r, is_hi_cal ? "HIGH" : "LOW", fuel_level_pc,
+                 interface_board_st.lowFuel, fuel_sensor_open_circuit, lv_v);
 
         binocan_itf_slow_metrics.itf_coolant_temp = binocan_itf_slow_metrics_itf_coolant_temp_encode(coolant_degC);
         binocan_itf_slow_metrics.itf_fuel_level_pc = binocan_itf_slow_metrics_itf_fuel_level_pc_encode(fuel_level_pc);
@@ -565,6 +767,20 @@ inline esp_err_t twai_ops_init()
     if (xTaskCreatePinnedToCore(dbg_itf_adc_raw_PKG, "DBG_ITF_ADC", 4096, NULL, 3, &dbg_itf_adc_raw_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create debug ADC package task");
+    }
+#endif
+
+#ifdef CONFIG_DBG_PULSE_COUNTS_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_pulse_counts_PKG, "DBG_ITF_PLS", 4096, NULL, 3, &dbg_itf_pulse_counts_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create debug pulse counts package task");
+    }
+#endif
+
+#ifdef CONFIG_DBG_FUEL_MSG
+    if (xTaskCreatePinnedToCore(dbg_itf_fuel_PKG, "DBG_ITF_FUEL", 4096, NULL, 3, &dbg_itf_fuel_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create debug fuel package task");
     }
 #endif
 
