@@ -23,3 +23,6 @@ graph TD
    - Fuel tank capacity and resistance breakpoints.
    - Coolant thermistor Steinhart-Hart / beta coefficients.
 3. **Validation & Persistence**: User submissions undergo client-side and server-side range validation before being committed into flash.
+4. **NVS Dynamic Inspection & Wipe**:
+   - `GET /nvs/list`: Scans and enumerates all NVS partitions, namespaces, keys, and values dynamically at runtime.
+   - `POST /nvs/wipe`: Erases all NVS partitions and safely re-initializes them cleanly without forcing an immediate MCU restart.

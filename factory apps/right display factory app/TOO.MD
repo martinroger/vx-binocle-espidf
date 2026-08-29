@@ -17,4 +17,5 @@ graph TD
 
 - **Geometry & Alignment Grid**: Displays crosshairs and boundary rectangles to calibrate physical bezel alignment.
 - **Backlight Curve Tuning**: Allows fine-tuning of PWM backlight curves stored in NVS.
+- **NVS Dynamic Inspection & Wipe**: Discovers all active NVS partitions/namespaces/keys via `GET /nvs/list` and offers full safe flash wipe via `POST /nvs/wipe`.
 - **Partition Switching**: Handles active partition verification and reboot execution.
