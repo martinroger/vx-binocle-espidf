@@ -107,7 +107,7 @@ esp_err_t init_fuel_sense_ctrl(void)
 {
     esp_err_t ret = ESP_FAIL;
     ESP_LOGI(TAG, "Initializing fuel sensing caliber control pin (GPIO %d)", CONFIG_SET_HIGH_CAL_GPIO);
-    ret = gpio_set_direction((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, GPIO_MODE_OUTPUT);
+    ret = gpio_set_direction((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, GPIO_MODE_INPUT_OUTPUT);
     ret = gpio_set_pull_mode((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, GPIO_PULLDOWN_ONLY);
     ret = gpio_pulldown_en((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
     ret = gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);

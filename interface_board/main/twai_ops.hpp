@@ -217,7 +217,7 @@ inline void dbg_itf_fuel_PKG(void *pvParameters)
 
         bool is_hi_cal = (gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO) != 0);
         double k_factor = is_hi_cal ? COEFF_K_FACTOR_HI_SENSE : COEFF_K_FACTOR_LOW_SENSE;
-        float fuel_level_R = (float)(k_factor * (float)raw_ch0 / vref_raw_valid);
+        float fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)raw_ch0 / vref_raw_valid);
         if (fuel_level_R < 0.0f)
             fuel_level_R = 0.0f;
         if (fuel_level_R > 4095.0f)
@@ -261,7 +261,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
     esp_err_t compute_err;
 
     sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
-    sma_handle_t *lv_vol__func__e_SMA = sma_init_full(CONFIG_LV_SMA_SIZE, adc_raw_buffer[1]);
+    sma_handle_t *lv_voltage_SMA = sma_init_full(CONFIG_LV_SMA_SIZE, adc_raw_buffer[1]);
 
     while (true)
     {
@@ -278,13 +278,6 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         interface_board_st.overTemp = (coolant_degC >= coolant_overtemp_threshold_degC ? true : false);
         // Comment in for debug
         ESP_LOGD(__func__, "Coolant: %.2f - %.2f - %.2f", pwm_cap_coolant.frequency, pwm_cap_coolant.duty_cycle * 100.0, coolant_degC);
-
-        // Collect the SMA values
-        sma_add(fuel_level_SMA, adc_raw_buffer[0]);
-        sma_add(lv_vol__func__e_SMA, adc_raw_buffer[1]);
-
-        float fuel_level_raw = sma_get_avg(fuel_level_SMA);
-        float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
 
         // Vref (3.3V) validation on ADC channel 3
         int16_t vref_raw = adc_raw_buffer[3];
@@ -306,13 +299,19 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         interface_board_st.EN_hi_R_sense_ST = is_hi_cal;
 
         double k_factor = is_hi_cal ? COEFF_K_FACTOR_HI_SENSE : COEFF_K_FACTOR_LOW_SENSE;
-        float fuel_level_R = (float)(k_factor * fuel_level_raw / vref_raw_valid);
 
-        // Caliber switching hysteresis check
-        if (!is_hi_cal && fuel_level_R > (float)COEFF_FUEL_SWITCH_TO_HI_R)
+        // Instantaneous resistance calculation for fast caliber switching
+        float raw_instant = (float)adc_raw_buffer[0];
+        float instant_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * raw_instant / vref_raw_valid);
+
+        float fuel_level_raw = 0.0f;
+        float fuel_level_R = 0.0f;
+
+        // Caliber switching hysteresis check based on instantaneous reading
+        if (!is_hi_cal && instant_R > (float)COEFF_FUEL_SWITCH_TO_HI_R)
         {
             // Switch from Low to High caliber
-            ESP_LOGI(__func__, "Fuel resistance %.1f Ohm > %.1f Ohm, switching to HIGH caliber sensing", fuel_level_R, COEFF_FUEL_SWITCH_TO_HI_R);
+            ESP_LOGI(__func__, "Instant fuel resistance %.1f Ohm > %.1f Ohm, switching to HIGH caliber sensing", instant_R, COEFF_FUEL_SWITCH_TO_HI_R);
             gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 1);
             interface_board_st.EN_hi_R_sense_ST = true;
             is_hi_cal = true;
@@ -326,12 +325,12 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
             fuel_level_raw = (float)fresh_raw;
 
             // Recompute resistance with High Caliber K-factor
-            fuel_level_R = (float)(COEFF_K_FACTOR_HI_SENSE * fuel_level_raw / vref_raw_valid);
+            fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * COEFF_K_FACTOR_HI_SENSE * fuel_level_raw / vref_raw_valid);
         }
-        else if (is_hi_cal && fuel_level_R < (float)COEFF_FUEL_SWITCH_TO_LOW_R)
+        else if (is_hi_cal && instant_R < (float)COEFF_FUEL_SWITCH_TO_LOW_R)
         {
             // Switch from High to Low caliber
-            ESP_LOGI(__func__, "Fuel resistance %.1f Ohm < %.1f Ohm, switching to LOW caliber sensing", fuel_level_R, COEFF_FUEL_SWITCH_TO_LOW_R);
+            ESP_LOGI(__func__, "Instant fuel resistance %.1f Ohm < %.1f Ohm, switching to LOW caliber sensing", instant_R, COEFF_FUEL_SWITCH_TO_LOW_R);
             gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);
             interface_board_st.EN_hi_R_sense_ST = false;
             is_hi_cal = false;
@@ -345,8 +344,19 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
             fuel_level_raw = (float)fresh_raw;
 
             // Recompute resistance with Low Caliber K-factor
-            fuel_level_R = (float)(COEFF_K_FACTOR_LOW_SENSE * fuel_level_raw / vref_raw_valid);
+            fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * COEFF_K_FACTOR_LOW_SENSE * fuel_level_raw / vref_raw_valid);
         }
+        else
+        {
+            // Normal steady state: add sample to SMA and compute smoothed values
+            sma_add(fuel_level_SMA, adc_raw_buffer[0]);
+            fuel_level_raw = sma_get_avg(fuel_level_SMA);
+            fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * fuel_level_raw / vref_raw_valid);
+        }
+
+        // Collect the LV SMA value and compute fuel voltage
+        sma_add(lv_voltage_SMA, adc_raw_buffer[1]);
+        float fuel_level_v = fuel_level_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
 
         // Open circuit safety check and fuel percentage calculation
         float fuel_level_pc = 0.0f;
@@ -355,7 +365,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
             fuel_sensor_open_circuit = true;
             fuel_level_pc = 100.0f;
             interface_board_st.lowFuel = true;
-            ESP_LOGW(__func__, "Fuel sender open-circuit detected (R = %.1f Ohm > %.1f Ohm)", fuel_level_R, COEFF_FUEL_OC_R);
+            ESP_LOGD(__func__, "Fuel sender open-circuit detected (R = %.1f Ohm > %.1f Ohm)", fuel_level_R, COEFF_FUEL_OC_R);
         }
         else
         {
@@ -394,7 +404,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
             interface_board_st.lowFuel = (fuel_level_pc < (float)fuel_low_level_threshold_pc);
         }
 
-        float lv_raw = sma_get_avg(lv_vol__func__e_SMA);
+        float lv_raw = sma_get_avg(lv_voltage_SMA);
         float lv_raw_v = lv_raw * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         float lv_v = lround((lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P) * 10.0) / 10.0;
 
