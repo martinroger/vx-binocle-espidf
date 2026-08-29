@@ -33,22 +33,11 @@
 #define COEFF_FUEL_OC_R (double)3400.0 // Open-circuit detection threshold in Ohms in High caliber mode
 #define COEFF_FUEL_LEARN_MAX_FACTOR (double)1.10 // Max upper boundary factor (10%) for self-learning fuel_full_r
 #define COEFF_FUEL_CORRECTION_MULT (double)1.02 // Correction factor to multiply the calculated resistance with to get to the theoretical resistance.
+#define COEFF_FUEL_FULL_R 250.0 // Default value for the full tank resistance in Ohms
 
 #define COEFF_VREF_MIN_V (double)3.0 // Minimum acceptable 3V3 reference voltage
 #define COEFF_VREF_MAX_V (double)3.6 // Maximum acceptable 3V3 reference voltage
 #define COEFF_VREF_DEFAULT_V (double)3.3 // Default 3V3 reference fallback voltage
-
-// This will be deprecated as it is imprecise
-#define COEFF_LOW_CALIBER_CURRENT (double)9.232   // Sense current for low caliber resistance sensor, in mA
-#define COEFF_HIGH_CALIBER_CURRENT (double)0.8992 // Sense current for high caliber resistance sensor, in mA
-
-#define COEFF_FUEL_FULL_R 250.0 // Default value for the full tank resistance in Ohms
-#define COEFF_FUEL_FULL_V (COEFF_FUEL_FULL_R * COEFF_LOW_CALIBER_CURRENT / 1000.0) // Voltage value at full tank
-
-#define COEFF_FUEL_PC_TO_V_M (double)(COEFF_FUEL_FULL_V / 100.0) // Conversion scale for fuel percentage to ADC input voltage
-#define COEFF_FUEL_PC_TO_V_P (double)(0.0)         // Conversion offset for fuel percentage to ADC input voltage
-#define COEFF_FUEL_V_TO_PC_M (double)(100.0 / COEFF_FUEL_FULL_V) // Conversion scale for ADC voltage to fuel percentage
-#define COEFF_FUEL_V_TO_PC_P (double)(0.0)         // Conversion offset for ADC voltage to fuel percentage
 
 #define COEFF_LV_TO_V_M (double)(220.0 / 1220.1) // Conversion scale from actual voltage down to ADC readout voltage
 #define COEFF_LV_TO_V_P (double)(0.0)            // Conversion offset from actual voltage down to ADC readout voltage
