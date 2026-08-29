@@ -396,7 +396,11 @@ number:
       - lambda: |-
           esphome::vehicle_emulator::McpwmManager::set_speed_kph(x);
           id(speed_mph).publish_state(roundf(x / 1.609344f));
-          id(sensor_speed_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED));
+          float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED);
+          float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_SPEED);
+          id(sensor_speed_freq).publish_state(actual_freq);
+          id(speed_freq_debug).publish_state(roundf(actual_freq));
+          id(speed_duty_debug).publish_state(roundf(actual_duty));
 
   # Vehicle Speed (mph)
   - platform: template
@@ -413,7 +417,11 @@ number:
       - lambda: |-
           esphome::vehicle_emulator::McpwmManager::set_speed_mph(x);
           id(speed_kph).publish_state(roundf(x * 1.609344f));
-          id(sensor_speed_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED));
+          float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED);
+          float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_SPEED);
+          id(sensor_speed_freq).publish_state(actual_freq);
+          id(speed_freq_debug).publish_state(roundf(actual_freq));
+          id(speed_duty_debug).publish_state(roundf(actual_duty));
 
   # Engine RPM
   - platform: template
@@ -429,7 +437,11 @@ number:
     set_action:
       - lambda: |-
           esphome::vehicle_emulator::McpwmManager::set_rpm(static_cast<int>(x));
-          id(sensor_rpm_freq).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_RPM));
+          float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_RPM);
+          float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_RPM);
+          id(sensor_rpm_freq).publish_state(actual_freq);
+          id(rpm_freq_debug).publish_state(roundf(actual_freq));
+          id(rpm_duty_debug).publish_state(roundf(actual_duty));
 
   # Coolant Temperature (°C)
   - platform: template
@@ -445,7 +457,105 @@ number:
     set_action:
       - lambda: |-
           esphome::vehicle_emulator::McpwmManager::set_coolant_degc(x);
-          id(sensor_coolant_duty).publish_state(esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_COOLANT));
+          float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_COOLANT);
+          id(sensor_coolant_duty).publish_state(actual_duty);
+          id(coolant_duty_debug).publish_state(roundf(actual_duty));
+
+  # --- Debug Low-Level Hardware Sliders ---
+  # Speed Frequency Debug Slider (0..1200 Hz, 1 Hz precision)
+  - platform: template
+    name: "Speed Frequency Debug"
+    id: speed_freq_debug
+    icon: "mdi:sine-wave"
+    unit_of_measurement: "Hz"
+    min_value: 0
+    max_value: 1200
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_speed_freq(x);
+          float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED);
+          id(sensor_speed_freq).publish_state(actual_freq);
+          // Calculate equivalent kph: kph = freq * (7651.0 / 31285.0)
+          float calc_kph = (actual_freq <= 0.0f) ? 0.0f : (actual_freq * (7651.0f / 31285.0f));
+          if (calc_kph > 271.0f) calc_kph = 271.0f;
+          id(speed_kph).publish_state(roundf(calc_kph));
+          id(speed_mph).publish_state(roundf(calc_kph / 1.609344f));
+
+  # Speed Duty Cycle Debug Slider (0..100 %, 1% precision)
+  - platform: template
+    name: "Speed Duty Cycle Debug"
+    id: speed_duty_debug
+    icon: "mdi:percent"
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 33
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_speed_duty(x);
+
+  # RPM Frequency Debug Slider (0..400 Hz, 1 Hz precision)
+  - platform: template
+    name: "RPM Frequency Debug"
+    id: rpm_freq_debug
+    icon: "mdi:sine-wave"
+    unit_of_measurement: "Hz"
+    min_value: 0
+    max_value: 400
+    step: 1
+    initial_value: 0
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_rpm_freq(x);
+          float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_RPM);
+          id(sensor_rpm_freq).publish_state(actual_freq);
+          // Calculate equivalent RPM: rpm = freq * 30.0
+          float calc_rpm = (actual_freq <= 0.0f) ? 0.0f : (actual_freq * 30.0f);
+          if (calc_rpm > 9000.0f) calc_rpm = 9000.0f;
+          id(engine_rpm).publish_state(roundf(calc_rpm));
+
+  # RPM Duty Cycle Debug Slider (0..100 %, 1% precision)
+  - platform: template
+    name: "RPM Duty Cycle Debug"
+    id: rpm_duty_debug
+    icon: "mdi:percent"
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 50
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_rpm_duty(x);
+
+  # Coolant Duty Cycle Debug Slider (0..100 %, 1% precision)
+  - platform: template
+    name: "Coolant Duty Cycle Debug"
+    id: coolant_duty_debug
+    icon: "mdi:percent"
+    unit_of_measurement: "%"
+    min_value: 0
+    max_value: 100
+    step: 1
+    initial_value: 37
+    optimistic: true
+    set_action:
+      - lambda: |-
+          esphome::vehicle_emulator::McpwmManager::set_coolant_duty(x);
+          float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_COOLANT);
+          id(sensor_coolant_duty).publish_state(actual_duty);
+          // Calculate equivalent Coolant Temp (°C): degc = duty * (71.0 / 100.0) + 64.0
+          float calc_degc = (actual_duty * 0.71f) + 64.0f;
+          if (calc_degc < 70.0f) calc_degc = 70.0f;
+          if (calc_degc > 130.0f) calc_degc = 130.0f;
+          id(coolant_temp).publish_state(roundf(calc_degc));
 
   # Fuel Level Slider (0% = 0 Ohm, 100% = 250 Ohm, allowed up to 120% for 270+ Ohm)
   - platform: template

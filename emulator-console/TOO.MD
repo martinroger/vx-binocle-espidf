@@ -27,3 +27,9 @@ graph TD
 ### 2.2 19-Step Fuel Resistor Network
 - Switched discrete resistor ladder replicates non-linear Opel Speedster / VX220 fuel sender curve from empty (approx 300 $\Omega$) to full (approx 40 $\Omega$).
 - Synchronized stepping logic ensures glitch-free transitions during bench drivecycle playback.
+
+### 2.3 Low-Level Debug Frequency & Duty Cycle Controls
+- **Speed Output**: Dedicated 1 Hz resolution frequency slider (0–1200 Hz) and 1% duty cycle slider (0–100%).
+- **RPM Output**: Dedicated 1 Hz resolution frequency slider (0–400 Hz) and 1% duty cycle slider (0–100%).
+- **Coolant Channel**: Dedicated 1% resolution duty cycle slider (0–100% at fixed 100 Hz).
+- **Synchronous Bidirectional Telemetry**: Changes to physical gauges (`speed_kph`, `speed_mph`, `engine_rpm`, `coolant_temp`) synchronously update the debug sliders and telemetry sensors. Modulating debug sliders dynamically recalculates and publishes back the computed physical metrics to maintain coherent dashboard state.
