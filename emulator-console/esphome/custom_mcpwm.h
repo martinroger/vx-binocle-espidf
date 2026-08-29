@@ -283,6 +283,38 @@ public:
         if (duty > 100.0) duty = 100.0;
         set_duty(MCPWM_CHAN_COOLANT, duty);
     }
+
+    static void set_speed_freq(double freq_hz) {
+        if (freq_hz <= 0.0) {
+            pause_channel(MCPWM_CHAN_SPEED);
+            mcpwm_channels[MCPWM_CHAN_SPEED].current_freq_hz = 0.0;
+            return;
+        }
+        if (freq_hz > 1200.0) freq_hz = 1200.0;
+        set_frequency(MCPWM_CHAN_SPEED, freq_hz);
+    }
+
+    static void set_speed_duty(double duty_pct) {
+        set_duty(MCPWM_CHAN_SPEED, duty_pct);
+    }
+
+    static void set_rpm_freq(double freq_hz) {
+        if (freq_hz <= 0.0) {
+            pause_channel(MCPWM_CHAN_RPM);
+            mcpwm_channels[MCPWM_CHAN_RPM].current_freq_hz = 0.0;
+            return;
+        }
+        if (freq_hz > 400.0) freq_hz = 400.0;
+        set_frequency(MCPWM_CHAN_RPM, freq_hz);
+    }
+
+    static void set_rpm_duty(double duty_pct) {
+        set_duty(MCPWM_CHAN_RPM, duty_pct);
+    }
+
+    static void set_coolant_duty(double duty_pct) {
+        set_duty(MCPWM_CHAN_COOLANT, duty_pct);
+    }
 };
 
 } // namespace vehicle_emulator
