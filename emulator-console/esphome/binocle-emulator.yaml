@@ -47,11 +47,16 @@ substitutions:
   inv_brake_low: "false"
 
   # Conversion Coefficients (Matching common/coefficients.h)
-  coeff_speed_kph_to_freq_m: "4.088998"   # 31285.0 / 7651.0
-  coeff_speed_mph_to_freq_m: "6.580620"   # 17182.0 / 2611.0
-  coeff_rpm_to_freq_m: "0.03333333"       # 1.0 / 30.0
-  coeff_coolant_degc_to_duty_m: "1.393978407" 
-  coeff_coolant_degc_to_duty_p: "-89.7414343" 
+  coeff_speed_kph_to_freq_m: "4.088998"      # 31285.0 / 7651.0
+  coeff_freq_to_speed_kph_m: "0.2445587"     # 7651.0 / 31285.0
+  coeff_speed_mph_to_freq_m: "6.580620"      # 17182.0 / 2611.0
+  coeff_freq_to_speed_mph_m: "0.1519613"     # 2611.0 / 17182.0
+  coeff_rpm_to_freq_m: "0.03333333"          # 1.0 / 30.0
+  coeff_freq_to_rpm_m: "30.0"                # 30.0
+  coeff_coolant_degc_to_duty_m: "1.3939784"  # 1.0 / 0.7173712271
+  coeff_coolant_degc_to_duty_p: "-89.741434" # -64.37792284 / 0.7173712271
+  coeff_duty_to_coolant_degc_m: "0.7173712"  # 0.7173712271
+  coeff_duty_to_coolant_degc_p: "64.377923"  # 64.37792284
   light_test_delay: "600"
 
 esphome:
@@ -66,7 +71,8 @@ esphome:
       - lambda: |
           ESP_LOGI("BOOT", "Initializing MCPWM outputs (Speed GPIO %d, RPM GPIO %d, Coolant GPIO %d)",
                    ${pin_num_pwm_speed}, ${pin_num_pwm_rpm}, ${pin_num_pwm_coolant});
-          esphome::vehicle_emulator::McpwmManager::init_all(${pin_num_pwm_coolant}, ${pin_num_pwm_rpm}, ${pin_num_pwm_speed});
+          esphome::vehicle_emulator::McpwmManager::init_all(${pin_num_pwm_coolant}, ${pin_num_pwm_rpm}, ${pin_num_pwm_speed},
+                                                           ${coolant_base_freq_hz}, ${speed_default_duty_pct}, ${rpm_default_duty_pct});
 
           ESP_LOGI("BOOT", "Applying early boot standby masks: Expander 0 = 0xD940, Expander 1 = 0x7FFF");
           //esphome::vehicle_emulator::write_resistor_mask(id(bus_i2c),${i2c_addr_primary},0xD940);
@@ -394,8 +400,10 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_speed_kph(x);
-          id(speed_mph).publish_state(roundf(x / 1.609344f));
+          double target_freq = (x <= 0.0f) ? 0.0 : ((double)x * ${coeff_speed_kph_to_freq_m});
+          esphome::vehicle_emulator::McpwmManager::set_frequency(MCPWM_CHAN_SPEED, target_freq);
+          esphome::vehicle_emulator::McpwmManager::set_duty(MCPWM_CHAN_SPEED, ${speed_default_duty_pct});
+          id(speed_mph).publish_state(roundf((double)x / 1.609344));
           float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED);
           float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_SPEED);
           id(sensor_speed_freq).publish_state(actual_freq);
@@ -415,8 +423,10 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_speed_mph(x);
-          id(speed_kph).publish_state(roundf(x * 1.609344f));
+          double target_freq = (x <= 0.0f) ? 0.0 : ((double)x * ${coeff_speed_mph_to_freq_m});
+          esphome::vehicle_emulator::McpwmManager::set_frequency(MCPWM_CHAN_SPEED, target_freq);
+          esphome::vehicle_emulator::McpwmManager::set_duty(MCPWM_CHAN_SPEED, ${speed_default_duty_pct});
+          id(speed_kph).publish_state(roundf((double)x * 1.609344));
           float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED);
           float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_SPEED);
           id(sensor_speed_freq).publish_state(actual_freq);
@@ -436,7 +446,9 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_rpm(static_cast<int>(x));
+          double target_freq = (x <= 0.0f) ? 0.0 : ((double)x * ${coeff_rpm_to_freq_m});
+          esphome::vehicle_emulator::McpwmManager::set_frequency(MCPWM_CHAN_RPM, target_freq);
+          esphome::vehicle_emulator::McpwmManager::set_duty(MCPWM_CHAN_RPM, ${rpm_default_duty_pct});
           float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_RPM);
           float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_RPM);
           id(sensor_rpm_freq).publish_state(actual_freq);
@@ -456,7 +468,10 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_coolant_degc(x);
+          double target_duty = ((double)x * ${coeff_coolant_degc_to_duty_m}) + (${coeff_coolant_degc_to_duty_p});
+          if (target_duty < 0.0) target_duty = 0.0;
+          if (target_duty > 100.0) target_duty = 100.0;
+          esphome::vehicle_emulator::McpwmManager::set_duty(MCPWM_CHAN_COOLANT, target_duty);
           float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_COOLANT);
           id(sensor_coolant_duty).publish_state(actual_duty);
           id(coolant_duty_debug).publish_state(roundf(actual_duty));
@@ -475,14 +490,14 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_speed_freq(x);
+          esphome::vehicle_emulator::McpwmManager::set_frequency(MCPWM_CHAN_SPEED, x);
           float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_SPEED);
           id(sensor_speed_freq).publish_state(actual_freq);
-          // Calculate equivalent kph: kph = freq * (7651.0 / 31285.0)
-          float calc_kph = (actual_freq <= 0.0f) ? 0.0f : (actual_freq * (7651.0f / 31285.0f));
+          // Calculate equivalent kph: kph = freq * coeff_freq_to_speed_kph_m
+          float calc_kph = (actual_freq <= 0.0f) ? 0.0f : (actual_freq * ${coeff_freq_to_speed_kph_m});
           if (calc_kph > 271.0f) calc_kph = 271.0f;
           id(speed_kph).publish_state(roundf(calc_kph));
-          id(speed_mph).publish_state(roundf(calc_kph / 1.609344f));
+          id(speed_mph).publish_state(roundf((double)calc_kph / 1.609344));
 
   # Speed Duty Cycle Debug Slider (0..100 %, 1% precision)
   - platform: template
@@ -497,7 +512,7 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_speed_duty(x);
+          esphome::vehicle_emulator::McpwmManager::set_duty(MCPWM_CHAN_SPEED, x);
 
   # RPM Frequency Debug Slider (0..400 Hz, 1 Hz precision)
   - platform: template
@@ -512,11 +527,11 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_rpm_freq(x);
+          esphome::vehicle_emulator::McpwmManager::set_frequency(MCPWM_CHAN_RPM, x);
           float actual_freq = esphome::vehicle_emulator::McpwmManager::get_actual_freq(MCPWM_CHAN_RPM);
           id(sensor_rpm_freq).publish_state(actual_freq);
-          // Calculate equivalent RPM: rpm = freq * 30.0
-          float calc_rpm = (actual_freq <= 0.0f) ? 0.0f : (actual_freq * 30.0f);
+          // Calculate equivalent RPM: rpm = freq * coeff_freq_to_rpm_m
+          float calc_rpm = (actual_freq <= 0.0f) ? 0.0f : (actual_freq * ${coeff_freq_to_rpm_m});
           if (calc_rpm > 9000.0f) calc_rpm = 9000.0f;
           id(engine_rpm).publish_state(roundf(calc_rpm));
 
@@ -533,7 +548,7 @@ number:
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_rpm_duty(x);
+          esphome::vehicle_emulator::McpwmManager::set_duty(MCPWM_CHAN_RPM, x);
 
   # Coolant Duty Cycle Debug Slider (0..100 %, 1% precision)
   - platform: template
@@ -544,15 +559,15 @@ number:
     min_value: 0
     max_value: 100
     step: 1
-    initial_value: 37
+    initial_value: 36
     optimistic: true
     set_action:
       - lambda: |-
-          esphome::vehicle_emulator::McpwmManager::set_coolant_duty(x);
+          esphome::vehicle_emulator::McpwmManager::set_duty(MCPWM_CHAN_COOLANT, x);
           float actual_duty = esphome::vehicle_emulator::McpwmManager::get_actual_duty(MCPWM_CHAN_COOLANT);
           id(sensor_coolant_duty).publish_state(actual_duty);
-          // Calculate equivalent Coolant Temp (°C): degc = duty * (71.0 / 100.0) + 64.0
-          float calc_degc = (actual_duty * 0.71f) + 64.0f;
+          // Calculate equivalent Coolant Temp (°C): degc = (duty * coeff_duty_to_coolant_degc_m) + coeff_duty_to_coolant_degc_p
+          float calc_degc = ((double)actual_duty * ${coeff_duty_to_coolant_degc_m}) + (${coeff_duty_to_coolant_degc_p});
           if (calc_degc < 70.0f) calc_degc = 70.0f;
           if (calc_degc > 130.0f) calc_degc = 130.0f;
           id(coolant_temp).publish_state(roundf(calc_degc));
