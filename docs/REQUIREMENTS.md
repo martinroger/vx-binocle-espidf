@@ -24,7 +24,7 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 
 ### 2.2 Left & Right Displays (LDB & RDB)
 - **REQ-DSP-001 (High-Speed UI Rendering)**: Render fluid gauge animations (60 FPS target) using LVGL v9 and custom White Rabbit typography.
-- **REQ-DSP-002 (CAN Telemetry Ingestion)**: Ingest incoming CAN frames via background TWAI daemon and update global UI data models atomically.
+- **REQ-DSP-002 (CAN Telemetry Ingestion & Declarative Routing)**: Ingest incoming CAN frames via modern `esp_driver_twai` daemon into `g_twai_rx_queue`, match IDs against a declarative routing table (`twai_route_entry_t`), automatically reset individual signal timeout watchdogs, and update global UI data models atomically.
 - **REQ-DSP-003 (Audible & Visual Warnings)**: Trigger high-priority warning indicators and audible buzzer alarms on coolant overtemperature, low oil pressure, or critical battery voltage.
 - **REQ-DSP-004 (Startup Animation)**: Execute synchronized gauge sweep and indicator self-test animation upon ignition power-on.
 

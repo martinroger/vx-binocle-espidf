@@ -6,12 +6,14 @@ The Left Display Board executes a multi-task FreeRTOS architecture:
 
 ```mermaid
 graph TD
-    A[CAN Bus] -->|TWAI Transceiver| B(TWAI Daemon Receiver Task - Core 0)
-    B -->|Atomic Data Model Update| C[Global State Model]
-    C -->|Render Loop| D(LVGL Task - Core 1)
-    D -->|SPI / RGB Buffer Flush| E[LCD Display Panel]
-    C -->|Threshold Monitor| F(Alarm & Buzzer Task)
-    F -->|LEDC / PWM| G[Buzzer Transducer]
+    A[CAN Bus] -->|Hardware ISR| B(TWAI Daemon on_rx_done)
+    B -->|Queue Handoff| C(TWAI RX Worker Task - Core 0)
+    C -->|dispatchFrame| D[Declarative Route Table]
+    D -->|Atomic Data Model Update| E[Global State Model]
+    E -->|Render Loop| F(LVGL Task - Core 1)
+    F -->|SPI / RGB Buffer Flush| G[LCD Display Panel]
+    E -->|Threshold Monitor| H(Alarm & Buzzer Task)
+    H -->|LEDC / PWM| I[Buzzer Transducer]
 ```
 
 ---
@@ -24,7 +26,8 @@ graph TD
 
 ---
 
-## 3. Telemetry & Fault Alerts
+## 3. CAN Telemetry & Declarative Route Dispatch
 
-- **CAN Ingestion**: Ingests vehicle speed, engine RPM, odometer pulses, and coolant temperature.
+- **Declarative Routing Table**: Frame ingestion is orchestrated by `rx_routes[]` in `twai_ops.hpp`, associating Frame IDs (`BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID`, `BINOCAN_ITF_SLOW_METRICS_FRAME_ID`, etc.) with unpack handlers and watchdog timers.
+- **Watchdog Lifecycles**: Incoming frames automatically reset per-signal FreeRTOS software timers. If signal loss occurs (> 5 cycles), callbacks revert cluster variables to safe default failure values.
 - **Overtemperature Alarm**: When coolant temperature exceeds the calibrated threshold (default 105°C), the alarm monitor triggers visual flashing on the UI and pulsates the audible buzzer until temperature drops below hysteresis limit (98°C).

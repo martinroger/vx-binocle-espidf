@@ -25,9 +25,10 @@
   - **Core 0**: Protocol daemons, TWAI/CAN bus transmission/reception, ADC sampling loops, and Wi-Fi/HTTP network stacks.
   - **Core 1**: LVGL rendering pipeline, UI animation loops, and display buffer flushing.
 - **Task Stack Allocations**: Minimum 4096 bytes allocated to FreeRTOS tasks interacting with C standard library, floating-point math, or logging.
-- **TWAI Bus-Off & Disconnect Recovery**:
-  - The CAN driver must handle `TWAI_STATE_BUS_OFF` and bench disconnected states gracefully without watchdog resets or task hangs.
-  - Periodic recovery checks (`twai_initiate_recovery()`) must be invoked when bus errors occur.
+- **TWAI Modern Driver Architecture & Bus-Off Recovery**:
+  - The modernized `esp_driver_twai` operates on a zero-copy pointer model; all asynchronous transmissions must utilize persistent descriptor slots (`s_tx_slots` pool managed by `twai_daemon`) with ISR recycling via `on_tx_done` to prevent stack dangling pointer corruptions.
+  - The CAN driver handles `TWAI_ERROR_BUS_OFF` and disconnected hardware gracefully via `on_state_change` ISR callbacks triggering non-blocking `twai_node_recover()` without watchdog resets or task hangs.
+  - All nodes (including display factory apps) must initialize the TWAI peripheral to hold transceiver TX lines recessive (logic HIGH) preventing floating pin bus disruption.
 - **HTTP Server Handler Capacity**: Any project registering REST endpoints, static files, and WebSockets must set `httpd_cfg.max_uri_handlers` to at least 16 (exceeding the default of 8).
 
 ---

@@ -1047,15 +1047,10 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
 
 	// Declare as static to ensure persistent memory addresses for twai_transmit pointers
-	static twai_message_t txMsg;
-	static twai_message_t rxMsg;
-
-	// Debug: Log the memory addresses
-	ESP_LOGD(__func__, "txMsg address: %p, rxMsg address: %p", (void *)&txMsg, (void *)&rxMsg);
-
-	txMsg.extd = false;
-	txMsg.ss = false;
-	txMsg.data_length_code = 8;
+	// Buffer and frame storage for OTA transport
+	static uint8_t txMsgData[8] = {0};
+	static twai_queued_frame_t rxFrame;
+	uint32_t reqFrameId = 0;
 	uint32_t UDSRespID = 0;
 
 	// Check the query length is correct
@@ -1105,7 +1100,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	if (strstr(targetECU, "LDB")) // Target is LDB
 	{
 		ESP_LOGI(__func__, "Prepping for LDB");
-		txMsg.identifier = BINOCAN_LDB_UDS_REQ_FRAME_ID;
+		reqFrameId = BINOCAN_LDB_UDS_REQ_FRAME_ID;
 		UDSRespID = BINOCAN_LDB_UDS_RESP_FRAME_ID;
 		ESP_LOGI(__func__, "Enabling 5V output for LDB...");
 		if (enable_5V_AUX() != ESP_OK) // Fire up screen in case
@@ -1126,7 +1121,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	else if (strstr(targetECU, "RDB")) // Target is RDB
 	{
 		ESP_LOGI(__func__, "Prepping for RDB");
-		txMsg.identifier = BINOCAN_RDB_UDS_REQ_FRAME_ID;
+		reqFrameId = BINOCAN_RDB_UDS_REQ_FRAME_ID;
 		UDSRespID = BINOCAN_RDB_UDS_RESP_FRAME_ID;
 		ESP_LOGI(__func__, "Enabling 5V output for RDB...");
 		if (enable_5V() != ESP_OK) // Fire up screen, in case
@@ -1245,8 +1240,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Chunk retrieval failed.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					if (CAN_RX_tsk_hdl != nullptr)
+						vTaskResume(CAN_RX_tsk_hdl);
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1280,8 +1275,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No valid image header in file");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					if (CAN_RX_tsk_hdl != nullptr)
+						vTaskResume(CAN_RX_tsk_hdl);
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1293,18 +1288,15 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		// Suspend the daemon tasks and flush incoming buffer if still running
 		if (!daemonSuspended)
 		{
-			vTaskSuspend(CAN_RX_tsk_hdl);
-			vTaskSuspend(CAN_TX_tsk_hdl);
+			if (CAN_RX_tsk_hdl != nullptr)
+			{
+				vTaskSuspend(CAN_RX_tsk_hdl);
+			}
 			daemonSuspended = true;
-			rx_err = twai_clear_receive_queue();
+			rx_err = twai_clear_rx_queue();
 			if (rx_err != ESP_OK)
 			{
 				ESP_LOGW(__func__, "Could not clear RX queue : %s", esp_err_to_name(rx_err));
-			}
-			tx_err = twai_clear_transmit_queue();
-			if (tx_err != ESP_OK)
-			{
-				ESP_LOGW(__func__, "Could not clear TX queue : %s", esp_err_to_name(tx_err));
 			}
 			ESP_LOGI(__func__, "CAN Daemon tasks suspended for OTA transfer.");
 		}
@@ -1312,23 +1304,20 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		// Start by sending the FF if it has not been sent yet
 		if (!FF_sent)
 		{
-			txMsg.data[0] = 0x10;												// Indicates content less than FF bytes long
-			txMsg.data[1] = 0x00;												// Escape sequence for long transfers
-			*(uint32_t *)(txMsg.data + 2) = (swap_endian<uint32_t>(file_size)); // Transfer the file size, BEndian
-			txMsg.data[6] = buf[bufCursor];
-			txMsg.data[7] = buf[bufCursor + 1];
+			txMsgData[0] = 0x10;												// Indicates content less than FF bytes long
+			txMsgData[1] = 0x00;												// Escape sequence for long transfers
+			*(uint32_t *)(txMsgData + 2) = (swap_endian<uint32_t>(file_size)); // Transfer the file size, BEndian
+			txMsgData[6] = buf[bufCursor];
+			txMsgData[7] = buf[bufCursor + 1];
 			bufCursor += 2; // Next byte to process
 			sentBytes += 2;
 
 			// Debug log: Print the FF frame data before transmission
 			ESP_LOGD(__func__, "FF Frame about to send - data[0..7]: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X",
-					 txMsg.data[0], txMsg.data[1], txMsg.data[2], txMsg.data[3],
-					 txMsg.data[4], txMsg.data[5], txMsg.data[6], txMsg.data[7]);
+					 txMsgData[0], txMsgData[1], txMsgData[2], txMsgData[3],
+					 txMsgData[4], txMsgData[5], txMsgData[6], txMsgData[7]);
 
-			// Disable interrupts during critical FF transmission
-			// portDISABLE_INTERRUPTS();
-			tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(1000));
-			// portENABLE_INTERRUPTS();
+			tx_err = twai_transmit_msg(reqFrameId, txMsgData, 8, false, 1000);
 
 			if (tx_err != ESP_OK) // FF is not transmitted for some hard reason
 			{
@@ -1338,8 +1327,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FF could not be transmitted.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					if (CAN_RX_tsk_hdl != nullptr)
+						vTaskResume(CAN_RX_tsk_hdl);
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1371,7 +1360,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		int otherFrames = 0; // This should ideally be replaced by a timer
 		while (otherFrames < 500 && FC_wait)
 		{
-			rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(2000));
+			rx_err = twai_receive_queued_frame(&rxFrame, pdMS_TO_TICKS(2000));
 			switch (rx_err)
 			{
 			case ESP_ERR_TIMEOUT: // Return on RX timed out
@@ -1382,8 +1371,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within 5s timeout.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					if (CAN_RX_tsk_hdl != nullptr)
+						vTaskResume(CAN_RX_tsk_hdl);
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1392,30 +1381,30 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			case ESP_OK: // Something valid was received, set conditions for loop exit if valid FC CTS
 			{
 				// Debug log: Print received message
-				ESP_LOGD(__func__, "Received CAN frame - ID: 0x%X, data[0..7]: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X, rxMsg addr: %p",
-						 rxMsg.identifier, rxMsg.data[0], rxMsg.data[1], rxMsg.data[2], rxMsg.data[3],
-						 rxMsg.data[4], rxMsg.data[5], rxMsg.data[6], rxMsg.data[7], (void *)&rxMsg);
+				ESP_LOGD(__func__, "Received CAN frame - ID: 0x%lX, data[0..7]: 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X",
+						 rxFrame.header.id, rxFrame.data[0], rxFrame.data[1], rxFrame.data[2], rxFrame.data[3],
+						 rxFrame.data[4], rxFrame.data[5], rxFrame.data[6], rxFrame.data[7]);
 
-				if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x30))
+				if ((rxFrame.header.id == UDSRespID) && (rxFrame.data[0] == 0x30))
 				{
-					CANBlockSize = rxMsg.data[1];
-					STmin_MS = rxMsg.data[2];
+					CANBlockSize = rxFrame.data[1];
+					STmin_MS = rxFrame.data[2];
 					FC_wait = false;
 					ESP_LOGD(__func__, "FC CTS received : %u blocks %u ms separation", CANBlockSize, STmin_MS);
 				}
-				else if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x40)) // Status frame case
+				else if ((rxFrame.header.id == UDSRespID) && (rxFrame.data[0] == 0x40)) // Status frame case
 				{
-					if (rxMsg.data[1] != 0x00) // Not a status OK, which would be strange anyways
+					if (rxFrame.data[1] != 0x00) // Not a status OK, which would be strange anyways
 					{
-						ESP_LOGE(__func__, "Received error status frame, code %0X", rxMsg.data[1]);
+						ESP_LOGE(__func__, "Received error status frame, code %0X", rxFrame.data[1]);
 						free(buf);
 						drain_remaining_body(req);
-						snprintf(out, sizeof(out), "Error. Status frame code : 0x%0X", rxMsg.data[1]);
+						snprintf(out, sizeof(out), "Error. Status frame code : 0x%0X", rxFrame.data[1]);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, out);
 						if (daemonSuspended)
 						{
-							vTaskResume(CAN_RX_tsk_hdl);
-							vTaskResume(CAN_TX_tsk_hdl);
+							if (CAN_RX_tsk_hdl != nullptr)
+								vTaskResume(CAN_RX_tsk_hdl);
 							daemonSuspended = false;
 						}
 						return ESP_FAIL;
@@ -1433,8 +1422,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC frame RX error.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					if (CAN_RX_tsk_hdl != nullptr)
+						vTaskResume(CAN_RX_tsk_hdl);
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1456,8 +1445,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received in 500 frames.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					if (CAN_RX_tsk_hdl != nullptr)
+						vTaskResume(CAN_RX_tsk_hdl);
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1471,8 +1460,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within timeout.");
 				if (daemonSuspended)
 				{
-					vTaskResume(CAN_RX_tsk_hdl);
-					vTaskResume(CAN_TX_tsk_hdl);
+					if (CAN_RX_tsk_hdl != nullptr)
+						vTaskResume(CAN_RX_tsk_hdl);
 					daemonSuspended = false;
 				}
 				return ESP_FAIL;
@@ -1500,8 +1489,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			while ((bufCursor < bytesRetrieved) && (txMsgCursor < 8))
 			{
 				CF_SN = (CF_SN & 0x0F) == 0 ? (CF_SN + 1) : CF_SN; // Jump the SeqNumbers finishing in 0 (count from 1 to F)
-				txMsg.data[0] = 0x20 + (CF_SN & 0x0F);			   // Seq number
-				txMsg.data[txMsgCursor] = buf[bufCursor];		   // Get current active byte
+				txMsgData[0] = 0x20 + (CF_SN & 0x0F);			   // Seq number
+				txMsgData[txMsgCursor] = buf[bufCursor];		   // Get current active byte
 				bufCursor++;									   // Increase buffer cursor position, will provoke break if at end of current 4K buffer
 				txMsgCursor++;									   // Increase txMsgCursor position, will provoke break if message is full
 				sentBytes++;
@@ -1511,10 +1500,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 			{
 				vTaskDelay(pdMS_TO_TICKS(STmin_MS)); // Implement separation time
 
-				// Disable interrupts during critical CF transmission
-				// portDISABLE_INTERRUPTS();
-				tx_err = twai_transmit(&txMsg, pdMS_TO_TICKS(5)); // Actually ship the message
-				// portENABLE_INTERRUPTS();
+				tx_err = twai_transmit_msg(reqFrameId, txMsgData, 8, false, 5); // Actually ship the message
 
 				if (tx_err != ESP_OK) // Escape case for TX errors
 				{
@@ -1524,8 +1510,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "CF Frame TX error.");
 					if (daemonSuspended)
 					{
-						vTaskResume(CAN_RX_tsk_hdl);
-						vTaskResume(CAN_TX_tsk_hdl);
+						if (CAN_RX_tsk_hdl != nullptr)
+							vTaskResume(CAN_RX_tsk_hdl);
 						daemonSuspended = false;
 					}
 					return ESP_FAIL;
@@ -1542,21 +1528,21 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					break;
 				}
 				// Otherwise check here for any error-coded status frame (will check later if the transfer is finished)
-				while ((twai_receive(&rxMsg, pdMS_TO_TICKS(0)) == ESP_OK) && (sentBytes != file_size))
+				while ((twai_receive_queued_frame(&rxFrame, pdMS_TO_TICKS(0)) == ESP_OK) && (sentBytes != file_size))
 				{
-					if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x40)) // Status frame case
+					if ((rxFrame.header.id == UDSRespID) && (rxFrame.data[0] == 0x40)) // Status frame case
 					{
-						if (rxMsg.data[1] != 0x00) // Not a status OK, which would be strange anyways
+						if (rxFrame.data[1] != 0x00) // Not a status OK, which would be strange anyways
 						{
-							ESP_LOGE(__func__, "Received error status frame, code %0X", rxMsg.data[1]);
+							ESP_LOGE(__func__, "Received error status frame, code %0X", rxFrame.data[1]);
 							free(buf);
 							drain_remaining_body(req);
-							snprintf(out, sizeof(out), "Error. Status frame code : 0x%0X", rxMsg.data[1]);
+							snprintf(out, sizeof(out), "Error. Status frame code : 0x%0X", rxFrame.data[1]);
 							httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, out);
 							if (daemonSuspended)
 							{
-								vTaskResume(CAN_RX_tsk_hdl);
-								vTaskResume(CAN_TX_tsk_hdl);
+								if (CAN_RX_tsk_hdl != nullptr)
+									vTaskResume(CAN_RX_tsk_hdl);
 								daemonSuspended = false;
 							}
 							return ESP_FAIL;
@@ -1580,8 +1566,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unexpected shipping loop error.");
 		if (daemonSuspended)
 		{
-			vTaskResume(CAN_RX_tsk_hdl);
-			vTaskResume(CAN_TX_tsk_hdl);
+			if (CAN_RX_tsk_hdl != nullptr)
+				vTaskResume(CAN_RX_tsk_hdl);
 			daemonSuspended = false;
 		}
 		return ESP_FAIL;
@@ -1611,7 +1597,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 
 	while (otherFrames < 500 && !statusReceived)
 	{
-		rx_err = twai_receive(&rxMsg, pdMS_TO_TICKS(5000));
+		rx_err = twai_receive_queued_frame(&rxFrame, pdMS_TO_TICKS(5000));
 		switch (rx_err)
 		{
 		case ESP_ERR_TIMEOUT: // Return on RX timed out
@@ -1621,9 +1607,9 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		}
 		case ESP_OK: // Something valid was received, set conditions for loop exit if valid FC CTS
 		{
-			if ((rxMsg.identifier == UDSRespID) && (rxMsg.data[0] == 0x40))
+			if ((rxFrame.header.id == UDSRespID) && (rxFrame.data[0] == 0x40))
 			{
-				OTA_status = rxMsg.data[1];
+				OTA_status = rxFrame.data[1];
 				statusReceived = true;
 			}
 			else
@@ -1669,8 +1655,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 
 	if (daemonSuspended)
 	{
-		vTaskResume(CAN_RX_tsk_hdl);
-		vTaskResume(CAN_TX_tsk_hdl);
+		if (CAN_RX_tsk_hdl != nullptr)
+			vTaskResume(CAN_RX_tsk_hdl);
 		daemonSuspended = false;
 	}
 	free(buf);

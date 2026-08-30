@@ -18,4 +18,5 @@ graph TD
 - **Pattern Generator**: Validates pixel response, color uniformity, and backplane contrast.
 - **NVS Brightness & Offset Settings**: Calibrates minimum/maximum backlight duty cycles and display orientation parameters.
 - **NVS Dynamic Inspection & Wipe**: Discovers all active NVS partitions/namespaces/keys via `GET /nvs/list` and offers full safe flash wipe via `POST /nvs/wipe`.
+- **TWAI / CAN Bus Protection**: Initializes `twai_daemon` with `initCAN(NULL)` on GPIO 19 (TX) and GPIO 20 (RX) upon startup, holding the transceiver TX line recessive (logic HIGH) to prevent bus grounding while in factory app mode.
 - **OTA Verification**: Verifies binary headers and checksums before marking OTA partitions as bootable.

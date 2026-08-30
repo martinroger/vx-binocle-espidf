@@ -16,6 +16,7 @@
 #include "binocan.h"
 
 TimerHandle_t alt_display_st_TO_hdl; // Alternative display timeout timer handle
+TimerHandle_t OTA_TO_hdl;            // OTA message timeout timer handle
 
 /// @brief Callback for alternate display status timeout
 /// @param xTimer
@@ -31,19 +32,17 @@ inline void alt_display_st_TO_cb(TimerHandle_t xTimer)
 #define UDS_RESP_FRAME_ID BINOCAN_RDB_UDS_RESP_FRAME_ID
 #define UDS_REQ_FRAME_ID BINOCAN_RDB_UDS_REQ_FRAME_ID
 #define UDS_FRAME_OBJ static binocan_rdb_uds_req_t binocan_rdb_uds_req_msg;
-#define UDS_FRAME_UNPACK binocan_rdb_uds_req_unpack(&binocan_rdb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL
+#define UDS_FRAME_UNPACK binocan_rdb_uds_req_unpack(&binocan_rdb_uds_req_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL
 #define ALT_DISPLAY_ST_FRAME_ID BINOCAN_LDB_ST_FRAME_ID
 
-inline esp_err_t alt_display_st_Handler(twai_message_t *rxMsg)
+inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_ldb_st_t binocan_ldb_st_msg;
-    if (binocan_ldb_st_unpack(&binocan_ldb_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_ldb_st_unpack(&binocan_ldb_st_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
     // General state message check
     if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
     {
@@ -63,10 +62,8 @@ inline void display_board_st_PKG(void *pvParameters)
 {
     binocan_rdb_st_t binocan_rdb_st;
     binocan_rdb_st_init(&binocan_rdb_st);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_RDB_ST_FRAME_ID,
-        .data_length_code = BINOCAN_RDB_ST_LENGTH};
-    tx_msg.ss = false; // Redundant
+    uint8_t payload[BINOCAN_RDB_ST_LENGTH] = {0};
+
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_RDB_ST_CYCLE_TIME_MS));
@@ -75,10 +72,10 @@ inline void display_board_st_PKG(void *pvParameters)
         binocan_rdb_st.xdb_light_brightness = binocan_rdb_st_xdb_light_brightness_encode(display_board_st.lightBrightness);
         binocan_rdb_st.xdb_light_mode = binocan_rdb_st_xdb_light_mode_encode(display_board_st.lightMode);
         binocan_rdb_st.xdb_mode_lock = binocan_rdb_st_xdb_mode_lock_encode(display_board_st.modeLocked);
-        binocan_rdb_st_pack(tx_msg.data, &binocan_rdb_st, BINOCAN_RDB_ST_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_rdb_st_pack(payload, &binocan_rdb_st, BINOCAN_RDB_ST_LENGTH);
+        if (twai_transmit_msg(BINOCAN_RDB_ST_FRAME_ID, payload, BINOCAN_RDB_ST_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue internal state message in queue");
+            ESP_LOGD(TAG, "Could not transmit display state message");
         }
     }
 }
@@ -88,10 +85,9 @@ inline void display_board_version_PKG(void *pvParameters)
     uint8_t message_mux = 0;
     binocan_rdb_board_version_t binocan_rdb_board_version;
     binocan_rdb_board_version_init(&binocan_rdb_board_version);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_RDB_BOARD_VERSION_FRAME_ID,
-        .data_length_code = BINOCAN_RDB_BOARD_VERSION_LENGTH};
+    uint8_t payload[BINOCAN_RDB_BOARD_VERSION_LENGTH] = {0};
     uint32_t cycle_time_ms = BINOCAN_RDB_BOARD_VERSION_CYCLE_TIME_MS;
+
     binocan_rdb_board_version.rdb_version_major = binocan_rdb_board_version_rdb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]) - 48);
     binocan_rdb_board_version.rdb_version_minor = binocan_rdb_board_version_rdb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]) - 48);
     binocan_rdb_board_version.rdb_version_patch = binocan_rdb_board_version_rdb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]) - 48);
@@ -119,10 +115,10 @@ inline void display_board_version_PKG(void *pvParameters)
         // Switch the mux indicator
         message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
         binocan_rdb_board_version.rdb_version_mux = binocan_rdb_board_version_rdb_version_mux_encode(message_mux);
-        binocan_rdb_board_version_pack(tx_msg.data, &binocan_rdb_board_version, BINOCAN_RDB_BOARD_VERSION_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_rdb_board_version_pack(payload, &binocan_rdb_board_version, BINOCAN_RDB_BOARD_VERSION_LENGTH);
+        if (twai_transmit_msg(BINOCAN_RDB_BOARD_VERSION_FRAME_ID, payload, BINOCAN_RDB_BOARD_VERSION_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(TAG, "Could not queue internal state message in queue");
+            ESP_LOGD(TAG, "Could not transmit display version message");
         }
     }
 }
@@ -131,19 +127,17 @@ inline void display_board_version_PKG(void *pvParameters)
 #define UDS_RESP_FRAME_ID BINOCAN_LDB_UDS_RESP_FRAME_ID
 #define UDS_REQ_FRAME_ID BINOCAN_LDB_UDS_REQ_FRAME_ID
 #define UDS_FRAME_OBJ static binocan_ldb_uds_req_t binocan_ldb_uds_req_msg;
-#define UDS_FRAME_UNPACK binocan_ldb_uds_req_unpack(&binocan_ldb_uds_req_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL
+#define UDS_FRAME_UNPACK binocan_ldb_uds_req_unpack(&binocan_ldb_uds_req_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL
 #define ALT_DISPLAY_ST_FRAME_ID BINOCAN_RDB_ST_FRAME_ID
 
-inline esp_err_t alt_display_st_Handler(twai_message_t *rxMsg)
+inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_rdb_st_t binocan_rdb_st_msg;
-    if (binocan_rdb_st_unpack(&binocan_rdb_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_rdb_st_unpack(&binocan_rdb_st_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
     if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
     {
         screen_interlock_OK = ((uint8_t)binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
@@ -278,10 +272,8 @@ inline void display_board_st_PKG(void *pvParameters)
 {
     binocan_ldb_st_t binocan_ldb_st;
     binocan_ldb_st_init(&binocan_ldb_st);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_LDB_ST_FRAME_ID,
-        .data_length_code = BINOCAN_LDB_ST_LENGTH};
-    tx_msg.ss = false; // Redundant
+    uint8_t payload[BINOCAN_LDB_ST_LENGTH] = {0};
+
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_LDB_ST_CYCLE_TIME_MS));
@@ -290,10 +282,10 @@ inline void display_board_st_PKG(void *pvParameters)
         binocan_ldb_st.xdb_light_brightness = binocan_ldb_st_xdb_light_brightness_encode(display_board_st.lightBrightness);
         binocan_ldb_st.xdb_light_mode = binocan_ldb_st_xdb_light_mode_encode(display_board_st.lightMode);
         binocan_ldb_st.xdb_mode_lock = binocan_ldb_st_xdb_mode_lock_encode(display_board_st.modeLocked);
-        binocan_ldb_st_pack(tx_msg.data, &binocan_ldb_st, BINOCAN_LDB_ST_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_ldb_st_pack(payload, &binocan_ldb_st, BINOCAN_LDB_ST_LENGTH);
+        if (twai_transmit_msg(BINOCAN_LDB_ST_FRAME_ID, payload, BINOCAN_LDB_ST_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue internal state message in queue");
+            ESP_LOGD(TAG, "Could not transmit display state message");
         }
     }
 }
@@ -303,10 +295,9 @@ inline void display_board_version_PKG(void *pvParameters)
     uint8_t message_mux = 0;
     binocan_ldb_board_version_t binocan_ldb_board_version;
     binocan_ldb_board_version_init(&binocan_ldb_board_version);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_LDB_BOARD_VERSION_FRAME_ID,
-        .data_length_code = BINOCAN_LDB_BOARD_VERSION_LENGTH};
+    uint8_t payload[BINOCAN_LDB_BOARD_VERSION_LENGTH] = {0};
     uint32_t cycle_time_ms = BINOCAN_LDB_BOARD_VERSION_CYCLE_TIME_MS;
+
     binocan_ldb_board_version.ldb_version_major = binocan_ldb_board_version_ldb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]) - 48);
     binocan_ldb_board_version.ldb_version_minor = binocan_ldb_board_version_ldb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]) - 48);
     binocan_ldb_board_version.ldb_version_patch = binocan_ldb_board_version_ldb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]) - 48);
@@ -334,10 +325,10 @@ inline void display_board_version_PKG(void *pvParameters)
         // Switch the mux indicator
         message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
         binocan_ldb_board_version.ldb_version_mux = binocan_ldb_board_version_ldb_version_mux_encode(message_mux);
-        binocan_ldb_board_version_pack(tx_msg.data, &binocan_ldb_board_version, BINOCAN_LDB_BOARD_VERSION_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_ldb_board_version_pack(payload, &binocan_ldb_board_version, BINOCAN_LDB_BOARD_VERSION_LENGTH);
+        if (twai_transmit_msg(BINOCAN_LDB_BOARD_VERSION_FRAME_ID, payload, BINOCAN_LDB_BOARD_VERSION_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(TAG, "Could not queue internal state message in queue");
+            ESP_LOGD(TAG, "Could not transmit display version message");
         }
     }
 }
@@ -347,31 +338,13 @@ inline void display_board_version_PKG(void *pvParameters)
 
 #pragma region COMMON
 
-/*
-Maybe this could be standardized as a struct or class...
-Ideally something linking :
-- a twai_message_t handler
-- a FreeRTOS time-out timer
-- the timer callback
-- a basic initiator (for the timer)
-*/
-// FreeRTOS objects
 TaskHandle_t display_board_st_PKG_hdl;
 TaskHandle_t display_board_version_PKG_hdl;
 
-TimerHandle_t OTA_TO_hdl;                       // OTA message timeout timer handle
-TimerHandle_t itf_active_hi_lo_TO_hdl;          // ITF active highs and lows timeout timer handle
-TimerHandle_t itf_slow_metrics_TO_hdl;          // ITF slow metrics timeout timer handle
-TimerHandle_t itf_fast_metrics_TO_hdl;          // ITF fast metrics timeout timer handle
-TimerHandle_t itf_odometer_TO_hdl;              // ITF odometer timeout timer handle
-TimerHandle_t ext_oil_metrics_TO_hdl;           // EXT oil metrics timeout timer handle
-TimerHandle_t ext_chargecooling_metrics_TO_hdl; // EXT chargecooling metrics timeout timer handle
-TimerHandle_t itf_board_st_TO_hdl;              // ITF board status timeout timer handle
-TimerHandle_t itf_board_version_TO_hdl;         // ITF board version timeout timer handle
 
 // Timeout callbacks
 // Bit ugly ...
-esp_err_t OTAHandler(twai_message_t *rxMsg);
+esp_err_t OTAHandler(const twai_frame_t *rxMsg);
 
 inline void OTA_TO_cb(TimerHandle_t xTimer)
 {
@@ -445,7 +418,9 @@ inline void itf_board_version_TO_cb(TimerHandle_t xTimer)
 
 // Actual TWAI message handlers
 
-inline esp_err_t OTAHandler(twai_message_t *rxMsg)
+// Actual TWAI message handlers
+
+inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
 {
     // Variables reserved for the UDS side of business
     static uint8_t ST_min = CONFIG_OTA_SEPARATION_TIME_MS;
@@ -460,11 +435,24 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
     static bool OTA_started = false;
     static uint32_t image_size;
     static esp_ota_handle_t ota_handle;
-    twai_message_t UDS_RESP_MSG = {
-        .identifier = UDS_RESP_FRAME_ID,
-        .data_length_code = 8};
-    UDS_RESP_MSG.ss = 0;
+    uint8_t uds_resp_payload[8] = {0};
     esp_err_t ota_err;
+
+    auto send_uds_response = [&](uint8_t d0, uint8_t d1, uint8_t d2 = 0xAA) -> esp_err_t {
+        uds_resp_payload[0] = d0;
+        uds_resp_payload[1] = d1;
+        uds_resp_payload[2] = d2;
+        for (size_t i = 3; i < 8; i++)
+        {
+            uds_resp_payload[i] = 0xAA;
+        }
+        if (twai_transmit_msg(UDS_RESP_FRAME_ID, uds_resp_payload, 8, false, 5) != ESP_OK)
+        {
+            ESP_LOGE(__func__, "Could not transmit UDS response message");
+            return ESP_FAIL;
+        }
+        return ESP_OK;
+    };
 
     // External reset of the OTA, such as on timeout
     if (rxMsg == NULL)
@@ -483,22 +471,9 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             sequenceNumber = 0x01;
             ESP_LOGW(__func__, "OTA was in progress, aborted.");
         }
-        // Send the Error Frame
-        UDS_RESP_MSG.extd = false;
-        UDS_RESP_MSG.data[0] = 0x40;
-        UDS_RESP_MSG.data[1] = 0xFF; // General error
-        for (size_t i = 2; i < 8; i++)
-        {
-            UDS_RESP_MSG.data[i] = 0xAA;
-        }
-        if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-            ESP_LOGE(__func__, "Could not queue internal state message in queue");
-        else
-            ESP_LOGI(__func__, "Error frame sent");
+        send_uds_response(0x40, 0xFF);
         return ESP_ERR_TIMEOUT; // Error break
     }
-    else
-        xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(1));
 
     // Get target partition
     if (update_partition == NULL) // Only first time
@@ -507,7 +482,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
     // Attempt unpack, filter malformed frames
     if (UDS_FRAME_UNPACK)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         if (OTA_started)
         {
             esp_ota_abort(ota_handle);
@@ -521,22 +496,11 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             sequenceNumber = 0x01;
             ESP_LOGW(__func__, "OTA was in progress, aborted.");
         }
-        // Send the Error Frame
-        UDS_RESP_MSG.extd = false;
-        UDS_RESP_MSG.data[0] = 0x40;
-        UDS_RESP_MSG.data[1] = 0xFF; // General error
-        for (size_t i = 2; i < 8; i++)
-        {
-            UDS_RESP_MSG.data[i] = 0xAA;
-        }
-        if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-            ESP_LOGE(__func__, "Could not queue internal state message in queue");
-        else
-            ESP_LOGI(__func__, "Error frame sent");
+        send_uds_response(0x40, 0xFF);
         return ESP_ERR_INVALID_SIZE; // Error break
     }
     // Check if this is a correct first frame
-    if ((rxMsg->data[0] & 0xF0) == 0x10)
+    if ((rxMsg->buffer[0] & 0xF0) == 0x10)
     {
         if (OTA_started || FF_received) // Early exit error case
         {
@@ -548,23 +512,12 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             receivedBytes = 0;
             transferComplete = false;
             image_size = 0;
-            // Send the Error Frame
-            UDS_RESP_MSG.extd = false;
-            UDS_RESP_MSG.data[0] = 0x40;
-            UDS_RESP_MSG.data[1] = 0xFF; // General error
-            for (size_t i = 2; i < 8; i++)
-            {
-                UDS_RESP_MSG.data[i] = 0xAA;
-            }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                ESP_LOGE(__func__, "Could not queue internal state message in queue");
-            else
-                ESP_LOGI(__func__, "Error frame sent");
+            send_uds_response(0x40, 0xFF);
             return ESP_ERR_NOT_FINISHED;
         }
 
         // TODO : check for escape sequence, shorter size contents
-        image_size = swap_endian<uint32_t>(*(uint32_t *)(rxMsg->data + 2));
+        image_size = swap_endian<uint32_t>(*(uint32_t *)(rxMsg->buffer + 2));
         receivedBytes = 0;
         sequenceNumber = 0x01;
         blockCounter = 0x00;
@@ -582,21 +535,10 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             image_size = 0;
             blockCounter = 0x00;
             sequenceNumber = 0x01;
-            // Send the Error Frame
-            UDS_RESP_MSG.extd = false;
-            UDS_RESP_MSG.data[0] = 0x40;
-            UDS_RESP_MSG.data[1] = 0x04; // No start
-            for (size_t i = 2; i < 8; i++)
-            {
-                UDS_RESP_MSG.data[i] = 0xAA;
-            }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                ESP_LOGE(__func__, "Could not queue internal state message in queue");
-            else
-                ESP_LOGI(__func__, "Error frame sent");
+            send_uds_response(0x40, 0x04);
             return ota_err;
         }
-        ota_err = esp_ota_write(ota_handle, (rxMsg->data + 6), 2);
+        ota_err = esp_ota_write(ota_handle, (rxMsg->buffer + 6), 2);
         if (ota_err != ESP_OK) // Break if somehow the OTA doesn't write
         {
             ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
@@ -609,35 +551,23 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             image_size = 0;
             blockCounter = 0x00;
             sequenceNumber = 0x01;
-            // Send the Error Frame
-            UDS_RESP_MSG.extd = false;
-            UDS_RESP_MSG.data[0] = 0x40;
-            UDS_RESP_MSG.data[1] = 0x05; // No write
-            for (size_t i = 2; i < 8; i++)
-            {
-                UDS_RESP_MSG.data[i] = 0xAA;
-            }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                ESP_LOGE(__func__, "Could not queue internal state message in queue");
-            else
-                ESP_LOGI(__func__, "Error frame sent");
+            send_uds_response(0x40, 0x05);
             return ota_err;
         }
         receivedBytes = 2;
         FF_received = true;
         OTA_started = true;
         // Send the FC frame for continuation
-        UDS_RESP_MSG.extd = false;
-        UDS_RESP_MSG.data[0] = 0x30;
-        UDS_RESP_MSG.data[1] = BSize;
-        UDS_RESP_MSG.data[2] = ST_min;
+        uds_resp_payload[0] = 0x30;
+        uds_resp_payload[1] = BSize;
+        uds_resp_payload[2] = ST_min;
         for (size_t i = 3; i < 8; i++)
         {
-            UDS_RESP_MSG.data[i] = 0xAA;
+            uds_resp_payload[i] = 0xAA;
         }
-        if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_transmit_msg(UDS_RESP_FRAME_ID, uds_resp_payload, 8, false, 5) != ESP_OK)
         {
-            ESP_LOGE(__func__, "Could not queue UDS response message in queue");
+            ESP_LOGE(__func__, "Could not transmit UDS response message");
             esp_ota_abort(ota_handle);
             FC_sent = false;
             FF_received = false;
@@ -656,7 +586,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         FC_sent = true;
         return ESP_OK; // Successful break
     }
-    else if ((rxMsg->data[0] & 0xF0) == 0x20) // CF is received
+    else if ((rxMsg->buffer[0] & 0xF0) == 0x20) // CF is received
     {
         if (!OTA_started || !FF_received || !FC_sent) // Weird break case
         {
@@ -670,25 +600,14 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             image_size = 0;
             blockCounter = 0x00;
             sequenceNumber = 0x01;
-            // Send the Error Frame
-            UDS_RESP_MSG.extd = false;
-            UDS_RESP_MSG.data[0] = 0x40;
-            UDS_RESP_MSG.data[1] = 0xFF; // General error
-            for (size_t i = 2; i < 8; i++)
-            {
-                UDS_RESP_MSG.data[i] = 0xAA;
-            }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                ESP_LOGE(__func__, "Could not queue internal state message in queue");
-            else
-                ESP_LOGI(__func__, "Error frame sent");
+            send_uds_response(0x40, 0xFF);
             return ESP_ERR_NOT_ALLOWED;
         }
 
         // Check sequence number
-        if ((rxMsg->data[0] & 0x0F) != sequenceNumber)
+        if ((rxMsg->buffer[0] & 0x0F) != sequenceNumber)
         {
-            ESP_LOGE(__func__, "Bad sequence number : %u instead of %u", rxMsg->data[0] & 0x0F, sequenceNumber);
+            ESP_LOGE(__func__, "Bad sequence number : %u instead of %u", rxMsg->buffer[0] & 0x0F, sequenceNumber);
             esp_ota_abort(ota_handle);
             FC_sent = false;
             FF_received = false;
@@ -698,19 +617,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             image_size = 0;
             blockCounter = 0x00;
             sequenceNumber = 0x01;
-            // Send the Error Frame
-            UDS_RESP_MSG.extd = false;
-            UDS_RESP_MSG.data[0] = 0x40;
-            UDS_RESP_MSG.data[1] = 0x03;           // Seq Number error
-            UDS_RESP_MSG.data[2] = sequenceNumber; // Expected sequence number
-            for (size_t i = 3; i < 8; i++)
-            {
-                UDS_RESP_MSG.data[i] = 0xAA;
-            }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                ESP_LOGE(__func__, "Could not queue internal state message in queue");
-            else
-                ESP_LOGI(__func__, "Error frame sent");
+            send_uds_response(0x40, 0x03, sequenceNumber);
             return ESP_ERR_INVALID_ARG;
         }
         sequenceNumber = ((sequenceNumber + 1) & 0x0F) == 0x00 ? 0x01 : (sequenceNumber + 1) & 0x0F;
@@ -719,7 +626,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         // Check if the whole message can be written to OTA or if something needs to be ignored
         if (image_size - receivedBytes >= 7)
         {
-            ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), 7);
+            ota_err = esp_ota_write(ota_handle, (rxMsg->buffer + 1), 7);
             if (ota_err != ESP_OK) // Break if somehow the OTA doesn't write
             {
                 ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
@@ -732,18 +639,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
                 image_size = 0;
                 blockCounter = 0x00;
                 sequenceNumber = 0x01;
-                // Send the Error Frame
-                UDS_RESP_MSG.extd = false;
-                UDS_RESP_MSG.data[0] = 0x40;
-                UDS_RESP_MSG.data[1] = 0x05; // No write
-                for (size_t i = 2; i < 8; i++)
-                {
-                    UDS_RESP_MSG.data[i] = 0xAA;
-                }
-                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
-                else
-                    ESP_LOGI(__func__, "Error frame sent");
+                send_uds_response(0x40, 0x05);
                 return ota_err;
             }
             receivedBytes += 7;
@@ -756,7 +652,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         }
         else // Only part of the buffer needs to be taken in
         {
-            ota_err = esp_ota_write(ota_handle, (rxMsg->data + 1), image_size - receivedBytes);
+            ota_err = esp_ota_write(ota_handle, (rxMsg->buffer + 1), image_size - receivedBytes);
             if (ota_err != ESP_OK) // Break if somehow the OTA doesn't write
             {
                 ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
@@ -769,18 +665,7 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
                 image_size = 0;
                 blockCounter = 0x00;
                 sequenceNumber = 0x01;
-                // Send the Error Frame
-                UDS_RESP_MSG.extd = false;
-                UDS_RESP_MSG.data[0] = 0x40;
-                UDS_RESP_MSG.data[1] = 0x05; // No write
-                for (size_t i = 2; i < 8; i++)
-                {
-                    UDS_RESP_MSG.data[i] = 0xAA;
-                }
-                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
-                else
-                    ESP_LOGI(__func__, "Error frame sent");
+                send_uds_response(0x40, 0x05);
                 return ota_err;
             }
             receivedBytes = image_size;
@@ -798,42 +683,20 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
             image_size = 0;
             blockCounter = 0x00;
             sequenceNumber = 0x01;
-            if (xTimerIsTimerActive(OTA_TO_hdl))
+            if (OTA_TO_hdl && xTimerIsTimerActive(OTA_TO_hdl))
                 xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1));
             ota_err = esp_ota_end(ota_handle);
             if (ota_err != ESP_OK)
             {
                 ESP_LOGE(__func__, "OTA not successful : %s", esp_err_to_name(ota_err));
-                // Send the Error Frame
-                UDS_RESP_MSG.extd = false;
-                UDS_RESP_MSG.data[0] = 0x40;
-                UDS_RESP_MSG.data[1] = 0x02; // No verif
-                for (size_t i = 2; i < 8; i++)
-                {
-                    UDS_RESP_MSG.data[i] = 0xAA;
-                }
-                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
-                else
-                    ESP_LOGI(__func__, "Error frame sent");
+                send_uds_response(0x40, 0x02);
                 return ota_err;
             }
             else
             {
                 ESP_LOGI(__func__, "OTA image verification OK, setting boot to %s and restarting.", update_partition->label);
                 esp_ota_set_boot_partition(update_partition);
-                // Send the OK Frame
-                UDS_RESP_MSG.extd = false;
-                UDS_RESP_MSG.data[0] = 0x40;
-                UDS_RESP_MSG.data[1] = 0x00; // OK status
-                for (size_t i = 2; i < 8; i++)
-                {
-                    UDS_RESP_MSG.data[i] = 0xAA;
-                }
-                if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
-                    ESP_LOGE(__func__, "Could not queue internal state message in queue");
-                else
-                    ESP_LOGI(__func__, "Status frame sent");
+                send_uds_response(0x40, 0x00);
                 vTaskDelay(pdMS_TO_TICKS(1));
                 esp_restart();
                 return ESP_OK;
@@ -843,17 +706,16 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
         // Send a FC frame if blockCounter == BSize
         if (BSize > 0 && blockCounter == BSize)
         {
-            UDS_RESP_MSG.extd = false;
-            UDS_RESP_MSG.data[0] = 0x30;
-            UDS_RESP_MSG.data[1] = BSize;
-            UDS_RESP_MSG.data[2] = ST_min;
+            uds_resp_payload[0] = 0x30;
+            uds_resp_payload[1] = BSize;
+            uds_resp_payload[2] = ST_min;
             for (size_t i = 3; i < 8; i++)
             {
-                UDS_RESP_MSG.data[i] = 0xAA;
+                uds_resp_payload[i] = 0xAA;
             }
-            if (xQueueSend(CAN_TX_queue_hdl, &UDS_RESP_MSG, pdMS_TO_TICKS(1)) != pdTRUE)
+            if (twai_transmit_msg(UDS_RESP_FRAME_ID, uds_resp_payload, 8, false, 5) != ESP_OK)
             {
-                ESP_LOGE(__func__, "Could not queue internal state message in queue");
+                ESP_LOGE(__func__, "Could not transmit UDS response message");
                 esp_ota_abort(ota_handle);
                 FC_sent = false;
                 FF_received = false;
@@ -882,16 +744,14 @@ inline esp_err_t OTAHandler(twai_message_t *rxMsg)
     }
 }
 
-inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
+inline esp_err_t itf_active_hi_lo_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_itf_active_hi_lo_t binocan_itf_active_hi_lo_msg;
-    if (binocan_itf_active_hi_lo_unpack(&binocan_itf_active_hi_lo_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_itf_active_hi_lo_unpack(&binocan_itf_active_hi_lo_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
 
     if (binocan_itf_active_hi_lo_itf_abs_al_tt_is_in_range(binocan_itf_active_hi_lo_msg.itf_abs_al_tt))
     {
@@ -1052,16 +912,14 @@ inline esp_err_t itf_active_hi_lo_Handler(twai_message_t *rxMsg)
     return ESP_OK;
 }
 
-inline esp_err_t itf_slow_metrics_Handler(twai_message_t *rxMsg)
+inline esp_err_t itf_slow_metrics_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_itf_slow_metrics_t binocan_itf_slow_metrics_msg;
-    if (binocan_itf_slow_metrics_unpack(&binocan_itf_slow_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_itf_slow_metrics_unpack(&binocan_itf_slow_metrics_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
     if (binocan_itf_slow_metrics_itf_coolant_temp_is_in_range(binocan_itf_slow_metrics_msg.itf_coolant_temp))
     {
         coolant_degC = (uint8_t)round(binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp));
@@ -1099,17 +957,15 @@ inline esp_err_t itf_slow_metrics_Handler(twai_message_t *rxMsg)
     return ESP_OK;
 }
 
-inline esp_err_t itf_fast_metrics_Handler(twai_message_t *rxMsg)
+inline esp_err_t itf_fast_metrics_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_itf_fast_metrics_t binocan_itf_fast_metrics_msg;
 
-    if (binocan_itf_fast_metrics_unpack(&binocan_itf_fast_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_itf_fast_metrics_unpack(&binocan_itf_fast_metrics_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
     if (binocan_itf_fast_metrics_itf_rpm_is_in_range(binocan_itf_fast_metrics_msg.itf_rpm))
     {
         rpm = (uint32_t)lround(binocan_itf_fast_metrics_itf_rpm_decode(binocan_itf_fast_metrics_msg.itf_rpm));
@@ -1134,17 +990,15 @@ inline esp_err_t itf_fast_metrics_Handler(twai_message_t *rxMsg)
     return ESP_OK;
 }
 
-inline esp_err_t itf_odometer_Handler(twai_message_t *rxMsg)
+inline esp_err_t itf_odometer_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_itf_odometer_t binocan_itf_odometer_msg;
 
-    if (binocan_itf_odometer_unpack(&binocan_itf_odometer_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_itf_odometer_unpack(&binocan_itf_odometer_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
 
     if (binocan_itf_odometer_itf_odometer_km_is_in_range(binocan_itf_odometer_msg.itf_odometer_km) && binocan_itf_odometer_itf_odo_rem_m_is_in_range(binocan_itf_odometer_msg.itf_odo_rem_m))
     {
@@ -1170,43 +1024,36 @@ inline esp_err_t itf_odometer_Handler(twai_message_t *rxMsg)
     return ESP_OK;
 }
 
-inline esp_err_t ext_oil_metrics_Handler(twai_message_t *rxMsg)
+inline esp_err_t ext_oil_metrics_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_ext_oil_metrics_t binocan_ext_oil_metrics_msg;
-    if (binocan_ext_oil_metrics_unpack(&binocan_ext_oil_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_ext_oil_metrics_unpack(&binocan_ext_oil_metrics_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
     return ESP_OK;
 }
 
-inline esp_err_t ext_chargecooling_metrics_Handler(twai_message_t *rxMsg)
+inline esp_err_t ext_chargecooling_metrics_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_ext_chargecooling_metrics_t binocan_ext_chargecooling_metrics_msg;
-    if (binocan_ext_chargecooling_metrics_unpack(&binocan_ext_chargecooling_metrics_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_ext_chargecooling_metrics_unpack(&binocan_ext_chargecooling_metrics_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
     return ESP_OK;
 }
 
-inline esp_err_t itf_board_st_Handler(twai_message_t *rxMsg)
+inline esp_err_t itf_board_st_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_itf_board_st_t binocan_itf_board_st_msg;
-    if (binocan_itf_board_st_unpack(&binocan_itf_board_st_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_itf_board_st_unpack(&binocan_itf_board_st_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-
-    if (xTimerReset(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
 
     if (binocan_itf_board_st_itf_sm_st_is_in_range(binocan_itf_board_st_msg.itf_sm_st))
     {
@@ -1220,50 +1067,78 @@ inline esp_err_t itf_board_st_Handler(twai_message_t *rxMsg)
     return ESP_OK;
 }
 
-inline esp_err_t itf_board_version_Handler(twai_message_t *rxMsg)
+inline esp_err_t itf_board_version_Handler(const twai_frame_t *rxMsg)
 {
     static binocan_itf_board_version_t binocan_itf_board_version_msg;
-    if (binocan_itf_board_version_unpack(&binocan_itf_board_version_msg, rxMsg->data, rxMsg->data_length_code) == EINVAL)
+    if (binocan_itf_board_version_unpack(&binocan_itf_board_version_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
     {
-        ESP_LOGE(__func__, "Malformed frame 0x%03LX, invalid DLC", rxMsg->identifier);
+        ESP_LOGE(__func__, "Malformed frame 0x%03lX, invalid DLC", rxMsg->header.id);
         return ESP_FAIL;
     }
-    if (xTimerReset(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) != pdPASS)
-        ESP_LOGE(__func__, "Could not reset timeout timer.");
     return ESP_OK;
 }
 
-// GP functions
+// -----------------------------------------------------------------------------
+// Declarative Routing Table & Dispatch
+// -----------------------------------------------------------------------------
+
+typedef esp_err_t (*twai_frame_handler_t)(const twai_frame_t *rxMsg);
+
+struct twai_route_entry_t {
+    uint32_t frame_id;
+    twai_frame_handler_t handler;
+    uint32_t timeout_ms;
+    TimerCallbackFunction_t timeout_cb;
+    TimerHandle_t timer_hdl;
+    const char *name;
+};
+
+static twai_route_entry_t rx_routes[] = {
+    { BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID,          itf_active_hi_lo_Handler,          5 * BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS,          itf_active_hi_lo_TO_cb,          NULL, "act_hi_lo" },
+    { BINOCAN_ITF_SLOW_METRICS_FRAME_ID,          itf_slow_metrics_Handler,          5 * BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS,          itf_slow_metrics_TO_cb,          NULL, "slow_m" },
+    { BINOCAN_ITF_FAST_METRICS_FRAME_ID,          itf_fast_metrics_Handler,          5 * BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS,          itf_fast_metrics_TO_cb,          NULL, "fast_m" },
+    { BINOCAN_ITF_ODOMETER_FRAME_ID,              itf_odometer_Handler,              5 * BINOCAN_ITF_ODOMETER_CYCLE_TIME_MS,              itf_odometer_TO_cb,              NULL, "odom" },
+    { BINOCAN_EXT_OIL_METRICS_FRAME_ID,          ext_oil_metrics_Handler,          5 * BINOCAN_EXT_OIL_METRICS_CYCLE_TIME_MS,          ext_oil_metrics_TO_cb,          NULL, "oil_m" },
+    { BINOCAN_EXT_CHARGECOOLING_METRICS_FRAME_ID, ext_chargecooling_metrics_Handler, 5 * BINOCAN_EXT_CHARGECOOLING_METRICS_CYCLE_TIME_MS, ext_chargecooling_metrics_TO_cb, NULL, "chg_m" },
+    { BINOCAN_ITF_BOARD_ST_FRAME_ID,              itf_board_st_Handler,              5 * BINOCAN_ITF_BOARD_ST_CYCLE_TIME_MS,              itf_board_st_TO_cb,              NULL, "ibs" },
+    { BINOCAN_ITF_BOARD_VERSION_FRAME_ID,         itf_board_version_Handler,         5 * BINOCAN_ITF_BOARD_VERSION_CYCLE_TIME_MS,         itf_board_version_TO_cb,         NULL, "ibv" },
+    { ALT_DISPLAY_ST_FRAME_ID,                    alt_display_st_Handler,            5000,                                                alt_display_st_TO_cb,            NULL, "alt_st" },
+    { UDS_REQ_FRAME_ID,                           OTAHandler,                        5000,                                                OTA_TO_cb,                        NULL, "OTA" },
+};
+
+static const size_t NUM_RX_ROUTES = sizeof(rx_routes) / sizeof(rx_routes[0]);
 
 /// @brief Initializer for all the timeout timers
 /// @return ESP_OK if all timers created successfully, ESP_FAIL otherwise
 inline esp_err_t TO_timers_init()
 {
-    esp_err_t ret = ESP_FAIL;
-    OTA_TO_hdl = xTimerCreate("OTA_TO", pdMS_TO_TICKS(5000), pdFALSE, NULL, OTA_TO_cb);
-    alt_display_st_TO_hdl = xTimerCreate("alt_st_TO", pdMS_TO_TICKS(5000), pdFALSE, NULL, alt_display_st_TO_cb);
-    itf_active_hi_lo_TO_hdl = xTimerCreate("act_hi_lo_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS), pdFALSE, NULL, itf_active_hi_lo_TO_cb);
-    itf_slow_metrics_TO_hdl = xTimerCreate("slow_m_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, itf_slow_metrics_TO_cb);
-    itf_fast_metrics_TO_hdl = xTimerCreate("fast_m_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, itf_fast_metrics_TO_cb);
-    itf_odometer_TO_hdl = xTimerCreate("odom_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_ODOMETER_CYCLE_TIME_MS), pdFALSE, NULL, itf_odometer_TO_cb);
-    ext_oil_metrics_TO_hdl = xTimerCreate("oil_m_TO", pdMS_TO_TICKS(5 * BINOCAN_EXT_OIL_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, ext_oil_metrics_TO_cb);
-    ext_chargecooling_metrics_TO_hdl = xTimerCreate("chg_m_TO", pdMS_TO_TICKS(5 * BINOCAN_EXT_CHARGECOOLING_METRICS_CYCLE_TIME_MS), pdFALSE, NULL, ext_chargecooling_metrics_TO_cb);
-    itf_board_st_TO_hdl = xTimerCreate("ibs_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_BOARD_ST_CYCLE_TIME_MS), pdFALSE, NULL, itf_board_st_TO_cb);
-    itf_board_version_TO_hdl = xTimerCreate("ibv_TO", pdMS_TO_TICKS(5 * BINOCAN_ITF_BOARD_VERSION_CYCLE_TIME_MS), pdFALSE, NULL, itf_board_version_TO_cb);
-
-    // Check all timers created successfully
-    if (OTA_TO_hdl != NULL &&
-        alt_display_st_TO_hdl != NULL &&
-        itf_active_hi_lo_TO_hdl != NULL &&
-        itf_slow_metrics_TO_hdl != NULL &&
-        itf_fast_metrics_TO_hdl != NULL &&
-        itf_odometer_TO_hdl != NULL &&
-        ext_oil_metrics_TO_hdl != NULL &&
-        ext_chargecooling_metrics_TO_hdl != NULL &&
-        itf_board_st_TO_hdl != NULL &&
-        itf_board_version_TO_hdl != NULL)
+    esp_err_t ret = ESP_OK;
+    for (size_t i = 0; i < NUM_RX_ROUTES; ++i)
     {
-        ret = ESP_OK;
+        if (rx_routes[i].timeout_ms > 0 && rx_routes[i].timeout_cb != nullptr)
+        {
+            rx_routes[i].timer_hdl = xTimerCreate(rx_routes[i].name,
+                                                  pdMS_TO_TICKS(rx_routes[i].timeout_ms),
+                                                  pdFALSE,
+                                                  NULL,
+                                                  rx_routes[i].timeout_cb);
+            if (rx_routes[i].timer_hdl == NULL)
+            {
+                ESP_LOGE(__func__, "Failed to create timer for route: %s", rx_routes[i].name);
+                ret = ESP_FAIL;
+            }
+        }
+    }
+    for (size_t i = 0; i < NUM_RX_ROUTES; ++i)
+    {
+        if (rx_routes[i].frame_id == UDS_REQ_FRAME_ID)
+        {
+            OTA_TO_hdl = rx_routes[i].timer_hdl;
+        }
+        else if (rx_routes[i].frame_id == ALT_DISPLAY_ST_FRAME_ID)
+        {
+            alt_display_st_TO_hdl = rx_routes[i].timer_hdl;
+        }
     }
     return ret;
 }
@@ -1273,46 +1148,16 @@ inline esp_err_t TO_timers_init()
 inline esp_err_t TO_timers_start()
 {
     esp_err_t ret = ESP_OK;
-    if (itf_active_hi_lo_TO_hdl)
-        ret |= (xTimerReset(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_active_hi_lo_TO_hdl is NULL, cannot start timer.");
-    if (itf_slow_metrics_TO_hdl)
-        ret |= (xTimerReset(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_slow_metrics_TO_hdl is NULL, cannot start timer.");
-    if (itf_fast_metrics_TO_hdl)
-        ret |= (xTimerReset(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_fast_metrics_TO_hdl is NULL, cannot start timer.");
-    if (itf_odometer_TO_hdl)
-        ret |= (xTimerReset(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_odometer_TO_hdl is NULL, cannot start timer.");
-    if (ext_oil_metrics_TO_hdl)
-        ret |= (xTimerReset(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "ext_oil_metrics_TO_hdl is NULL, cannot start timer.");
-    if (ext_chargecooling_metrics_TO_hdl)
-        ret |= (xTimerReset(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "ext_chargecooling_metrics_TO_hdl is NULL, cannot start timer.");
-    if (itf_board_st_TO_hdl)
-        ret |= (xTimerReset(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_board_st_TO_hdl is NULL, cannot start timer.");
-    if (itf_board_version_TO_hdl)
-        ret |= (xTimerReset(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_board_version_TO_hdl is NULL, cannot start timer.");
-    if (alt_display_st_TO_hdl)
-        ret |= (xTimerReset(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "alt_display_st_TO_hdl is NULL, cannot start timer.");
-    // if (OTA_TO_hdl)
-    //     ret |= (xTimerReset(OTA_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    // else
-    //     ESP_LOGW(__func__, "OTA_TO_hdl is NULL, cannot start timer.");
+    for (size_t i = 0; i < NUM_RX_ROUTES; ++i)
+    {
+        if (rx_routes[i].frame_id != UDS_REQ_FRAME_ID && rx_routes[i].timer_hdl != NULL)
+        {
+            if (xTimerReset(rx_routes[i].timer_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+            {
+                ret = ESP_FAIL;
+            }
+        }
+    }
     return ret;
 }
 
@@ -1321,126 +1166,43 @@ inline esp_err_t TO_timers_start()
 inline esp_err_t TO_timers_stop()
 {
     esp_err_t ret = ESP_OK;
-    if (OTA_TO_hdl)
-        ret |= (xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "OTA_TO_hdl is NULL, cannot stop timer.");
-    if (alt_display_st_TO_hdl)
-        ret |= (xTimerStop(alt_display_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "alt_display_st_TO_hdl is NULL, cannot stop timer.");
-    if (itf_active_hi_lo_TO_hdl)
-        ret |= (xTimerStop(itf_active_hi_lo_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_active_hi_lo_TO_hdl is NULL, cannot stop timer.");
-    if (itf_slow_metrics_TO_hdl)
-        ret |= (xTimerStop(itf_slow_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_slow_metrics_TO_hdl is NULL, cannot stop timer.");
-    if (itf_fast_metrics_TO_hdl)
-        ret |= (xTimerStop(itf_fast_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_fast_metrics_TO_hdl is NULL, cannot stop timer.");
-    if (itf_odometer_TO_hdl)
-        ret |= (xTimerStop(itf_odometer_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_odometer_TO_hdl is NULL, cannot stop timer.");
-    if (ext_oil_metrics_TO_hdl)
-        ret |= (xTimerStop(ext_oil_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "ext_oil_metrics_TO_hdl is NULL, cannot stop timer.");
-    if (ext_chargecooling_metrics_TO_hdl)
-        ret |= (xTimerStop(ext_chargecooling_metrics_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "ext_chargecooling_metrics_TO_hdl is NULL, cannot stop timer.");
-    if (itf_board_st_TO_hdl)
-        ret |= (xTimerStop(itf_board_st_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_board_st_TO_hdl is NULL, cannot stop timer.");
-    if (itf_board_version_TO_hdl)
-        ret |= (xTimerStop(itf_board_version_TO_hdl, pdMS_TO_TICKS(1)) == pdPASS);
-    else
-        ESP_LOGW(__func__, "itf_board_version_TO_hdl is NULL, cannot stop timer.");
+    for (size_t i = 0; i < NUM_RX_ROUTES; ++i)
+    {
+        if (rx_routes[i].timer_hdl != NULL)
+        {
+            if (xTimerStop(rx_routes[i].timer_hdl, pdMS_TO_TICKS(1)) != pdPASS)
+            {
+                ret = ESP_FAIL;
+            }
+        }
+    }
     return ret;
 }
 
 /// @brief Dispatcher linked to the TWAI daemon. Parses received CAN frames
 /// @param rxMsg Received TWAI frame
 /// @return Error code, if relevant
-inline esp_err_t dispatchFrame(twai_message_t *rxMsg)
+inline esp_err_t dispatchFrame(const twai_frame_t *rxMsg)
 {
-    esp_err_t ret;
-    switch (rxMsg->identifier)
+    if (rxMsg == nullptr)
     {
-    case BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID:
-    {
-        ret = itf_active_hi_lo_Handler(rxMsg);
-    }
-    break;
-
-    case BINOCAN_ITF_SLOW_METRICS_FRAME_ID:
-    {
-        ret = itf_slow_metrics_Handler(rxMsg);
-    }
-    break;
-
-    case BINOCAN_ITF_FAST_METRICS_FRAME_ID:
-    {
-        ret = itf_fast_metrics_Handler(rxMsg);
-    }
-    break;
-
-    case BINOCAN_ITF_ODOMETER_FRAME_ID:
-    {
-        ret = itf_odometer_Handler(rxMsg);
-    }
-    break;
-
-    case BINOCAN_EXT_OIL_METRICS_FRAME_ID:
-    {
-        ret = ext_oil_metrics_Handler(rxMsg);
-    }
-    break;
-
-    case BINOCAN_EXT_CHARGECOOLING_METRICS_FRAME_ID:
-    {
-        ret = ext_chargecooling_metrics_Handler(rxMsg);
-    }
-    break;
-
-    case BINOCAN_ITF_BOARD_ST_FRAME_ID:
-    {
-        ret = itf_board_st_Handler(rxMsg);
-    }
-    break;
-
-    case BINOCAN_ITF_BOARD_VERSION_FRAME_ID:
-    {
-        ret = itf_board_version_Handler(rxMsg);
-    }
-    break;
-
-    case ALT_DISPLAY_ST_FRAME_ID:
-    {
-        ret = alt_display_st_Handler(rxMsg);
-    }
-    break;
-
-    case UDS_REQ_FRAME_ID:
-    {
-        ret = OTAHandler(rxMsg);
-    }
-    break;
-
-    default:
-    {
-        ESP_LOGD(__func__, "Unknown CAN frame received: ID = 0x%03X", (uint16_t)rxMsg->identifier);
-        ret = ESP_ERR_INVALID_ARG;
-    }
-    break;
+        return ESP_ERR_INVALID_ARG;
     }
 
-    return ret;
+    for (size_t i = 0; i < NUM_RX_ROUTES; ++i)
+    {
+        if (rx_routes[i].frame_id == rxMsg->header.id)
+        {
+            if (rx_routes[i].timer_hdl != NULL)
+            {
+                xTimerReset(rx_routes[i].timer_hdl, pdMS_TO_TICKS(1));
+            }
+            return rx_routes[i].handler(rxMsg);
+        }
+    }
+
+    ESP_LOGD(__func__, "Unknown CAN frame received: ID = 0x%03lX", rxMsg->header.id);
+    return ESP_ERR_INVALID_ARG;
 }
 
 #pragma endregion

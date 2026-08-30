@@ -1,157 +1,374 @@
 #include "twai_daemon.h"
 
-const char *TAG = "CAN Daemon";
+static const char *TAG = "CAN Daemon";
 
+twai_node_handle_t g_twai_node_hdl = nullptr;
 frameDispatcher_t *dispatchCANFrame = nullptr;
 
 bool CAN_RX_TimedOut = false;
+bool g_twai_bus_off = false;
 
-// Pointer to rx and dispatch task handle
 TaskHandle_t CAN_RX_tsk_hdl = nullptr;
-TaskHandle_t CAN_TX_tsk_hdl = nullptr;
+QueueHandle_t g_twai_rx_queue = nullptr;
 
-/// @brief Queue for messages to be sent out
-QueueHandle_t CAN_TX_queue_hdl = nullptr;
+// -----------------------------------------------------------------------------
+// TX Frame Pool (Zero-copy asynchronous transmission without stack dangling)
+// -----------------------------------------------------------------------------
+
+#define TWAI_TX_POOL_SIZE 32
+
+struct twai_tx_slot_t
+{
+    twai_frame_t frame;
+    uint8_t buffer[8];
+};
+
+static twai_tx_slot_t s_tx_slots[TWAI_TX_POOL_SIZE];
+static QueueHandle_t s_tx_pool_queue = nullptr;
+
+// -----------------------------------------------------------------------------
+// Driver Callbacks (ISR Context)
+// -----------------------------------------------------------------------------
+
+static IRAM_ATTR bool twai_tx_done_cb(twai_node_handle_t handle, const twai_tx_done_event_data_t *edata, void *user_ctx)
+{
+    BaseType_t high_task_woken = pdFALSE;
+
+    if (edata != nullptr && edata->done_tx_frame != nullptr)
+    {
+        const twai_frame_t *done_frame = edata->done_tx_frame;
+        // Verify pointer belongs to s_tx_slots pool
+        if (done_frame >= &s_tx_slots[0].frame && done_frame <= &s_tx_slots[TWAI_TX_POOL_SIZE - 1].frame)
+        {
+            twai_tx_slot_t *slot = (twai_tx_slot_t *)done_frame;
+            if (s_tx_pool_queue != nullptr)
+            {
+                xQueueSendFromISR(s_tx_pool_queue, &slot, &high_task_woken);
+            }
+        }
+    }
+
+    return (high_task_woken == pdTRUE);
+}
+
+static IRAM_ATTR bool twai_rx_done_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx)
+{
+    twai_queued_frame_t q_frame = {};
+    twai_frame_t rx_frame = {
+        .buffer = q_frame.data,
+        .buffer_len = sizeof(q_frame.data),
+    };
+    BaseType_t high_task_woken = pdFALSE;
+
+    if (twai_node_receive_from_isr(handle, &rx_frame) == ESP_OK)
+    {
+        q_frame.header = rx_frame.header;
+        q_frame.buffer_len = (uint8_t)rx_frame.buffer_len;
+        if (g_twai_rx_queue != nullptr)
+        {
+            xQueueSendFromISR(g_twai_rx_queue, &q_frame, &high_task_woken);
+        }
+    }
+
+    return (high_task_woken == pdTRUE);
+}
+
+static IRAM_ATTR bool twai_state_change_cb(twai_node_handle_t handle, const twai_state_change_event_data_t *edata, void *user_ctx)
+{
+    if (edata->new_sta == TWAI_ERROR_BUS_OFF)
+    {
+        g_twai_bus_off = true;
+        ESP_EARLY_LOGW(TAG, "TWAI entered BUS_OFF! Initiating recovery...");
+        twai_node_recover(handle);
+    }
+    else if (edata->new_sta == TWAI_ERROR_ACTIVE)
+    {
+        g_twai_bus_off = false;
+        ESP_EARLY_LOGI(TAG, "TWAI returned to ERROR_ACTIVE.");
+    }
+    else if (edata->new_sta == TWAI_ERROR_PASSIVE)
+    {
+        ESP_EARLY_LOGW(TAG, "TWAI entered ERROR_PASSIVE.");
+    }
+    else if (edata->new_sta == TWAI_ERROR_WARNING)
+    {
+        ESP_EARLY_LOGW(TAG, "TWAI entered ERROR_WARNING.");
+    }
+
+    return false;
+}
+
+static IRAM_ATTR bool twai_error_cb(twai_node_handle_t handle, const twai_error_event_data_t *edata, void *user_ctx)
+{
+    return false;
+}
+
+// -----------------------------------------------------------------------------
+// Driver Init & Lifecycle
+// -----------------------------------------------------------------------------
 
 esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
 {
-#ifdef TWAI_WATCHDOG
-    // Set up alerts filter
-    uint32_t alerts_to_enable = TWAI_ALERT_RX_DATA |
-                                TWAI_ALERT_TX_FAILED |
-                                TWAI_ALERT_ERR_PASS |
-                                TWAI_ALERT_BUS_ERROR |
-                                TWAI_ALERT_RX_QUEUE_FULL |
-                                TWAI_ALERT_ARB_LOST;
-    uint32_t twai_alerts_triggered;
-    twai_status_info_t twai_status;
-    unsigned long twai_wdg_rx_dropped = 0;
-    unsigned long twai_wdg_rx_dropped_prev = 0;
-    unsigned long twai_wdg_rx_dropped_rate = 0;
-#else
-    uint32_t alerts_to_enable = TWAI_ALERT_NONE;
-#endif
-    twai_general_config_t g_config = {
-        .mode = TWAI_MODE_NORMAL,
-        .tx_io = (gpio_num_t)CONFIG_CAN_TX,
-        .rx_io = (gpio_num_t)CONFIG_CAN_RX,
-        .clkout_io = TWAI_IO_UNUSED,
-        .bus_off_io = TWAI_IO_UNUSED,
-        .tx_queue_len = 256,
-        .rx_queue_len = 256,
-        .alerts_enabled = alerts_to_enable,
-        .clkout_divider = 0,
-        .intr_flags = ESP_INTR_FLAG_LEVEL1,
-    };
-    twai_timing_config_t t_config = TWAI_TIMING_CONFIG_500KBITS();
-    twai_filter_config_t f_config = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+    dispatchCANFrame = frameDispatcher;
 
-    if (twai_driver_install(&g_config, &t_config, &f_config) == ESP_OK)
+    // Initialize TX frame pool queue
+    if (s_tx_pool_queue == nullptr)
     {
-        if (twai_start() != ESP_OK)
+        s_tx_pool_queue = xQueueCreate(TWAI_TX_POOL_SIZE, sizeof(twai_tx_slot_t *));
+        if (s_tx_pool_queue == nullptr)
         {
-            ESP_LOGE(TAG, "Failed to start TWAI driver");
+            ESP_LOGE(TAG, "Failed to create TWAI TX pool queue");
+            return ESP_ERR_NO_MEM;
+        }
+        for (int i = 0; i < TWAI_TX_POOL_SIZE; i++)
+        {
+            twai_tx_slot_t *slot = &s_tx_slots[i];
+            xQueueSend(s_tx_pool_queue, &slot, 0);
+        }
+    }
+
+    // Initialize RX queue for ISR handoff upfront before enabling callbacks/node
+    if (g_twai_rx_queue == nullptr)
+    {
+        g_twai_rx_queue = xQueueCreate(32, sizeof(twai_queued_frame_t));
+        if (g_twai_rx_queue == nullptr)
+        {
+            ESP_LOGE(TAG, "Failed to create TWAI RX queue");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+
+    twai_onchip_node_config_t node_config = {
+        .io_cfg = {
+            .tx = (gpio_num_t)CONFIG_CAN_TX,
+            .rx = (gpio_num_t)CONFIG_CAN_RX,
+            .quanta_clk_out = (gpio_num_t)-1,
+            .bus_off_indicator = (gpio_num_t)-1,
+        },
+        .clk_src = TWAI_CLK_SRC_DEFAULT,
+        .bit_timing = {
+            .bitrate = 500000,
+            .sp_permill = 0,
+            .ssp_permill = 0,
+        },
+        .data_timing = {},
+        .timestamp_resolution_hz = 0,
+        .fail_retry_cnt = -1, // Retransmit until success or bus-off
+        .tx_queue_depth = TWAI_TX_POOL_SIZE,
+        .intr_priority = 0,
+        .flags = {
+            .enable_self_test = 0,
+            .enable_loopback = 0,
+            .enable_listen_only = 0,
+            .no_receive_rtr = 0,
+            .sleep_allow_pd = 0,
+        },
+    };
+
+    esp_err_t ret = twai_new_node_onchip(&node_config, &g_twai_node_hdl);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to allocate TWAI node: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    twai_event_callbacks_t cbs = {
+        .on_tx_done = twai_tx_done_cb,
+        .on_rx_done = twai_rx_done_cb,
+        .on_state_change = twai_state_change_cb,
+        .on_error = twai_error_cb,
+    };
+
+    ret = twai_node_register_event_callbacks(g_twai_node_hdl, &cbs, nullptr);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to register TWAI event callbacks: %s", esp_err_to_name(ret));
+        twai_node_delete(g_twai_node_hdl);
+        g_twai_node_hdl = nullptr;
+        return ret;
+    }
+
+    ret = twai_node_enable(g_twai_node_hdl);
+    if (ret != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Failed to enable TWAI node: %s", esp_err_to_name(ret));
+        twai_node_delete(g_twai_node_hdl);
+        g_twai_node_hdl = nullptr;
+        return ret;
+    }
+
+    ESP_LOGI(TAG, "TWAI modern driver started successfully (500 kbps, TX: %d, RX: %d)", CONFIG_CAN_TX, CONFIG_CAN_RX);
+
+    // Only create worker task if a frame dispatcher is attached
+    if (dispatchCANFrame != nullptr)
+    {
+        BaseType_t twai_core_id = CONFIG_CAN_CORE_AFFINITY;
+        if (xTaskCreatePinnedToCore(CAN_RX_Task, "twai RX worker", 4096, NULL, 5, &CAN_RX_tsk_hdl, twai_core_id) != pdPASS)
+        {
+            ESP_LOGE(TAG, "Failed to create TWAI RX worker task");
             return ESP_FAIL;
         }
         else
         {
-            ESP_LOGI(TAG, "TWAI driver started successfully");
+            ESP_LOGI(TAG, "TWAI RX worker task created on Core %d", (int)twai_core_id);
         }
     }
-    else
-    {
-        ESP_LOGE(TAG, "Failed to install TWAI driver");
-        return ESP_FAIL;
-    }
 
-    CAN_TX_queue_hdl = xQueueCreate(16, sizeof(twai_message_t));
-    if (CAN_TX_queue_hdl == NULL)
-    {
-        ESP_LOGE(TAG, "Failed to create CAN TX queue");
-        return ESP_FAIL;
-    }
-
-    BaseType_t twai_core_id = CONFIG_CAN_CORE_AFFINITY;
-    if (xTaskCreatePinnedToCore(CAN_RX_Task, "twai RX daemon", 4096, NULL, 5, &CAN_RX_tsk_hdl, twai_core_id) != pdPASS)
-    {
-        ESP_LOGE(TAG, "Failed to create TWAI RX task");
-        return ESP_FAIL;
-    }
-    else if (xTaskCreatePinnedToCore(CAN_TX_Task, "twai TX daemon", 4096, NULL, 5, &CAN_TX_tsk_hdl, twai_core_id) != pdPASS)
-    {
-        ESP_LOGE(TAG, "Failed to create TWAI TX task");
-        return ESP_FAIL;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "CAN RX and TX Tasks created successfully");
-    }
-
-    dispatchCANFrame = frameDispatcher;
-    if (dispatchCANFrame == nullptr)
-    {
-        ESP_LOGW(TAG, "Frame dispatcher function does not exist!");
-    }
-    // All checks passed
     return ESP_OK;
 }
+
+// -----------------------------------------------------------------------------
+// Transmission APIs
+// -----------------------------------------------------------------------------
+
+esp_err_t twai_transmit_frame(const twai_frame_t *frame, int timeout_ms)
+{
+    if (g_twai_node_hdl == nullptr || frame == nullptr)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (g_twai_bus_off)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (s_tx_pool_queue == nullptr)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    TickType_t wait_ticks = (timeout_ms <= 0) ? 0 : pdMS_TO_TICKS(timeout_ms);
+    twai_tx_slot_t *slot = nullptr;
+
+    if (xQueueReceive(s_tx_pool_queue, &slot, wait_ticks) != pdTRUE || slot == nullptr)
+    {
+        ESP_LOGW(TAG, "TX frame pool exhausted (all slots pending transmission)");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    slot->frame = *frame;
+    slot->frame.buffer = slot->buffer;
+    size_t copy_len = (frame->buffer_len <= sizeof(slot->buffer)) ? frame->buffer_len : sizeof(slot->buffer);
+    slot->frame.buffer_len = copy_len;
+    if (frame->buffer != nullptr && copy_len > 0)
+    {
+        memcpy(slot->buffer, frame->buffer, copy_len);
+    }
+
+    esp_err_t ret = twai_node_transmit(g_twai_node_hdl, &slot->frame, timeout_ms);
+    if (ret != ESP_OK)
+    {
+        xQueueSend(s_tx_pool_queue, &slot, 0);
+    }
+
+    return ret;
+}
+
+esp_err_t twai_transmit_msg(uint32_t can_id, const uint8_t *data, uint8_t dlc, bool is_ext, int timeout_ms)
+{
+    if (g_twai_node_hdl == nullptr || (data == nullptr && dlc > 0))
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (g_twai_bus_off)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (s_tx_pool_queue == nullptr)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    TickType_t wait_ticks = (timeout_ms <= 0) ? 0 : pdMS_TO_TICKS(timeout_ms);
+    twai_tx_slot_t *slot = nullptr;
+
+    if (xQueueReceive(s_tx_pool_queue, &slot, wait_ticks) != pdTRUE || slot == nullptr)
+    {
+        ESP_LOGW(TAG, "TX frame pool exhausted (all slots pending transmission)");
+        return ESP_ERR_TIMEOUT;
+    }
+
+    slot->frame = {};
+    slot->frame.header.id = can_id;
+    slot->frame.header.dlc = dlc;
+    slot->frame.header.ide = is_ext ? 1 : 0;
+    slot->frame.header.rtr = 0;
+    slot->frame.buffer = slot->buffer;
+    slot->frame.buffer_len = dlc;
+    if (data != nullptr && dlc > 0)
+    {
+        uint8_t copy_bytes = (dlc <= sizeof(slot->buffer)) ? dlc : sizeof(slot->buffer);
+        memcpy(slot->buffer, data, copy_bytes);
+    }
+
+    esp_err_t ret = twai_node_transmit(g_twai_node_hdl, &slot->frame, timeout_ms);
+    if (ret != ESP_OK)
+    {
+        xQueueSend(s_tx_pool_queue, &slot, 0);
+    }
+
+    return ret;
+}
+
+esp_err_t twai_receive_queued_frame(twai_queued_frame_t *frame, TickType_t wait_ticks)
+{
+    if (g_twai_rx_queue == nullptr || frame == nullptr)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+    if (xQueueReceive(g_twai_rx_queue, frame, wait_ticks) == pdTRUE)
+    {
+        return ESP_OK;
+    }
+    return ESP_ERR_TIMEOUT;
+}
+
+esp_err_t twai_clear_rx_queue()
+{
+    if (g_twai_rx_queue == nullptr)
+    {
+        return ESP_ERR_INVALID_STATE;
+    }
+    xQueueReset(g_twai_rx_queue);
+    return ESP_OK;
+}
+
+// -----------------------------------------------------------------------------
+// RX Ingestion Worker Task
+// -----------------------------------------------------------------------------
 
 void CAN_RX_Task(void *pvParameters)
 {
     ESP_LOGI(TAG, "CAN_RX_Task has started");
-    static twai_message_t rxMessage;
+    twai_queued_frame_t q_frame;
     CAN_RX_TimedOut = false;
-    static esp_err_t rxErr;
 
     while (true)
     {
-        rxErr = twai_receive(&rxMessage, pdMS_TO_TICKS(CONFIG_CAN_RX_TIMEOUT_MS));
-        switch (rxErr)
-        {
-        case ESP_OK:
+        if (xQueueReceive(g_twai_rx_queue, &q_frame, pdMS_TO_TICKS(CONFIG_CAN_RX_TIMEOUT_MS)) == pdPASS)
         {
             CAN_RX_TimedOut = false;
-            if (dispatchCANFrame == nullptr)
+            if (dispatchCANFrame != nullptr)
             {
-                ESP_LOGD(TAG, "No Frame dispatcher set up !");
-                break;
-            }
+                twai_frame_t rx_frame = {
+                    .header = q_frame.header,
+                    .buffer = q_frame.data,
+                    .buffer_len = q_frame.buffer_len,
+                };
 
-            if (dispatchCANFrame(&rxMessage) != ESP_OK)
-            {
-                ESP_LOGD(TAG, "Frame dispatcher returned an error");
+                if (dispatchCANFrame(&rx_frame) != ESP_OK)
+                {
+                    ESP_LOGD(TAG, "Frame dispatcher returned an error for ID: 0x%03lX", q_frame.header.id);
+                }
             }
-            break;
         }
-        case ESP_ERR_TIMEOUT:
+        else
         {
             CAN_RX_TimedOut = true;
-            break;
-        }
-        default:
-        {
-            ESP_LOGE(__func__, "TWAI RX Task experiencing issues, pausing for 1000ms : %s",esp_err_to_name(rxErr));
-            vTaskDelay(pdMS_TO_TICKS(1000));
-            break;
-        }
         }
     }
 }
 
-void CAN_TX_Task(void *pvParameters)
-{
-    ESP_LOGI(TAG, "CAN_TX_Task has started");
-    static twai_message_t txMessage;
-
-    while (true)
-    {
-        while (xQueueReceive(CAN_TX_queue_hdl, &txMessage, pdMS_TO_TICKS(CONFIG_CAN_TX_POLLING_RATE_MS)) == pdPASS)
-        {
-            txMessage.ss = false;
-            if (twai_transmit(&txMessage, pdMS_TO_TICKS(5)) != ESP_OK)
-            {
-                ESP_LOGD(TAG, "Could not TX TWAI message!");
-            }
-        }
-    }
-}
