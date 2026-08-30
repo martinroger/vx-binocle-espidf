@@ -50,8 +50,8 @@ substitutions:
   coeff_speed_kph_to_freq_m: "4.088998"   # 31285.0 / 7651.0
   coeff_speed_mph_to_freq_m: "6.580620"   # 17182.0 / 2611.0
   coeff_rpm_to_freq_m: "0.03333333"       # 1.0 / 30.0
-  coeff_coolant_degc_to_duty_m: "1.408451" # 100.0 / 71.0
-  coeff_coolant_degc_to_duty_p: "-90.140845" # -100.0 * 64.0 / 71.0
+  coeff_coolant_degc_to_duty_m: "1.393978407" 
+  coeff_coolant_degc_to_duty_p: "-89.7414343" 
   light_test_delay: "600"
 
 esphome:

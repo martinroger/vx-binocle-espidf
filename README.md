@@ -74,8 +74,8 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `right_screen` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
 | `right_screen` | `espressif/esp32_io_expander` | `1.1.1` | `1.*` *(transitive)* |
 | `factory apps/ITF factory app` | `espressif/mdns` | `1.11.3` | `*` |
-| `factory apps/left display factory app` | `espressif/mdns` | `1.11.3` | `*` |
-| `factory apps/right display factory app` | `espressif/mdns` | `1.11.3` | `*` |
+| `factory apps/left display factory app` | `espressif/mdns` | `1.9.1` | `*` |
+| `factory apps/right display factory app` | `espressif/mdns` | `1.9.1` | `*` |
 
 ---
 

@@ -14,10 +14,10 @@ graph TD
     D --> H(SMA Filter Engine)
     F --> I(Digital State Packager)
     
-    G --> J(TWAI CAN Broadcast Task)
-    H --> J
-    I --> J
-    J -->|TWAI Driver| K[CAN Bus / Binocan Frames]
+    G -->|Direct twai_transmit_msg| J(Modern esp_driver_twai)
+    H -->|Direct twai_transmit_msg| J
+    I -->|Direct twai_transmit_msg| J
+    J -->|On-Chip Peripheral| K[CAN Bus / Binocan Frames]
 ```
 
 ---
@@ -45,9 +45,11 @@ graph TD
 
 ## 3. CAN Telemetry Dispatch
 
-The TWAI daemon broadcasts frames according to standard schedules:
+The TWAI daemon broadcasts frames via zero-copy direct transmission according to standard schedules:
 - **`ITF_values` (20 ms)**: Real-time speed, RPM, and critical drive dynamics.
 - **`ITF_status` (50 ms)**: Coolant temperature, fuel level, battery voltage, and discrete indicators.
+- **`ITF_odometer` (250 ms)**: Monotonic odometer and trip distance.
+- **`ITF_board_version` (1000 ms)**: App descriptor metadata and git commit SHA.
 - **`ITF_debug` (100 ms)**: Debug telemetry broadcast tasks (enabled conditionally via Kconfig):
   - `DBG_ITF_speed` (`0x300`): Raw speed frequency and duty cycle.
   - `DBG_ITF_RPM` (`0x301`): Raw RPM frequency and duty cycle.

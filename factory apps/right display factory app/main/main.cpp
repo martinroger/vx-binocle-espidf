@@ -17,6 +17,7 @@
 #include "esp_mac.h"
 #include "esp_image_format.h"
 #include "esp_spiffs.h"
+#include "twai_daemon.h"
 #include <algorithm>
 
 #ifdef TAG
@@ -1015,6 +1016,13 @@ extern "C" void app_main(void)
 		return;
 	}
 	ESP_LOGI(TAG, "SPIFFS mounted successfully");
+
+	ESP_LOGI(__func__, "Starting TWAI");
+	esp_err_t twai_err = initCAN(NULL);
+	if (twai_err != ESP_OK)
+	{
+		ESP_LOGE(__func__, "Could not start TWAI : %s", esp_err_to_name(twai_err));
+	}
 
 	start_ap_mode();
 	start_mdns();

@@ -44,9 +44,7 @@ inline void dbg_itf_speed_PKG(void *pvParameters)
 {
     binocan_dbg_itf_speed_t binocan_dbg_itf_speed;
     binocan_dbg_itf_speed_init(&binocan_dbg_itf_speed);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_DBG_ITF_SPEED_FRAME_ID,
-        .data_length_code = BINOCAN_DBG_ITF_SPEED_LENGTH};
+    uint8_t payload[BINOCAN_DBG_ITF_SPEED_LENGTH] = {0};
 
     while (true)
     {
@@ -58,10 +56,10 @@ inline void dbg_itf_speed_PKG(void *pvParameters)
         else if (duty_cycle < 0.0)
             duty_cycle = 0.0;
         binocan_dbg_itf_speed.dbg_speed_duty = binocan_dbg_itf_speed_dbg_speed_duty_encode(duty_cycle);
-        binocan_dbg_itf_speed_pack(tx_msg.data, &binocan_dbg_itf_speed, BINOCAN_DBG_ITF_SPEED_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_dbg_itf_speed_pack(payload, &binocan_dbg_itf_speed, BINOCAN_DBG_ITF_SPEED_LENGTH);
+        if (twai_transmit_msg(BINOCAN_DBG_ITF_SPEED_FRAME_ID, payload, BINOCAN_DBG_ITF_SPEED_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue debug speed message in queue");
+            ESP_LOGD(__func__, "Could not transmit debug speed message");
         }
     }
 }
@@ -75,9 +73,7 @@ inline void dbg_itf_rpm_PKG(void *pvParameters)
 {
     binocan_dbg_itf_rpm_t binocan_dbg_itf_rpm;
     binocan_dbg_itf_rpm_init(&binocan_dbg_itf_rpm);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_DBG_ITF_RPM_FRAME_ID,
-        .data_length_code = BINOCAN_DBG_ITF_RPM_LENGTH};
+    uint8_t payload[BINOCAN_DBG_ITF_RPM_LENGTH] = {0};
 
     while (true)
     {
@@ -89,10 +85,10 @@ inline void dbg_itf_rpm_PKG(void *pvParameters)
         else if (duty_cycle < 0.0)
             duty_cycle = 0.0;
         binocan_dbg_itf_rpm.dbg_rpm_duty = binocan_dbg_itf_rpm_dbg_rpm_duty_encode(pwm_cap_rpm.duty_cycle * 100.0);
-        binocan_dbg_itf_rpm_pack(tx_msg.data, &binocan_dbg_itf_rpm, BINOCAN_DBG_ITF_RPM_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_dbg_itf_rpm_pack(payload, &binocan_dbg_itf_rpm, BINOCAN_DBG_ITF_RPM_LENGTH);
+        if (twai_transmit_msg(BINOCAN_DBG_ITF_RPM_FRAME_ID, payload, BINOCAN_DBG_ITF_RPM_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue debug rpm message in queue");
+            ESP_LOGD(__func__, "Could not transmit debug rpm message");
         }
     }
 }
@@ -106,9 +102,8 @@ inline void dbg_itf_coolant_PKG(void *pvParameters)
 {
     binocan_dbg_itf_coolant_t binocan_dbg_itf_coolant;
     binocan_dbg_itf_coolant_init(&binocan_dbg_itf_coolant);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_DBG_ITF_COOLANT_FRAME_ID,
-        .data_length_code = BINOCAN_DBG_ITF_COOLANT_LENGTH};
+    uint8_t payload[BINOCAN_DBG_ITF_COOLANT_LENGTH] = {0};
+
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_COOLANT_CYCLE_TIME_MS));
@@ -119,10 +114,10 @@ inline void dbg_itf_coolant_PKG(void *pvParameters)
         else if (duty_cycle < 0.0)
             duty_cycle = 0.0;
         binocan_dbg_itf_coolant.dbg_coolant_duty = binocan_dbg_itf_coolant_dbg_coolant_duty_encode(pwm_cap_coolant.duty_cycle * 100.0);
-        binocan_dbg_itf_coolant_pack(tx_msg.data, &binocan_dbg_itf_coolant, BINOCAN_DBG_ITF_COOLANT_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_dbg_itf_coolant_pack(payload, &binocan_dbg_itf_coolant, BINOCAN_DBG_ITF_COOLANT_LENGTH);
+        if (twai_transmit_msg(BINOCAN_DBG_ITF_COOLANT_FRAME_ID, payload, BINOCAN_DBG_ITF_COOLANT_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue debug coolant message in queue");
+            ESP_LOGD(__func__, "Could not transmit debug coolant message");
         }
     }
 }
@@ -137,9 +132,7 @@ inline void dbg_itf_adc_raw_PKG(void *pvParameters)
 {
     binocan_dbg_itf_adc_raw_t binocan_dbg_itf_adc_raw;
     binocan_dbg_itf_adc_raw_init(&binocan_dbg_itf_adc_raw);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_DBG_ITF_ADC_RAW_FRAME_ID,
-        .data_length_code = BINOCAN_DBG_ITF_ADC_RAW_LENGTH};
+    uint8_t payload[BINOCAN_DBG_ITF_ADC_RAW_LENGTH] = {0};
 
     while (true)
     {
@@ -148,10 +141,10 @@ inline void dbg_itf_adc_raw_PKG(void *pvParameters)
         float lv_raw_v = adc_raw_buffer[1] * ads111x_gain_values[ADS111X_GAIN_4V096] / ADS111X_MAX_VALUE;
         binocan_dbg_itf_adc_raw.dbg_3_v3_raw_v = binocan_dbg_itf_adc_raw_dbg_3_v3_raw_v_encode(v3v3_raw_v);
         binocan_dbg_itf_adc_raw.dbg_12_v_raw_v = binocan_dbg_itf_adc_raw_dbg_12_v_raw_v_encode(lv_raw_v);
-        binocan_dbg_itf_adc_raw_pack(tx_msg.data, &binocan_dbg_itf_adc_raw, BINOCAN_DBG_ITF_ADC_RAW_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_dbg_itf_adc_raw_pack(payload, &binocan_dbg_itf_adc_raw, BINOCAN_DBG_ITF_ADC_RAW_LENGTH);
+        if (twai_transmit_msg(BINOCAN_DBG_ITF_ADC_RAW_FRAME_ID, payload, BINOCAN_DBG_ITF_ADC_RAW_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue debug ADC raw message in queue");
+            ESP_LOGD(__func__, "Could not transmit debug ADC raw message");
         }
     }
 }
@@ -165,19 +158,17 @@ inline void dbg_itf_pulse_counts_PKG(void *pvParameters)
 {
     binocan_dbg_itf_pulse_counts_t binocan_dbg_itf_pulse_counts;
     binocan_dbg_itf_pulse_counts_init(&binocan_dbg_itf_pulse_counts);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_DBG_ITF_PULSE_COUNTS_FRAME_ID,
-        .data_length_code = BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH};
+    uint8_t payload[BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH] = {0};
 
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_DBG_ITF_PULSE_COUNTS_CYCLE_TIME_MS));
         binocan_dbg_itf_pulse_counts.dbg_rpm_pulses = binocan_dbg_itf_pulse_counts_dbg_rpm_pulses_encode(pwm_cap_rpm.cumulative_pulse_counter);
         binocan_dbg_itf_pulse_counts.dbg_speed_pulses = binocan_dbg_itf_pulse_counts_dbg_speed_pulses_encode(pwm_cap_speed.cumulative_pulse_counter);
-        binocan_dbg_itf_pulse_counts_pack(tx_msg.data, &binocan_dbg_itf_pulse_counts, BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_dbg_itf_pulse_counts_pack(payload, &binocan_dbg_itf_pulse_counts, BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH);
+        if (twai_transmit_msg(BINOCAN_DBG_ITF_PULSE_COUNTS_FRAME_ID, payload, BINOCAN_DBG_ITF_PULSE_COUNTS_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue debug pulse counts message in queue");
+            ESP_LOGD(__func__, "Could not transmit debug pulse counts message");
         }
     }
 }
@@ -191,9 +182,7 @@ inline void dbg_itf_fuel_PKG(void *pvParameters)
 {
     binocan_dbg_itf_fuel_t binocan_dbg_itf_fuel;
     binocan_dbg_itf_fuel_init(&binocan_dbg_itf_fuel);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_DBG_ITF_FUEL_FRAME_ID,
-        .data_length_code = BINOCAN_DBG_ITF_FUEL_LENGTH};
+    uint8_t payload[BINOCAN_DBG_ITF_FUEL_LENGTH] = {0};
 
     while (true)
     {
@@ -235,14 +224,15 @@ inline void dbg_itf_fuel_PKG(void *pvParameters)
         binocan_dbg_itf_fuel.dbg_fuel_full_r = binocan_dbg_itf_fuel_dbg_fuel_full_r_encode(fuel_full_r);
         binocan_dbg_itf_fuel.dbg_fuel_r = binocan_dbg_itf_fuel_dbg_fuel_r_encode((uint16_t)lround(fuel_level_R));
 
-        binocan_dbg_itf_fuel_pack(tx_msg.data, &binocan_dbg_itf_fuel, BINOCAN_DBG_ITF_FUEL_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_dbg_itf_fuel_pack(payload, &binocan_dbg_itf_fuel, BINOCAN_DBG_ITF_FUEL_LENGTH);
+        if (twai_transmit_msg(BINOCAN_DBG_ITF_FUEL_FRAME_ID, payload, BINOCAN_DBG_ITF_FUEL_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue debug fuel message in queue");
+            ESP_LOGD(__func__, "Could not transmit debug fuel message");
         }
     }
 }
 #endif
+
 
 /// @brief Packaging task for base_slow_metrics
 /// @param pvParameters
@@ -255,9 +245,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
 
     binocan_itf_slow_metrics_t binocan_itf_slow_metrics;
     binocan_itf_slow_metrics_init(&binocan_itf_slow_metrics);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_ITF_SLOW_METRICS_FRAME_ID,
-        .data_length_code = BINOCAN_ITF_SLOW_METRICS_LENGTH};
+    uint8_t payload[BINOCAN_ITF_SLOW_METRICS_LENGTH] = {0};
     esp_err_t compute_err;
 
     sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
@@ -416,10 +404,10 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         binocan_itf_slow_metrics.itf_coolant_temp = binocan_itf_slow_metrics_itf_coolant_temp_encode(coolant_degC);
         binocan_itf_slow_metrics.itf_fuel_level_pc = binocan_itf_slow_metrics_itf_fuel_level_pc_encode(fuel_level_pc);
         binocan_itf_slow_metrics.itf_lv_voltage_v = binocan_itf_slow_metrics_itf_lv_voltage_v_encode(lv_v);
-        binocan_itf_slow_metrics_pack(tx_msg.data, &binocan_itf_slow_metrics, BINOCAN_ITF_SLOW_METRICS_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_itf_slow_metrics_pack(payload, &binocan_itf_slow_metrics, BINOCAN_ITF_SLOW_METRICS_LENGTH);
+        if (twai_transmit_msg(BINOCAN_ITF_SLOW_METRICS_FRAME_ID, payload, BINOCAN_ITF_SLOW_METRICS_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue slow metrics message in queue");
+            ESP_LOGD(__func__, "Could not transmit slow metrics message");
         }
     }
 }
@@ -434,9 +422,7 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
     esp_err_t compute_err;
     binocan_itf_fast_metrics_t binocan_itf_fast_metrics;
     binocan_itf_fast_metrics_init(&binocan_itf_fast_metrics);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_ITF_FAST_METRICS_FRAME_ID,
-        .data_length_code = BINOCAN_ITF_FAST_METRICS_LENGTH};
+    uint8_t payload[BINOCAN_ITF_FAST_METRICS_LENGTH] = {0};
 
     while (true)
     {
@@ -456,10 +442,10 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
         binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
         // Placeholder for the gear position, for now always showing Neutral
         binocan_itf_fast_metrics.itf_gear_position_st = binocan_itf_fast_metrics_itf_gear_position_st_encode(BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE);
-        binocan_itf_fast_metrics_pack(tx_msg.data, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_itf_fast_metrics_pack(payload, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
+        if (twai_transmit_msg(BINOCAN_ITF_FAST_METRICS_FRAME_ID, payload, BINOCAN_ITF_FAST_METRICS_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue fast metrics message in queue");
+            ESP_LOGD(__func__, "Could not transmit fast metrics message");
         }
     }
 }
@@ -474,9 +460,7 @@ inline void itf_active_hilo_PKG(void *pvParameters)
 
     binocan_itf_active_hi_lo_t binocan_itf_active_hi_lo;
     binocan_itf_active_hi_lo_init(&binocan_itf_active_hi_lo);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID,
-        .data_length_code = BINOCAN_ITF_ACTIVE_HI_LO_LENGTH};
+    uint8_t payload[BINOCAN_ITF_ACTIVE_HI_LO_LENGTH] = {0};
 
     while (true)
     {
@@ -529,11 +513,11 @@ inline void itf_active_hilo_PKG(void *pvParameters)
                 // Virtual tell tales
                 binocan_itf_active_hi_lo.itf_over_temperature_tt = binocan_itf_active_hi_lo_itf_over_temperature_tt_encode(interface_board_st.overTemp);
                 binocan_itf_active_hi_lo.itf_fuel_low_tt = binocan_itf_active_hi_lo_itf_fuel_low_tt_encode(interface_board_st.lowFuel);
-                binocan_itf_active_hi_lo_pack(tx_msg.data, &binocan_itf_active_hi_lo, BINOCAN_ITF_ACTIVE_HI_LO_LENGTH);
+                binocan_itf_active_hi_lo_pack(payload, &binocan_itf_active_hi_lo, BINOCAN_ITF_ACTIVE_HI_LO_LENGTH);
 
-                if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+                if (twai_transmit_msg(BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID, payload, BINOCAN_ITF_ACTIVE_HI_LO_LENGTH, false, 5) != ESP_OK)
                 {
-                    ESP_LOGW(__func__, "Could not queue active hi/lo message in queue");
+                    ESP_LOGD(__func__, "Could not transmit active hi/lo message");
                 }
                 xSemaphoreGive(exp_act_hilo_semaphore);
             }
@@ -547,9 +531,7 @@ inline void itf_odometer_PKG(void *pvParameters)
 {
     binocan_itf_odometer_t binocan_itf_odometer;
     binocan_itf_odometer_init(&binocan_itf_odometer);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_ITF_ODOMETER_FRAME_ID,
-        .data_length_code = BINOCAN_ITF_ODOMETER_LENGTH};
+    uint8_t payload[BINOCAN_ITF_ODOMETER_LENGTH] = {0};
 
     float pulse_m = 0;
 
@@ -581,10 +563,10 @@ inline void itf_odometer_PKG(void *pvParameters)
         binocan_itf_odometer.itf_odo_rem_m = binocan_itf_odometer_itf_odo_rem_m_encode((float)(odometer_m % 1000));
         binocan_itf_odometer.itf_trip_km = binocan_itf_odometer_itf_trip_km_encode((float)(trip_m / 1000));
         binocan_itf_odometer.itf_trip_rem_m = binocan_itf_odometer_itf_trip_rem_m_encode((float)(trip_m % 1000));
-        binocan_itf_odometer_pack(tx_msg.data, &binocan_itf_odometer, BINOCAN_ITF_ODOMETER_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_itf_odometer_pack(payload, &binocan_itf_odometer, BINOCAN_ITF_ODOMETER_LENGTH);
+        if (twai_transmit_msg(BINOCAN_ITF_ODOMETER_FRAME_ID, payload, BINOCAN_ITF_ODOMETER_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue odometer message in queue");
+            ESP_LOGD(__func__, "Could not transmit odometer message");
         }
     }
 }
@@ -602,9 +584,7 @@ void itf_board_st_PKG(void *pvParameters)
 
     binocan_itf_board_st_t binocan_itf_board_st;
     binocan_itf_board_st_init(&binocan_itf_board_st);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_ITF_BOARD_ST_FRAME_ID,
-        .data_length_code = BINOCAN_ITF_BOARD_ST_LENGTH};
+    uint8_t payload[BINOCAN_ITF_BOARD_ST_LENGTH] = {0};
 
     gpio_set_direction((gpio_num_t)CONFIG_LD_ALIVE_IO, GPIO_MODE_INPUT);
     gpio_set_pull_mode((gpio_num_t)CONFIG_LD_ALIVE_IO, GPIO_PULLDOWN_ONLY);
@@ -640,11 +620,11 @@ void itf_board_st_PKG(void *pvParameters)
         binocan_itf_board_st.itf_mcu_temp = binocan_itf_board_st_itf_mcu_temp_encode(interface_board_st.mcu_temperature);
         binocan_itf_board_st.itf_adc_st = binocan_itf_board_st_itf_adc_st_encode(interface_board_st.adc_ST);
         binocan_itf_board_st.itf_expander_st = binocan_itf_board_st_itf_expander_st_encode(interface_board_st.expander_ST);
-        binocan_itf_board_st_pack(tx_msg.data, &binocan_itf_board_st, BINOCAN_ITF_BOARD_ST_LENGTH);
+        binocan_itf_board_st_pack(payload, &binocan_itf_board_st, BINOCAN_ITF_BOARD_ST_LENGTH);
 
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        if (twai_transmit_msg(BINOCAN_ITF_BOARD_ST_FRAME_ID, payload, BINOCAN_ITF_BOARD_ST_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue internal state message in queue");
+            ESP_LOGD(__func__, "Could not transmit internal state message");
         }
     }
 }
@@ -656,9 +636,7 @@ inline void itf_board_version_PKG(void *pvParameters)
     uint8_t message_mux = 0;
     binocan_itf_board_version_t binocan_itf_board_version;
     binocan_itf_board_version_init(&binocan_itf_board_version);
-    twai_message_t tx_msg = {
-        .identifier = BINOCAN_ITF_BOARD_VERSION_FRAME_ID,
-        .data_length_code = BINOCAN_ITF_BOARD_VERSION_LENGTH};
+    uint8_t payload[BINOCAN_ITF_BOARD_VERSION_LENGTH] = {0};
 
     binocan_itf_board_version.itf_version_major = binocan_itf_board_version_itf_version_major_encode((uint8_t)(interface_board_st.app_metadata->base_version[0]) - 48);
     binocan_itf_board_version.itf_version_minor = binocan_itf_board_version_itf_version_minor_encode((uint8_t)(interface_board_st.app_metadata->base_version[2]) - 48);
@@ -691,13 +669,14 @@ inline void itf_board_version_PKG(void *pvParameters)
         // Switch the mux indicator
         message_mux = (message_mux + 1) % 2; // Currently only two values to the MUX
         binocan_itf_board_version.itf_version_mux = binocan_itf_board_version_itf_version_mux_encode(message_mux);
-        binocan_itf_board_version_pack(tx_msg.data, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
-        if (xQueueSend(CAN_TX_queue_hdl, &tx_msg, pdMS_TO_TICKS(1)) != pdTRUE)
+        binocan_itf_board_version_pack(payload, &binocan_itf_board_version, BINOCAN_ITF_BOARD_VERSION_LENGTH);
+        if (twai_transmit_msg(BINOCAN_ITF_BOARD_VERSION_FRAME_ID, payload, BINOCAN_ITF_BOARD_VERSION_LENGTH, false, 5) != ESP_OK)
         {
-            ESP_LOGW(__func__, "Could not queue internal state message in queue");
+            ESP_LOGD(__func__, "Could not transmit internal state message");
         }
     }
 }
+
 
 #pragma endregion
 
