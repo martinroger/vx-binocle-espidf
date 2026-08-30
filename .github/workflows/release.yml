@@ -117,7 +117,6 @@ jobs:
         with:
           path: |
             ${{ matrix.project_path }}/build
-            bennu/build_${{ matrix.bennu_target }}
             ~/.ccache
           key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.project_path), format('{0}/main/CMakeLists.txt', matrix.project_path), 'bennu/CMakeLists.txt', 'bennu/main/CMakeLists.txt', 'bennu/components/payload/CMakeLists.txt') }}
           restore-keys: |
@@ -153,27 +152,32 @@ jobs:
             echo "$EXTRA_MD5  ${PREFIX}_storage.bin" >> "export_bins/checksums.md5"
           fi
 
+      - name: Stage Bennu Payloads
+        if: steps.check.outputs.run_build == 'true' && matrix.bennu_target != ''
+        run: |
+          mkdir -p bennu/build bennu/components/payload
+          cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "bennu/build/payload.bin"
+          cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "bennu/build/storage.bin"
+          cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "bennu/components/payload/payload.bin"
+          cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "bennu/components/payload/storage.bin"
+
       - name: Build Bennu Special Delivery Package
         if: steps.check.outputs.run_build == 'true' && matrix.bennu_target != ''
-        shell: bash
+        uses: espressif/esp-idf-ci-action@v1
+        with:
+          esp_idf_version: v5.5.5
+          target: ${{ matrix.target }}
+          path: 'bennu'
+
+      - name: Collect Bennu Delivery Binary
+        if: steps.check.outputs.run_build == 'true' && matrix.bennu_target != ''
         run: |
           BENNU_NAME="${{ matrix.bennu_target }}_bennu.bin"
-          PAYLOAD_PATH="${{ matrix.project_path }}/build/${{ matrix.app_bin }}"
-          STORAGE_PATH="${{ matrix.project_path }}/build/${{ matrix.extra_bin }}"
           PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
           VERSION=$(git describe --tags --always --dirty || echo "unknown")
 
-          echo "Packaging Bennu special delivery binary for ${{ matrix.bennu_target }}..."
-          mkdir -p "bennu/build_${{ matrix.bennu_target }}"
-          cp "$PAYLOAD_PATH" "bennu/build_${{ matrix.bennu_target }}/payload.bin"
-          cp "$STORAGE_PATH" "bennu/build_${{ matrix.bennu_target }}/storage.bin"
-
-          cd bennu
-          idf.py -B "build_${{ matrix.bennu_target }}" build
-          cd ..
-
           BENNU_DEST="export_bins/${BENNU_NAME}"
-          cp "bennu/build_${{ matrix.bennu_target }}/bennu.bin" "$BENNU_DEST"
+          cp "bennu/build/bennu.bin" "$BENNU_DEST"
           BENNU_SIZE=$(du -sh "$BENNU_DEST" | cut -f1)
           BENNU_MD5=$(md5sum "$BENNU_DEST" | awk '{ print $1 }')
 
