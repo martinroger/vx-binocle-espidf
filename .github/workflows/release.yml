@@ -33,9 +33,15 @@ jobs:
             interface_board: 'interface_board/**'
             left_screen: 'left_screen/**'
             right_screen: 'right_screen/**'
-            itf_factory: 'factory apps/ITF factory app/**'
-            ldb_factory: 'factory apps/left display factory app/**'
-            rdb_factory: 'factory apps/right display factory app/**'
+            itf_factory:
+              - 'factory apps/ITF factory app/**'
+              - 'bennu/**'
+            ldb_factory:
+              - 'factory apps/left display factory app/**'
+              - 'bennu/**'
+            rdb_factory:
+              - 'factory apps/right display factory app/**'
+              - 'bennu/**'
 
   build:
     needs: changes
@@ -64,16 +70,19 @@ jobs:
           - project_path: 'factory apps/ITF factory app'
             app_bin: 'ITF_factory.bin'
             extra_bin: 'storage.bin'
+            bennu_target: 'ITF'
             target: 'esp32s3'
             change_key: 'itf_factory'
           - project_path: 'factory apps/left display factory app'
             app_bin: 'LDB_factory.bin'
             extra_bin: 'storage.bin'
+            bennu_target: 'LDB'
             target: 'esp32s3'
             change_key: 'ldb_factory'
           - project_path: 'factory apps/right display factory app'
             app_bin: 'RDB_factory.bin'
             extra_bin: 'storage.bin'
+            bennu_target: 'RDB'
             target: 'esp32s3'
             change_key: 'rdb_factory'
 
@@ -108,8 +117,9 @@ jobs:
         with:
           path: |
             ${{ matrix.project_path }}/build
+            bennu/build_${{ matrix.bennu_target }}
             ~/.ccache
-          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.project_path), format('{0}/main/CMakeLists.txt', matrix.project_path)) }}
+          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.project_path), format('{0}/main/CMakeLists.txt', matrix.project_path), 'bennu/CMakeLists.txt', 'bennu/main/CMakeLists.txt', 'bennu/components/payload/CMakeLists.txt') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-
 
@@ -142,6 +152,33 @@ jobs:
             EXTRA_MD5=$(md5sum "$EXTRA_DEST" | awk '{ print $1 }')
             echo "$EXTRA_MD5  ${PREFIX}_storage.bin" >> "export_bins/checksums.md5"
           fi
+
+      - name: Build Bennu Special Delivery Package
+        if: steps.check.outputs.run_build == 'true' && matrix.bennu_target != ''
+        shell: bash
+        run: |
+          BENNU_NAME="${{ matrix.bennu_target }}_bennu.bin"
+          PAYLOAD_PATH="${{ matrix.project_path }}/build/${{ matrix.app_bin }}"
+          STORAGE_PATH="${{ matrix.project_path }}/build/${{ matrix.extra_bin }}"
+          PREFIX=$(echo "$(basename "${{ matrix.project_path }}")" | tr ' ' '_')
+          VERSION=$(git describe --tags --always --dirty || echo "unknown")
+
+          echo "Packaging Bennu special delivery binary for ${{ matrix.bennu_target }}..."
+          mkdir -p "bennu/build_${{ matrix.bennu_target }}"
+          cp "$PAYLOAD_PATH" "bennu/build_${{ matrix.bennu_target }}/payload.bin"
+          cp "$STORAGE_PATH" "bennu/build_${{ matrix.bennu_target }}/storage.bin"
+
+          cd bennu
+          idf.py -B "build_${{ matrix.bennu_target }}" build
+          cd ..
+
+          BENNU_DEST="export_bins/${BENNU_NAME}"
+          cp "bennu/build_${{ matrix.bennu_target }}/bennu.bin" "$BENNU_DEST"
+          BENNU_SIZE=$(du -sh "$BENNU_DEST" | cut -f1)
+          BENNU_MD5=$(md5sum "$BENNU_DEST" | awk '{ print $1 }')
+
+          echo "| ${PREFIX}_delivery | $VERSION | $BENNU_SIZE |" >> "summary_data/${PREFIX}.txt"
+          echo "$BENNU_MD5  ${BENNU_NAME}" >> "export_bins/checksums.md5"
 
       - name: Upload Artifacts
         if: steps.check.outputs.run_build == 'true'

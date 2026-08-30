@@ -1,1 +1,20 @@
-idf_component_register(EMBED_FILES "payload.bin" "storage.bin")
+set(PAYLOAD_BIN_PATH "${CMAKE_CURRENT_SOURCE_DIR}/payload.bin" CACHE FILEPATH "Path to factory application binary")
+set(STORAGE_BIN_PATH "${CMAKE_CURRENT_SOURCE_DIR}/storage.bin" CACHE FILEPATH "Path to factory storage binary")
+
+if(EXISTS "${CMAKE_BINARY_DIR}/payload.bin")
+    set(ACTUAL_PAYLOAD "${CMAKE_BINARY_DIR}/payload.bin")
+elseif(EXISTS "${PAYLOAD_BIN_PATH}")
+    set(ACTUAL_PAYLOAD "${PAYLOAD_BIN_PATH}")
+else()
+    message(FATAL_ERROR "Payload binary not found at: ${PAYLOAD_BIN_PATH}")
+endif()
+
+if(EXISTS "${CMAKE_BINARY_DIR}/storage.bin")
+    set(ACTUAL_STORAGE "${CMAKE_BINARY_DIR}/storage.bin")
+elseif(EXISTS "${STORAGE_BIN_PATH}")
+    set(ACTUAL_STORAGE "${STORAGE_BIN_PATH}")
+else()
+    message(FATAL_ERROR "Storage binary not found at: ${STORAGE_BIN_PATH}")
+endif()
+
+idf_component_register(EMBED_FILES "${ACTUAL_PAYLOAD}" "${ACTUAL_STORAGE}")

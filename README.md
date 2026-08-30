@@ -44,6 +44,7 @@ graph LR
 | **[`factory apps/ITF factory app`](factory%20apps/ITF%20factory%20app)** | ESP32-S3 | ITF captive Wi-Fi AP, NVS calibration, sensor zeroing, and safe reboot sequencing. |
 | **[`factory apps/left display factory app`](factory%20apps/left%20display%20factory%20app)** | ESP32-S3 | LDB display diagnostics, test pattern generation, and web-based OTA flashing. |
 | **[`factory apps/right display factory app`](factory%20apps/right%20display%20factory%20app)** | ESP32-S3 | RDB display diagnostics, test pattern generation, and web-based OTA flashing. |
+| **[`bennu`](bennu)** | ESP32-S3 | Special delivery recovery payload for remote factory app & SPIFFS overwrite via OTA. |
 | **[`emulator-console`](emulator-console)** | ESP32-S3 | Vehicle simulator with serial console, ESPHome firmware, and Node-RED drivecycle replayer. |
 | **[`common/binocan`](common/binocan)** | Shared | DBC CAN database (`binocan.dbc`) and generated C encode/decode libraries. |
 | **[`common/lvgl_v9_port`](common/lvgl_v9_port)** | Shared | High-performance double-buffered LVGL v9 ESP32-S3 display driver port. |
@@ -101,6 +102,9 @@ idf.py build
 cd ../left_screen
 idf.py set-target esp32s3
 idf.py build
+
+# Generate Bennu Special Delivery Packages (ITF_bennu.bin, LDB_bennu.bin, RDB_bennu.bin)
+python tools/build_deliveries.py --app all
 ```
 
 > [!TIP]
