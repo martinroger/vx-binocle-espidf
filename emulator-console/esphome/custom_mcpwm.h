@@ -225,95 +225,19 @@ public:
         return mcpwm_channels[chan_idx].is_active;
     }
 
-    // Vehicle specific helper functions
-    static void init_all(int coolant_pin, int rpm_pin, int speed_pin) {
-        // Group 0: Coolant (500kHz clock, base 100 Hz)
-        init_channel(MCPWM_CHAN_COOLANT, 0, 500000, 100.0, coolant_pin, 50.7); // ~100 degC base
+    // Vehicle specific hardware initialization
+    static void init_all(int coolant_pin, int rpm_pin, int speed_pin,
+                         double coolant_freq_hz = 100.0, double speed_duty_pct = 33.0, double rpm_duty_pct = 50.0) {
+        // Group 0: Coolant (500kHz clock, base coolant_freq_hz, ~35.7% duty for 90 degC)
+        init_channel(MCPWM_CHAN_COOLANT, 0, 500000, coolant_freq_hz, coolant_pin, 35.7);
 
         // Group 0: RPM (500kHz clock, initially paused)
-        init_channel(MCPWM_CHAN_RPM, 0, 500000, 100.0, rpm_pin, 50.0);
+        init_channel(MCPWM_CHAN_RPM, 0, 500000, 100.0, rpm_pin, rpm_duty_pct);
         pause_channel(MCPWM_CHAN_RPM);
 
         // Group 1: Speed (200kHz clock, initially paused)
-        init_channel(MCPWM_CHAN_SPEED, 1, 200000, 100.0, speed_pin, 33.0);
+        init_channel(MCPWM_CHAN_SPEED, 1, 200000, 100.0, speed_pin, speed_duty_pct);
         pause_channel(MCPWM_CHAN_SPEED);
-    }
-
-    static void set_speed_kph(double kph) {
-        if (kph <= 0.0) {
-            pause_channel(MCPWM_CHAN_SPEED);
-            mcpwm_channels[MCPWM_CHAN_SPEED].current_freq_hz = 0.0;
-            return;
-        }
-        if (kph > 271.0) kph = 271.0;
-        double target_freq = kph * (31285.0 / 7651.0);
-        set_frequency(MCPWM_CHAN_SPEED, target_freq);
-        set_duty(MCPWM_CHAN_SPEED, 33.0);
-    }
-
-    static void set_speed_mph(double mph) {
-        if (mph <= 0.0) {
-            pause_channel(MCPWM_CHAN_SPEED);
-            mcpwm_channels[MCPWM_CHAN_SPEED].current_freq_hz = 0.0;
-            return;
-        }
-        if (mph > 168.0) mph = 168.0;
-        double target_freq = mph * (17182.0 / 2611.0);
-        set_frequency(MCPWM_CHAN_SPEED, target_freq);
-        set_duty(MCPWM_CHAN_SPEED, 33.0);
-    }
-
-    static void set_rpm(int rpm) {
-        if (rpm <= 0) {
-            pause_channel(MCPWM_CHAN_RPM);
-            mcpwm_channels[MCPWM_CHAN_RPM].current_freq_hz = 0.0;
-            return;
-        }
-        if (rpm > 9000) rpm = 9000;
-        double target_freq = static_cast<double>(rpm) / 30.0;
-        set_frequency(MCPWM_CHAN_RPM, target_freq);
-        set_duty(MCPWM_CHAN_RPM, 50.0);
-    }
-
-    static void set_coolant_degc(double degc) {
-        if (degc < 70.0) degc = 70.0;
-        if (degc > 130.0) degc = 130.0;
-        double duty = (degc - 64.0) * (100.0 / 71.0);
-        if (duty < 0.0) duty = 0.0;
-        if (duty > 100.0) duty = 100.0;
-        set_duty(MCPWM_CHAN_COOLANT, duty);
-    }
-
-    static void set_speed_freq(double freq_hz) {
-        if (freq_hz <= 0.0) {
-            pause_channel(MCPWM_CHAN_SPEED);
-            mcpwm_channels[MCPWM_CHAN_SPEED].current_freq_hz = 0.0;
-            return;
-        }
-        if (freq_hz > 1200.0) freq_hz = 1200.0;
-        set_frequency(MCPWM_CHAN_SPEED, freq_hz);
-    }
-
-    static void set_speed_duty(double duty_pct) {
-        set_duty(MCPWM_CHAN_SPEED, duty_pct);
-    }
-
-    static void set_rpm_freq(double freq_hz) {
-        if (freq_hz <= 0.0) {
-            pause_channel(MCPWM_CHAN_RPM);
-            mcpwm_channels[MCPWM_CHAN_RPM].current_freq_hz = 0.0;
-            return;
-        }
-        if (freq_hz > 400.0) freq_hz = 400.0;
-        set_frequency(MCPWM_CHAN_RPM, freq_hz);
-    }
-
-    static void set_rpm_duty(double duty_pct) {
-        set_duty(MCPWM_CHAN_RPM, duty_pct);
-    }
-
-    static void set_coolant_duty(double duty_pct) {
-        set_duty(MCPWM_CHAN_COOLANT, duty_pct);
     }
 };
 
