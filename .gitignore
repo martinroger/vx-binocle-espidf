@@ -3,3 +3,17 @@
 .clangd
 sdkconfig
 sdkconfig.old
+
+# Build outputs and temporary build directories
+build/
+build_*/
+dist/
+export_bins/
+
+# Binary and ELF deliverables
+*.bin
+*.elf
+*.map
+
+# Bennu embedded payloads
+bennu/components/payload/*.bin
