@@ -110,7 +110,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
 {
     if (g_twai_node_hdl != nullptr)
     {
-        ESP_LOGI(TAG, "TWAI driver already initialized");
+        ESP_LOGW(TAG, "TWAI driver already initialized");
         return ESP_OK;
     }
 
@@ -184,7 +184,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
         return ret;
     }
 
-    ESP_LOGI(TAG, "TWAI modern driver started successfully (500 kbps, TX: %d, RX: %d)", CONFIG_CAN_TX, CONFIG_CAN_RX);
+    ESP_LOGD(TAG, "TWAI modern driver started successfully (500 kbps, TX: %d, RX: %d)", CONFIG_CAN_TX, CONFIG_CAN_RX);
 
     // Only create worker task if a frame dispatcher is attached
     if (dispatchCANFrame != nullptr)
@@ -197,7 +197,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
         }
         else
         {
-            ESP_LOGI(TAG, "TWAI RX worker task created on Core %d", (int)twai_core_id);
+            ESP_LOGD(TAG, "TWAI RX worker task created on Core %d", (int)twai_core_id);
         }
     }
 
@@ -329,7 +329,7 @@ esp_err_t twai_clear_rx_queue()
 
 void CAN_RX_Task(void *pvParameters)
 {
-    ESP_LOGI(TAG, "CAN_RX_Task has started");
+    ESP_LOGD(TAG, "CAN_RX_Task has started");
     twai_queued_frame_t q_frame;
     CAN_RX_TimedOut = false;
 
