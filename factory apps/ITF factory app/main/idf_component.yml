@@ -16,6 +16,8 @@ dependencies:
   #   public: true
   espressif/mdns: '*'
   twai_daemon:
-    path: "../../../common/twai_daemon"
+    git: "https://github.com/martinroger/twai_daemon.git"
+    version: "v0.1.0"
   binocan:
-    path: "../../../common/binocan"
+    git: "https://github.com/martinroger/binocan.git"
+    version: "v0.1.0"
