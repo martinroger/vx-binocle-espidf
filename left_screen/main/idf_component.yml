@@ -6,8 +6,10 @@ dependencies:
   espressif/esp32_display_panel: ^1.0.2
   lvgl/lvgl: ^9.4.0
   twai_daemon:
-    path: "../../common/twai_daemon"
+    git: "https://github.com/martinroger/twai_daemon.git"
+    version: "v0.1.0"
   binocan:
-    path: "../../common/binocan"
+    git: "https://github.com/martinroger/binocan.git"
+    version: "v0.1.0"
   lvgl_v9_port:
     path: "../../common/lvgl_v9_port"

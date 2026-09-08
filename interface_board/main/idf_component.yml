@@ -6,6 +6,8 @@ dependencies:
   esp-idf-lib/ads111x: ^1.1.12
   esp-idf-lib/tca95x5: ^1.0.7
   twai_daemon:
-    path: "../../common/twai_daemon"
+    git: "https://github.com/martinroger/twai_daemon.git"
+    version: "v0.1.0"
   binocan:
-    path: "../../common/binocan"
+    git: "https://github.com/martinroger/binocan.git"
+    version: "v0.1.0"

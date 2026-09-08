@@ -60,10 +60,10 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 | **REQ-ITF-002** | Interface Board | [`interface_board/main/mcpwm_capture_helpers.h`](../interface_board/main/mcpwm_capture_helpers.h) | Bench frequency generator (0–8000 RPM) |
 | **REQ-ITF-003** | Interface Board | [`interface_board/main/adc_processor.h`](../interface_board/main/adc_processor.h) | Voltage sweep across ADS1115 channels |
 | **REQ-ITF-004** | Interface Board | [`interface_board/components/sma_filter`](../interface_board/components/sma_filter) | Step response noise rejection test |
-| **REQ-ITF-005** | Interface Board | [`interface_board/main/twai_ops.hpp`](../interface_board/main/twai_ops.hpp), [`common/binocan`](../common/binocan) | CAN bus analyzer frame rate audit |
+| **REQ-ITF-005** | Interface Board | [`interface_board/main/twai_ops.hpp`](../interface_board/main/twai_ops.hpp), [External `binocan`](https://github.com/martinroger/binocan) | CAN bus analyzer frame rate audit |
 | **REQ-ITF-006** | Interface Board | [`interface_board/components/odometer`](../interface_board/components/odometer), [`interface_board/components/nvs_storage`](../interface_board/components/nvs_storage) | Power cycle endurance & pulse accumulation |
 | **REQ-DSP-001** | Displays | [`left_screen/main/main.cpp`](../left_screen/main/main.cpp), [`common/lvgl_v9_port`](../common/lvgl_v9_port) | LVGL frame rate counter / screen refresh |
-| **REQ-DSP-002** | Displays | [`common/twai_daemon`](../common/twai_daemon), [`left_screen/main/updateUI.hpp`](../left_screen/main/updateUI.hpp) | Frame reception & decoding benchmark |
+| **REQ-DSP-002** | Displays | [External `twai_daemon`](https://github.com/martinroger/twai_daemon), [`left_screen/main/updateUI.hpp`](../left_screen/main/updateUI.hpp) | Frame reception & decoding benchmark |
 | **REQ-DSP-003** | Displays | [`left_screen/main/main.cpp`](../left_screen/main/main.cpp), [`right_screen/main/main.cpp`](../right_screen/main/main.cpp) | Simulated over-temperature signal test |
 | **REQ-DSP-004** | Displays | [`left_screen/main/start_animation.hpp`](../left_screen/main/start_animation.hpp) | Visual ignition boot inspection |
 | **REQ-FAC-001** | Factory Apps | [`factory apps/ITF factory app/main/main.cpp`](../factory%20apps/ITF%20factory%20app/main/main.cpp) | Browser access & mDNS resolution |
@@ -76,7 +76,7 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 | **REQ-OTA-001** | Factory Apps | [`factory apps/left display factory app/main/main.cpp`](../factory%20apps/left%20display%20factory%20app/main/main.cpp), [`esp_ota_ops.h`](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-reference/system/ota.html) | Web browser `.bin` upload & flash validation |
 | **REQ-OTA-002** | Factory Apps / Core | [`bennu/main/main.cpp`](../bennu/main/main.cpp), [`esp_ota_ops.h`](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-reference/system/ota.html) | Bad header & wrong chip image rejection |
 | **REQ-OTA-003** | Core Firmware | [`bennu/partitionTable.csv`](../bennu/partitionTable.csv), [`esp_ota_ops.h`](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-reference/system/ota.html) | Boot failure rollback test to previous slot |
-| **REQ-OTA-CAN-001** | Protocol / CAN | [`common/binocan/binocan.dbc`](../common/binocan/binocan.dbc), [`common/binocan/src/binocan.h`](../common/binocan/src/binocan.h) | Diagnostic state request and mode transition |
-| **REQ-OTA-CAN-002** | CAN Transceiver / Ops | [`common/twai_daemon`](../common/twai_daemon), [`interface_board/main/twai_ops.hpp`](../interface_board/main/twai_ops.hpp) | Segmented chunk streaming & CRC verification |
+| **REQ-OTA-CAN-001** | Protocol / CAN | [External `binocan`](https://github.com/martinroger/binocan) | Diagnostic state request and mode transition |
+| **REQ-OTA-CAN-002** | CAN Transceiver / Ops | [External `twai_daemon`](https://github.com/martinroger/twai_daemon), [`interface_board/main/twai_ops.hpp`](../interface_board/main/twai_ops.hpp) | Segmented chunk streaming & CRC verification |
 | **REQ-OTA-CAN-003** | Core / Flash | [`esp_ota_ops.h`](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-reference/system/ota.html) | RAM ring buffer to flash throughput benchmark |
 | **REQ-OTA-CAN-004** | Core / Reboot | [`esp_ota_ops.h`](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-reference/system/ota.html) | Post-flash partition switch & reboot test |
