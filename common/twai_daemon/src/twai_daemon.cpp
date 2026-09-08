@@ -54,10 +54,9 @@ static IRAM_ATTR bool twai_tx_done_cb(twai_node_handle_t handle, const twai_tx_d
 static IRAM_ATTR bool twai_rx_done_cb(twai_node_handle_t handle, const twai_rx_done_event_data_t *edata, void *user_ctx)
 {
     twai_queued_frame_t q_frame = {};
-    twai_frame_t rx_frame = {
-        .buffer = q_frame.data,
-        .buffer_len = sizeof(q_frame.data),
-    };
+    twai_frame_t rx_frame = {};
+    rx_frame.buffer = q_frame.data;
+    rx_frame.buffer_len = sizeof(q_frame.data);
     BaseType_t high_task_woken = pdFALSE;
 
     if (twai_node_receive_from_isr(handle, &rx_frame) == ESP_OK)
@@ -109,6 +108,12 @@ static IRAM_ATTR bool twai_error_cb(twai_node_handle_t handle, const twai_error_
 
 esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
 {
+    if (g_twai_node_hdl != nullptr)
+    {
+        ESP_LOGW(TAG, "TWAI driver already initialized");
+        return ESP_OK;
+    }
+
     dispatchCANFrame = frameDispatcher;
 
     // Initialize TX frame pool queue
@@ -138,32 +143,17 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
         }
     }
 
-    twai_onchip_node_config_t node_config = {
-        .io_cfg = {
-            .tx = (gpio_num_t)CONFIG_CAN_TX,
-            .rx = (gpio_num_t)CONFIG_CAN_RX,
-            .quanta_clk_out = (gpio_num_t)-1,
-            .bus_off_indicator = (gpio_num_t)-1,
-        },
-        .clk_src = TWAI_CLK_SRC_DEFAULT,
-        .bit_timing = {
-            .bitrate = 500000,
-            .sp_permill = 0,
-            .ssp_permill = 0,
-        },
-        .data_timing = {},
-        .timestamp_resolution_hz = 0,
-        .fail_retry_cnt = -1, // Retransmit until success or bus-off
-        .tx_queue_depth = TWAI_TX_POOL_SIZE,
-        .intr_priority = 0,
-        .flags = {
-            .enable_self_test = 0,
-            .enable_loopback = 0,
-            .enable_listen_only = 0,
-            .no_receive_rtr = 0,
-            .sleep_allow_pd = 0,
-        },
-    };
+    twai_onchip_node_config_t node_config = {};
+    node_config.io_cfg.tx = (gpio_num_t)CONFIG_CAN_TX;
+    node_config.io_cfg.rx = (gpio_num_t)CONFIG_CAN_RX;
+    node_config.io_cfg.quanta_clk_out = (gpio_num_t)-1;
+    node_config.io_cfg.bus_off_indicator = (gpio_num_t)-1;
+    node_config.bit_timing.bitrate = 500000;
+    node_config.fail_retry_cnt = -1; // Retransmit until success or bus-off
+    node_config.tx_queue_depth = TWAI_TX_POOL_SIZE;
+#if CONFIG_CAN_ENABLE_LOOPBACK
+    node_config.flags.enable_loopback = 1;
+#endif
 
     esp_err_t ret = twai_new_node_onchip(&node_config, &g_twai_node_hdl);
     if (ret != ESP_OK)
@@ -197,7 +187,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
         return ret;
     }
 
-    ESP_LOGI(TAG, "TWAI modern driver started successfully (500 kbps, TX: %d, RX: %d)", CONFIG_CAN_TX, CONFIG_CAN_RX);
+    ESP_LOGD(TAG, "TWAI modern driver started successfully (500 kbps, TX: %d, RX: %d)", CONFIG_CAN_TX, CONFIG_CAN_RX);
 
     // Only create worker task if a frame dispatcher is attached
     if (dispatchCANFrame != nullptr)
@@ -210,7 +200,7 @@ esp_err_t initCAN(frameDispatcher_t *frameDispatcher)
         }
         else
         {
-            ESP_LOGI(TAG, "TWAI RX worker task created on Core %d", (int)twai_core_id);
+            ESP_LOGD(TAG, "TWAI RX worker task created on Core %d", (int)twai_core_id);
         }
     }
 
@@ -243,7 +233,7 @@ esp_err_t twai_transmit_frame(const twai_frame_t *frame, int timeout_ms)
 
     if (xQueueReceive(s_tx_pool_queue, &slot, wait_ticks) != pdTRUE || slot == nullptr)
     {
-        ESP_LOGW(TAG, "TX frame pool exhausted (all slots pending transmission)");
+        ESP_LOGD(TAG, "TX frame pool exhausted (all slots pending transmission)");
         return ESP_ERR_TIMEOUT;
     }
 
@@ -287,7 +277,7 @@ esp_err_t twai_transmit_msg(uint32_t can_id, const uint8_t *data, uint8_t dlc, b
 
     if (xQueueReceive(s_tx_pool_queue, &slot, wait_ticks) != pdTRUE || slot == nullptr)
     {
-        ESP_LOGW(TAG, "TX frame pool exhausted (all slots pending transmission)");
+        ESP_LOGD(TAG, "TX frame pool exhausted (all slots pending transmission)");
         return ESP_ERR_TIMEOUT;
     }
 
@@ -342,7 +332,7 @@ esp_err_t twai_clear_rx_queue()
 
 void CAN_RX_Task(void *pvParameters)
 {
-    ESP_LOGI(TAG, "CAN_RX_Task has started");
+    ESP_LOGD(TAG, "CAN_RX_Task has started");
     twai_queued_frame_t q_frame;
     CAN_RX_TimedOut = false;
 
@@ -353,11 +343,10 @@ void CAN_RX_Task(void *pvParameters)
             CAN_RX_TimedOut = false;
             if (dispatchCANFrame != nullptr)
             {
-                twai_frame_t rx_frame = {
-                    .header = q_frame.header,
-                    .buffer = q_frame.data,
-                    .buffer_len = q_frame.buffer_len,
-                };
+                twai_frame_t rx_frame = {};
+                rx_frame.header = q_frame.header;
+                rx_frame.buffer = q_frame.data;
+                rx_frame.buffer_len = q_frame.buffer_len;
 
                 if (dispatchCANFrame(&rx_frame) != ESP_OK)
                 {
