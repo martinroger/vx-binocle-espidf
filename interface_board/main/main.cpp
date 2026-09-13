@@ -17,6 +17,8 @@
 #include "global_vars.hpp"
 #include "twai_ops.hpp"
 
+#include "mcpwm_processor.hpp"
+
 #ifdef TAG
 #undef TAG
 #endif
@@ -556,6 +558,12 @@ extern "C" void app_main(void)
     if (twai_ops_init() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start TWAI operations fully");
+        attemptRollBack();
+    }
+
+    if (mcpwm_processor_init() != ESP_OK)
+    {
+        ESP_LOGE(TAG, "MCPWM processor failed to init");
         attemptRollBack();
     }
 

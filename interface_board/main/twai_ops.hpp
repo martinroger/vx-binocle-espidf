@@ -233,7 +233,6 @@ inline void dbg_itf_fuel_PKG(void *pvParameters)
 }
 #endif
 
-
 /// @brief Packaging task for base_slow_metrics
 /// @param pvParameters
 inline void itf_slow_metrics_PKG(void *pvParameters)
@@ -248,14 +247,14 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
     uint8_t payload[BINOCAN_ITF_SLOW_METRICS_LENGTH] = {0};
     esp_err_t compute_err;
 
-    sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
+    //sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
     sma_handle_t *lv_voltage_SMA = sma_init_full(CONFIG_LV_SMA_SIZE, adc_raw_buffer[1]);
 
     while (true)
     {
         // SMAs should already be protected, and some of the MCPWM logic can be brought in here.
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS)); // Waits for notification or one cyclic for frame message
-        compute_err = compute_freq_dut(&pwm_cap_coolant);
+        // compute_err = compute_freq_dut(&pwm_cap_coolant);
         // if (compute_err != ESP_OK)
         //     ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
         float coolant_degC = lround((100.0 * pwm_cap_coolant.duty_cycle * COEFF_DUTY_TO_COOLANT_DEGC_M + COEFF_DUTY_TO_COOLANT_DEGC_P) * 10.0) / 10.0;
@@ -309,7 +308,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
 
             // Synchronous fresh sample and SMA filter reseed
             int16_t fresh_raw = adc_sample_channel_threadsafe(0);
-            sma_reset(fuel_level_SMA, fresh_raw);
+            //sma_reset(fuel_level_SMA, fresh_raw);
             fuel_level_raw = (float)fresh_raw;
 
             // Recompute resistance with High Caliber K-factor
@@ -328,7 +327,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
 
             // Synchronous fresh sample and SMA filter reseed
             int16_t fresh_raw = adc_sample_channel_threadsafe(0);
-            sma_reset(fuel_level_SMA, fresh_raw);
+            //sma_reset(fuel_level_SMA, fresh_raw);
             fuel_level_raw = (float)fresh_raw;
 
             // Recompute resistance with Low Caliber K-factor
@@ -337,8 +336,9 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         else
         {
             // Normal steady state: add sample to SMA and compute smoothed values
-            sma_add(fuel_level_SMA, adc_raw_buffer[0]);
-            fuel_level_raw = sma_get_avg(fuel_level_SMA);
+            //sma_add(fuel_level_SMA, adc_raw_buffer[0]);
+            //fuel_level_raw = sma_get_avg(fuel_level_SMA);
+            fuel_level_raw += ((float)CONFIG_FUEL_EMA_ALPHA / 1000000.0) * ((float)adc_raw_buffer[0] - fuel_level_raw);
             fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * fuel_level_raw / vref_raw_valid);
         }
 
@@ -428,10 +428,10 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
     {
         // Transport some of the MCPWM logic in there
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS));
-        compute_err = compute_freq_dut(&pwm_cap_rpm);
-        // if (compute_err != ESP_OK)
-        //     ESP_LOGW(__func__,"RPM DutFreq Compute error : %s",esp_err_to_name(compute_err));
-        compute_err = compute_freq_dut(&pwm_cap_speed);
+        // compute_err = compute_freq_dut(&pwm_cap_rpm);
+        // // if (compute_err != ESP_OK)
+        // //     ESP_LOGW(__func__,"RPM DutFreq Compute error : %s",esp_err_to_name(compute_err));
+        // compute_err = compute_freq_dut(&pwm_cap_speed);
         // if (compute_err != ESP_OK)
         //     ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
         float rpm = COEFF_FREQ_TO_RPM_M * pwm_cap_rpm.frequency + COEFF_FREQ_TO_RPM_P;
@@ -440,8 +440,20 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
 
         binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
         binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
-        // Placeholder for the gear position, for now always showing Neutral
-        binocan_itf_fast_metrics.itf_gear_position_st = binocan_itf_fast_metrics_itf_gear_position_st_encode(BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE);
+        switch (gear_estimator.latched_gear)
+        {
+        case GEAR_NEUTRAL:
+            binocan_itf_fast_metrics.itf_gear_position_st = binocan_itf_fast_metrics_itf_gear_position_st_encode(BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE);
+            break;
+
+        case GEAR_UNCERTAIN:
+            binocan_itf_fast_metrics.itf_gear_position_st = binocan_itf_fast_metrics_itf_gear_position_st_encode(BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_UNCERTAIN_CHOICE);
+            break;
+
+        default:
+            binocan_itf_fast_metrics.itf_gear_position_st = binocan_itf_fast_metrics_itf_gear_position_st_encode(gear_estimator.latched_gear);
+            break;
+        }
         binocan_itf_fast_metrics_pack(payload, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
         if (twai_transmit_msg(BINOCAN_ITF_FAST_METRICS_FRAME_ID, payload, BINOCAN_ITF_FAST_METRICS_LENGTH, false, 5) != ESP_OK)
         {
@@ -677,7 +689,6 @@ inline void itf_board_version_PKG(void *pvParameters)
     }
 }
 
-
 #pragma endregion
 
 #pragma region Initialization
@@ -699,7 +710,7 @@ inline esp_err_t twai_ops_init()
         ESP_LOGE(__func__, "Could not create base ActHiLo package task");
         ret = ESP_FAIL;
     }
-    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096+2048, NULL, 3, &itf_slow_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(itf_slow_metrics_PKG, "ITF_SLO_M", 4096 + 2048, NULL, 3, &itf_slow_metrics_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create base slow metrics package task");
         ret = ESP_FAIL;

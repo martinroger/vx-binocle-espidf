@@ -75,7 +75,7 @@ menu "Interface board configuration"
     endmenu
 
     menu "SMA Filters"
-                config FUEL_SMA_SIZE
+        config FUEL_SMA_SIZE
             int "Size of SMA filter for Fuel level sensing"
             default 100
             help
@@ -87,6 +87,15 @@ menu "Interface board configuration"
             help
                 Multiply it by polling rate to get time window. E.g. 200ms at 100 elements -> 20s filtering.
         
+    endmenu
+
+    menu "EMA Coefficients"
+        config FUEL_EMA_ALPHA
+            int "Alpha coefficient for the fuel level filtering, in millionth"
+            default 4975
+            help
+                Exponential moving average alpha factor for the fuel level. Is divided by 1 000 000 in the code !
+
     endmenu
 
     menu "Debug messages"

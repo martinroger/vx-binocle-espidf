@@ -43,9 +43,10 @@ static volatile pwm_info_t pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed = {.pos_e
 mcpwm_cap_channel_handle_t cap_chan_coolant = NULL;
 mcpwm_cap_channel_handle_t cap_chan_rpm = NULL;
 mcpwm_cap_channel_handle_t cap_chan_speed = NULL;
+
+TaskHandle_t acquire_mcpwm_hdl = NULL; // Task handle for MCPWM acquisition & gear estimation
 #pragma endregion
 
 #pragma region Gear estimator
-static gear_bayesian_state_t gear_estimator;
-
+gear_bayesian_state_t gear_estimator; // Bayesian gear estimator state
 #pragma endregion
