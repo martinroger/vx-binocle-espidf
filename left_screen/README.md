@@ -1,7 +1,7 @@
 # Left Display Board (LDB)
 
 ## Overview
-The **Left Display Board (LDB)** drives the primary digital instrument cluster screen located in the left binocle pod. It renders real-time engine RPM, vehicle speed, coolant temperature, odometer/trip information, and critical warning icons using LVGL v9.
+The **Left Display Board (LDB)** drives the primary digital instrument cluster screen located in the left binocle pod. It renders real-time engine RPM (with optional gear estimator readout), vehicle speed, coolant temperature, odometer/trip information, and critical warning icons using LVGL v9.
 
 ## Hardware Architecture
 - **Microcontroller**: ESP32-S3 (240 MHz dual-core, 8 MB Flash, 8 MB Octal PSRAM).

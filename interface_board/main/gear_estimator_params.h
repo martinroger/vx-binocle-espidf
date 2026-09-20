@@ -24,18 +24,31 @@
 extern "C" {
 #endif
 
-/* DBC Gear Position Constants */
-#define GEAR_NEUTRAL           0
-#define GEAR_UNCERTAIN         14
-#define GEAR_NUM_FORWARD_GEARS 5
-#define GEAR_TOLERANCE_ABS     (0.25f)
-#define GEAR_MIN_SPEED_HZ      (11.28f)
-#define GEAR_MIN_RPM_HZ        (33.33f)
+/**
+ * @name DBC Gear Position Constants
+ * @{
+ */
+#define GEAR_NEUTRAL           0   /**< Neutral gear position identifier */
+#define GEAR_UNCERTAIN         14  /**< Uncertain gear position (clutch depressed, transition, or out-of-band ratio) */
+#define GEAR_NUM_FORWARD_GEARS 5   /**< Number of modeled forward transmission gears */
+#define GEAR_TOLERANCE_ABS     (0.25f)  /**< Maximum absolute ratio tolerance for heuristic matching */
+#define GEAR_MIN_SPEED_HZ      (11.28f) /**< Minimum wheel speed pulse frequency to attempt gear estimation (~10 km/h) */
+#define GEAR_MIN_RPM_HZ        (33.33f) /**< Minimum engine RPM pulse frequency to attempt gear estimation (~1000 RPM) */
+/** @} */
 
+/**
+ * @brief Calibrated mean ratio (speed_freq / rpm_freq) for forward gears 1 to 5.
+ */
 static const float GEAR_RATIO_MEANS[GEAR_NUM_FORWARD_GEARS] = { 1.0180f, 1.7930f, 2.7260f, 3.7630f, 4.5420f };
+
+/**
+ * @brief Calibrated ratio Gaussian distribution variance for forward gears 1 to 5.
+ */
 static const float GEAR_RATIO_VARS[GEAR_NUM_FORWARD_GEARS]  = { 0.01701f, 0.01077f, 0.00584f, 0.00206f, 0.00193f };
 
-/* Empirical 6x6 State Transition Probability Matrix A (N, 1G, 2G, 3G, 4G, 5G) */
+/**
+ * @brief Empirical 6x6 State Transition Probability Matrix A (Neutral, 1G, 2G, 3G, 4G, 5G).
+ */
 static const float GEAR_HMM_TRANSITION[6][6] = {
     { 0.9494f, 0.0086f, 0.0092f, 0.0113f, 0.0101f, 0.0113f },
     { 0.0361f, 0.9540f, 0.0025f, 0.0025f, 0.0025f, 0.0025f },
@@ -48,14 +61,26 @@ static const float GEAR_HMM_TRANSITION[6][6] = {
 /* -------------------------------------------------------------------------- */
 /* Model 1: Calibrated Gated Heuristic Baseline                               */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * @brief State structure for the calibrated gated heuristic gear estimator.
+ */
 typedef struct {
-    float latched_ratio_ema;
-    uint8_t latched_gear;
-    uint8_t pending_gear;
-    float pending_time_ms;
-    float prev_ratio;
+    float latched_ratio_ema; /**< Exponential moving average of speed/RPM ratio */
+    uint8_t latched_gear;    /**< Current debounced and latched gear position */
+    uint8_t pending_gear;    /**< Candidate gear undergoing persistence debounce */
+    float pending_time_ms;   /**< Accumulated persistence duration for pending gear in milliseconds */
+    float prev_ratio;        /**< Previous instantaneous speed/RPM ratio */
 } gear_heuristic_state_t;
 
+/**
+ * @brief Initialize the gated heuristic gear estimator state.
+ *
+ * @param[out] st Pointer to heuristic estimator state structure to initialize.
+ *
+ * @note Thread Safety: Must be called before concurrent calls to gear_heuristic_update().
+ * @note Side Effects: Resets latched and pending gear to GEAR_NEUTRAL and zeroes ratio filters.
+ */
 static inline void gear_heuristic_init(gear_heuristic_state_t *st) {
     st->latched_ratio_ema = 0.0f;
     st->latched_gear = GEAR_NEUTRAL;
@@ -64,6 +89,19 @@ static inline void gear_heuristic_init(gear_heuristic_state_t *st) {
     st->prev_ratio = 0.0f;
 }
 
+/**
+ * @brief Update heuristic gear estimation based on speed and RPM pulse frequencies.
+ *
+ * @param[in,out] st Pointer to heuristic estimator state structure.
+ * @param[in] speed_freq Instantaneous wheel speed capture pulse frequency in Hz.
+ * @param[in] rpm_freq Instantaneous engine ignition capture pulse frequency in Hz.
+ * @param[in] dt_s Sample delta time in seconds.
+ *
+ * @return uint8_t Currently latched gear position (GEAR_NEUTRAL, 1..5, or GEAR_UNCERTAIN).
+ *
+ * @note Thread Safety: Reads and modifies state in place; caller must serialize updates.
+ * @note Side Effects: Updates ratio EMA, persistence timers, and latched_gear.
+ */
 static inline uint8_t gear_heuristic_update(gear_heuristic_state_t *st, float speed_freq, float rpm_freq, float dt_s) {
     if (speed_freq < GEAR_MIN_SPEED_HZ || rpm_freq < GEAR_MIN_RPM_HZ) {
         st->latched_gear = GEAR_NEUTRAL;
@@ -121,15 +159,27 @@ static inline uint8_t gear_heuristic_update(gear_heuristic_state_t *st, float sp
 /* -------------------------------------------------------------------------- */
 /* Model 2: Kinematic-Conditioned Bayesian Classifier                         */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * @brief State structure for the kinematic-conditioned Bayesian gear classifier.
+ */
 typedef struct {
-    float prior[6];
-    float prev_speed_freq;
-    float prev_rpm_freq;
-    uint8_t latched_gear;
-    uint8_t pending_gear;
-    float pending_time_ms;
+    float prior[6];        /**< Prior probability distribution vector over 6 states (Neutral, 1G..5G) */
+    float prev_speed_freq; /**< Previous wheel speed pulse frequency in Hz for derivative calculation */
+    float prev_rpm_freq;   /**< Previous engine RPM pulse frequency in Hz for derivative calculation */
+    uint8_t latched_gear;  /**< Currently debounced and latched gear position */
+    uint8_t pending_gear;  /**< Candidate gear undergoing persistence debounce */
+    float pending_time_ms; /**< Accumulated persistence duration for pending gear in milliseconds */
 } gear_bayesian_state_t;
 
+/**
+ * @brief Initialize the kinematic-conditioned Bayesian gear classifier state.
+ *
+ * @param[out] st Pointer to Bayesian classifier state structure to initialize.
+ *
+ * @note Thread Safety: Must be called before concurrent calls to gear_bayesian_update().
+ * @note Side Effects: Sets prior[0]=0.90 (Neutral) and prior[1..5]=0.02; zeroes derivative history.
+ */
 static inline void gear_bayesian_init(gear_bayesian_state_t *st) {
     st->prior[0] = 0.90f;
     for (int i = 1; i < 6; i++) st->prior[i] = 0.02f;
@@ -140,6 +190,23 @@ static inline void gear_bayesian_init(gear_bayesian_state_t *st) {
     st->pending_time_ms = 0.0f;
 }
 
+/**
+ * @brief Execute a single update step of the kinematic Bayesian gear classifier.
+ *
+ * Evaluates speed/RPM kinematic derivatives, dynamically constructs a 6x6 transition matrix,
+ * evaluates Gaussian likelihood densities across forward gears, applies clutch-drop suppression,
+ * computes the posterior distribution, and debounces candidates with 200 ms persistence.
+ *
+ * @param[in,out] st Pointer to Bayesian estimator state structure.
+ * @param[in] speed_freq Instantaneous wheel speed capture pulse frequency in Hz.
+ * @param[in] rpm_freq Instantaneous engine ignition capture pulse frequency in Hz.
+ * @param[in] dt_s Sample delta time in seconds.
+ *
+ * @return uint8_t Currently latched gear position (GEAR_NEUTRAL, 1..5, or GEAR_UNCERTAIN).
+ *
+ * @note Thread Safety: Reads and modifies state in place; caller must serialize task execution.
+ * @note Side Effects: Updates prior probability vector, frequency derivatives, and latched_gear.
+ */
 static inline uint8_t gear_bayesian_update(gear_bayesian_state_t *st, float speed_freq, float rpm_freq, float dt_s) {
     if (speed_freq < GEAR_MIN_SPEED_HZ || rpm_freq < GEAR_MIN_RPM_HZ) {
         st->prior[0] = 0.95f;
@@ -264,12 +331,24 @@ static inline uint8_t gear_bayesian_update(gear_bayesian_state_t *st, float spee
 /* -------------------------------------------------------------------------- */
 /* Model 3: Hidden Markov Model (HMM) with Clutch Suppression                 */
 /* -------------------------------------------------------------------------- */
+
+/**
+ * @brief State structure for the 6-state Hidden Markov Model (HMM) gear estimator.
+ */
 typedef struct {
-    float alpha[6];
-    float prev_rpm_freq;
-    uint8_t prev_gear;
+    float alpha[6];      /**< Forward inference belief state vector across 6 states (Neutral, 1G..5G) */
+    float prev_rpm_freq; /**< Previous engine RPM pulse frequency in Hz for clutch drop detection */
+    uint8_t prev_gear;   /**< Previously inferred gear state */
 } gear_hmm_state_t;
 
+/**
+ * @brief Initialize the Hidden Markov Model (HMM) gear estimator state.
+ *
+ * @param[out] st Pointer to HMM estimator state structure to initialize.
+ *
+ * @note Thread Safety: Must be called before concurrent calls to gear_hmm_update().
+ * @note Side Effects: Sets alpha[0]=1.0 (Neutral) and alpha[1..5]=0.0; zeroes RPM frequency.
+ */
 static inline void gear_hmm_init(gear_hmm_state_t *st) {
     st->alpha[0] = 1.0f;
     for (int i = 1; i < 6; i++) st->alpha[i] = 0.0f;
@@ -277,6 +356,19 @@ static inline void gear_hmm_init(gear_hmm_state_t *st) {
     st->prev_gear = GEAR_NEUTRAL;
 }
 
+/**
+ * @brief Execute forward inference step for the 6-state HMM gear estimator.
+ *
+ * @param[in,out] st Pointer to HMM estimator state structure.
+ * @param[in] speed_freq Instantaneous wheel speed capture pulse frequency in Hz.
+ * @param[in] rpm_freq Instantaneous engine ignition capture pulse frequency in Hz.
+ * @param[in] dt_s Sample delta time in seconds.
+ *
+ * @return uint8_t Inferred gear position (GEAR_NEUTRAL, 1..5, or GEAR_UNCERTAIN).
+ *
+ * @note Thread Safety: Reads and modifies state in place; caller must serialize task execution.
+ * @note Side Effects: Updates forward alpha state vector and prev_rpm_freq.
+ */
 static inline uint8_t gear_hmm_update(gear_hmm_state_t *st, float speed_freq, float rpm_freq, float dt_s) {
     if (speed_freq < GEAR_MIN_SPEED_HZ || rpm_freq < GEAR_MIN_RPM_HZ) {
         st->alpha[0] = 0.95f;

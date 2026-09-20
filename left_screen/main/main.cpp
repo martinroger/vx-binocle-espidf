@@ -408,8 +408,17 @@ extern "C" void action_decimation_update(lv_event_t *e)
     rpm = 0;
 }
 
-/// @brief Enables gear estimator display instead of RPM
-/// @param e LV event VALUE CHANGED
+/**
+ * @brief Enables or disables gear estimator display instead of RPM on the gauge.
+ *
+ * Saves the updated boolean toggle into NVS key "gear_on" under the "storage" namespace
+ * and invalidates p_gearPosition to force an immediate UI redraw.
+ *
+ * @param[in] e Pointer to LVGL event structure (LV_EVENT_VALUE_CHANGED).
+ *
+ * @note Thread Safety: Invoked from LVGL event handler context on Core 1.
+ * @note Side Effects: Writes display_board_st.showGearPosition to NVS; invalidates p_gearPosition.
+ */
 extern "C" void action_enable_gears(lv_event_t *e)
 {
     display_board_st.showGearPosition =  lv_obj_has_state(objects.gear_on,LV_STATE_CHECKED);
