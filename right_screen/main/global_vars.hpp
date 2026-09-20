@@ -65,6 +65,7 @@ struct board_ST
     uint8_t lightBrightness = 100;       // Screen brightness in light mode
     bool lightMode = true;               // Light mode active indicator
     bool modeLocked = false;             // Light/Dark mode override lock indicator
+    bool showGearPosition = false;       // Show gear position instead of RPM
 } display_board_st;
 
 // Validation-related booleans
@@ -101,6 +102,7 @@ bool headlightsOn, p_headlightsOn = true;
 float speed_kph, p_speed_kph = 0;
 float lvVoltage_v, p_lvVoltage_v = 12.0;
 uint32_t rpm, p_rpm = 0;
+uint8_t gearPosition, p_gearPosition = BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE;
 uint8_t fuelLevel_pc, p_fuelLevel_pc = 50;
 uint8_t coolant_degC, p_coolant_degC = 88;
 

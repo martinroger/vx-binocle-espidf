@@ -88,7 +88,7 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     }
 
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
-    if (lround(p_rpm / 10.0) != lround(rpm / 10.0) || forceRefresh)
+    if (((lround(p_rpm / 10.0) != lround(rpm / 10.0))) || (gearPosition != p_gearPosition) || forceRefresh)
     {
         // lv_arc_set_value(objects.itf_speed_kph_arc, speed_kph);
         animateTargetArc(objects.rpm_arc, rpm);
@@ -97,8 +97,39 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         // // lv_scale_set_line_needle_value(objects.speed_scale, objects.itf_speed_kph_needle, 230, speed_kph);
         // // lv_scale_set_line_needle_value(objects.speed_scale,needleLine,-8,speed_kph);
         // lv_scale_set_image_needle_value(objects.speed_scale, objects.simple_needle, (long)(speed_kph * 10));
-        if (((lround(p_rpm / (float)(display_board_st.rpm_decimation)) != lround(rpm / (float)(display_board_st.rpm_decimation)))) || forceRefresh)
-            lv_label_set_text_fmt(objects.rpm, "%ld", (display_board_st.rpm_decimation * lround(((float)rpm) / (display_board_st.rpm_decimation))));
+        if (display_board_st.showGearPosition)
+        {
+            if ((gearPosition != p_gearPosition) || forceRefresh)
+            {
+                switch (gearPosition)
+                {
+                case BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE:
+                    lv_label_set_text(objects.rpm, "N");
+                    break;
+
+                case BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_UNCERTAIN_CHOICE:
+                    lv_label_set_text(objects.rpm,"-");
+                    break;
+                
+                case BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_REVERSE_CHOICE:
+                    lv_label_set_text(objects.rpm,"R");
+                    break;
+                
+                default:
+                    lv_label_set_text_fmt(objects.rpm,"%u",gearPosition);
+                    break;
+                }
+
+                p_gearPosition = gearPosition;
+            }
+            
+        }
+        else
+        {
+            if (((lround(p_rpm / (float)(display_board_st.rpm_decimation)) != lround(rpm / (float)(display_board_st.rpm_decimation)))) || forceRefresh)
+                lv_label_set_text_fmt(objects.rpm, "%ld", (display_board_st.rpm_decimation * lround(((float)rpm) / (display_board_st.rpm_decimation))));
+        }
+
         // lv_obj_set_state(objects.rpm, LV_STATE_FOCUSED, (display_board_st.rpm_alarm_override) ? (rpm > display_board_st.rpm_alarm_threshold) && (blinkOn || !(display_board_st.rpm_alarm_blink)) : alarmOn);
         if (rpm >= display_board_st.shift_mid_threshold)
         {

@@ -408,8 +408,27 @@ extern "C" void action_decimation_update(lv_event_t *e)
     rpm = 0;
 }
 
+/// @brief Enables gear estimator display instead of RPM
+/// @param e LV event VALUE CHANGED
+extern "C" void action_enable_gears(lv_event_t *e)
+{
+    display_board_st.showGearPosition =  lv_obj_has_state(objects.gear_on,LV_STATE_CHECKED);
+    nvs_handle_t h;
+    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    else
+    {
+        if (nvs_set_u8(h, "gear_on", display_board_st.showGearPosition) != ESP_OK)
+            ESP_LOGE(__func__, "Cannot save gear display status");
+
+        nvs_commit(h);
+        nvs_close(h);
+    }
+    p_gearPosition = gearPosition +1;
+}
+
 /// @brief Updates the overtemperature buzzer enabled status
-/// @param e LV even VALUE CHANGED
+/// @param e LV event VALUE CHANGED
 extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
 {
     display_board_st.overTemp_buzz = lv_obj_has_state(objects.buzz_overtemp_sw, LV_STATE_CHECKED);
@@ -534,6 +553,8 @@ extern "C" void app_main()
 
         if (nvs_get_u8(h, "mph_on", (uint8_t *)&(display_board_st.mph_selected)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve MPH status from NVS");
+        if (nvs_get_u8(h,"gear_on", (uint8_t *)&(display_board_st.showGearPosition)) != ESP_OK)
+            ESP_LOGW(__func__, "Could not retrieve gear estimator display state from NVS");
 
         if (nvs_get_u8(h, "rpm_al_overr", (uint8_t *)&(display_board_st.rpm_alarm_override)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM alarm override.");

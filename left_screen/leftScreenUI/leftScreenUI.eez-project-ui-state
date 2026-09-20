@@ -1,7 +1,7 @@
 {
   "navigation": {
     "selectedUserPageObject": "[leftScreenUI.eez-project]:/userPages/0",
-    "selectedActionObject": "[leftScreenUI.eez-project]:/actions/9",
+    "selectedActionObject": "[leftScreenUI.eez-project]:/actions/10",
     "selectedStyleObject": "[leftScreenUI.eez-project]:/lvglStyles/styles/0",
     "selectedFontObject": "[leftScreenUI.eez-project]:/fonts/5",
     "subnavigationSelectedItems": {}
@@ -71,6 +71,7 @@
           },
           {
             "type": "border",
+            "selected": 0,
             "location": "bottom",
             "children": [
               {
@@ -204,7 +205,8 @@
                   },
                   "icon": "svg:page"
                 }
-              ]
+              ],
+              "active": true
             },
             {
               "type": "row",
@@ -224,8 +226,7 @@
                       "enableClose": false,
                       "icon": "svg:properties"
                     }
-                  ],
-                  "active": true
+                  ]
                 },
                 {
                   "type": "tabset",
@@ -979,19 +980,19 @@
               "2": {}
             },
             "1": {
-              "5": {},
-              "20": {
-                "$selected": true
-              },
-              "22": {}
-            }
+              "1": {},
+              "8": {},
+              "23": {},
+              "25": {}
+            },
+            "2": {}
           }
         }
       },
       "transform": {
         "translate": {
           "x": -240,
-          "y": -277
+          "y": -278
         },
         "scale": 1
       },
