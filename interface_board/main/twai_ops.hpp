@@ -248,6 +248,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
     esp_err_t compute_err;
 
     //sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
+    float fuel_level_raw = adc_raw_buffer[0];
     sma_handle_t *lv_voltage_SMA = sma_init_full(CONFIG_LV_SMA_SIZE, adc_raw_buffer[1]);
 
     while (true)
@@ -291,7 +292,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         float raw_instant = (float)adc_raw_buffer[0];
         float instant_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * raw_instant / vref_raw_valid);
 
-        float fuel_level_raw = 0.0f;
+        // float fuel_level_raw = 0.0f;
         float fuel_level_R = 0.0f;
 
         // Caliber switching hysteresis check based on instantaneous reading
