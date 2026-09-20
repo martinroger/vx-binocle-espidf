@@ -5,8 +5,9 @@
 #include <stdbool.h>
 
 #include "version_parser.h"        // For parsed app metadata struct
-#include "odometer.h"              //For odometer and trip variables
+#include "odometer.h"              // For odometer and trip variables
 #include "mcpwm_capture_helpers.h" // For pwm_info_t struct and capture handles
+#include "gear_estimator_params.h" // For gear estimator
 
 struct board_ST
 {
@@ -42,4 +43,10 @@ static volatile pwm_info_t pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed = {.pos_e
 mcpwm_cap_channel_handle_t cap_chan_coolant = NULL;
 mcpwm_cap_channel_handle_t cap_chan_rpm = NULL;
 mcpwm_cap_channel_handle_t cap_chan_speed = NULL;
+
+TaskHandle_t acquire_mcpwm_hdl = NULL; // Task handle for MCPWM acquisition & gear estimation
+#pragma endregion
+
+#pragma region Gear estimator
+gear_bayesian_state_t gear_estimator; // Bayesian gear estimator state
 #pragma endregion

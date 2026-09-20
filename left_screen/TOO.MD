@@ -20,14 +20,20 @@ graph TD
 
 ## 2. UI Pipeline & Font Rendering
 
-- **LVGL v9 Port**: Custom double-buffered rendering pipeline with DMA transfers (`lvgl_v9_port.cpp`).
+- **LVGL v9 Port**: Custom double-buffered rendering pipeline with DMA transfers ([`lvgl_v9_port.cpp`](../common/lvgl_v9_port/src/lvgl_v9_port.cpp)).
 - **Typography**: Custom-generated White Rabbit pixel fonts (20px, 28px, 32px) for crisp contrast under automotive lighting.
-- **Startup Animation**: Ignition-on sequence sweeps the RPM arc to max scale and back, illuminates all warning telltales, and transitions into live mode (`start_animation.hpp`).
+- **Startup Animation**: Ignition-on sequence sweeps the RPM arc to max scale and back, illuminates all warning telltales, and transitions into live mode ([`start_animation.hpp`](main/start_animation.hpp)).
+- **Gear Estimator Display Mode**: When `showGearPosition` is enabled in settings (toggled via [`action_enable_gears()`](main/main.cpp) and persisted in NVS key `"gear_on"`), the central gauge label switches from numeric RPM to the active transmission gear state decoded from `ITF_values` ([`updateUI.hpp`](main/updateUI.hpp)):
+  - `BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE` (0) $\to$ `"N"`
+  - `BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_UNCERTAIN_CHOICE` (14) $\to$ `"-"`
+  - `BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_REVERSE_CHOICE` (15) $\to$ `"R"`
+  - Forward Gears 1 to 5 $\to$ `"1"` .. `"5"`
+  The perimeter RPM arc and shift light thresholds remain active and responsive to live engine speed.
 
 ---
 
 ## 3. CAN Telemetry & Declarative Route Dispatch
 
-- **Declarative Routing Table**: Frame ingestion is orchestrated by `rx_routes[]` in `twai_ops.hpp`, associating Frame IDs (`BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID`, `BINOCAN_ITF_SLOW_METRICS_FRAME_ID`, etc.) with unpack handlers and watchdog timers.
+- **Declarative Routing Table**: Frame ingestion is orchestrated by `rx_routes[]` in [`twai_ops.hpp`](main/twai_ops.hpp), associating Frame IDs (`BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID`, `BINOCAN_ITF_SLOW_METRICS_FRAME_ID`, `BINOCAN_ITF_FAST_METRICS_FRAME_ID`, etc.) with unpack handlers and watchdog timers.
 - **Watchdog Lifecycles**: Incoming frames automatically reset per-signal FreeRTOS software timers. If signal loss occurs (> 5 cycles), callbacks revert cluster variables to safe default failure values.
 - **Overtemperature Alarm**: When coolant temperature exceeds the calibrated threshold (default 105°C), the alarm monitor triggers visual flashing on the UI and pulsates the audible buzzer until temperature drops below hysteresis limit (98°C).

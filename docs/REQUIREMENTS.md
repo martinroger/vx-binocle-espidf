@@ -21,12 +21,14 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 - **REQ-ITF-004 (Signal Filtering)**: Apply Simple Moving Average (SMA) filtering with bounded raw signals to eliminate jitter.
 - **REQ-ITF-005 (CAN Telemetry Broadcast)**: Broadcast standard CAN messages (`ITF_status`, `ITF_values`, `ITF_odometer`, `ITF_board_version`) and configurable debug telemetry (`DBG_ITF_speed`, `DBG_ITF_RPM`, `DBG_ITF_coolant`, `DBG_ITF_ADC_raw`, `DBG_ITF_pulse_counts`, `DBG_ITF_fuel`) over TWAI at periodic rates (20ms, 50ms, 100ms, 200ms, 250ms, 1000ms).
 - **REQ-ITF-006 (Persistent Odometer)**: Maintain high-resolution vehicle odometer and trip distance in non-volatile storage (NVS) with wear-leveling.
+- **REQ-ITF-007 (Kinematic Bayesian Gear Estimation)**: Continuously estimate transmission gear position (Neutral, Gears 1..5, or Uncertain) from speed and engine pulse frequency kinematics using a 6-state Bayesian classifier with acceleration transitions, clutch-drop suppression, and 200 ms persistence debounce. Broadcast `itf_gear_position_st` in `BINOCAN_ITF_FAST_METRICS` frames.
 
 ### 2.2 Left & Right Displays (LDB & RDB)
 - **REQ-DSP-001 (High-Speed UI Rendering)**: Render fluid gauge animations (60 FPS target) using LVGL v9 and custom White Rabbit typography.
 - **REQ-DSP-002 (CAN Telemetry Ingestion & Declarative Routing)**: Ingest incoming CAN frames via modern `esp_driver_twai` daemon into `g_twai_rx_queue`, match IDs against a declarative routing table (`twai_route_entry_t`), automatically reset individual signal timeout watchdogs, and update global UI data models atomically.
 - **REQ-DSP-003 (Audible & Visual Warnings)**: Trigger high-priority warning indicators and audible buzzer alarms on coolant overtemperature, low oil pressure, or critical battery voltage.
 - **REQ-DSP-004 (Startup Animation)**: Execute synchronized gauge sweep and indicator self-test animation upon ignition power-on.
+- **REQ-DSP-005 (Gear Position Display Mode)**: Support user-configurable substitution of numeric RPM display with the current engaged gear position ("N", "-", "R", "1".."5") in the primary gauge cluster, with preference toggled via settings UI and persisted in NVS (`gear_on`).
 
 ### 2.3 Factory Calibration & Web Provisioning
 - **REQ-FAC-001 (WiFi AP & Web Portal)**: Launch captive Wi-Fi AP and HTTP server with mDNS service discovery (`interface-board.local`, `ldb-factory.local`, `rdb-factory.local`).
@@ -62,10 +64,12 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 | **REQ-ITF-004** | Interface Board | [`interface_board/components/sma_filter`](../interface_board/components/sma_filter) | Step response noise rejection test |
 | **REQ-ITF-005** | Interface Board | [`interface_board/main/twai_ops.hpp`](../interface_board/main/twai_ops.hpp), [External `binocan`](https://github.com/martinroger/binocan) | CAN bus analyzer frame rate audit |
 | **REQ-ITF-006** | Interface Board | [`interface_board/components/odometer`](../interface_board/components/odometer), [`interface_board/components/nvs_storage`](../interface_board/components/nvs_storage) | Power cycle endurance & pulse accumulation |
+| **REQ-ITF-007** | Interface Board | [`interface_board/main/gear_estimator_params.h`](../interface_board/main/gear_estimator_params.h), [`interface_board/main/mcpwm_processor.hpp`](../interface_board/main/mcpwm_processor.hpp) | Ratio simulation sweep & drive-cycle dataset validation |
 | **REQ-DSP-001** | Displays | [`left_screen/main/main.cpp`](../left_screen/main/main.cpp), [`common/lvgl_v9_port`](../common/lvgl_v9_port) | LVGL frame rate counter / screen refresh |
 | **REQ-DSP-002** | Displays | [External `twai_daemon`](https://github.com/martinroger/twai_daemon), [`left_screen/main/updateUI.hpp`](../left_screen/main/updateUI.hpp) | Frame reception & decoding benchmark |
 | **REQ-DSP-003** | Displays | [`left_screen/main/main.cpp`](../left_screen/main/main.cpp), [`right_screen/main/main.cpp`](../right_screen/main/main.cpp) | Simulated over-temperature signal test |
 | **REQ-DSP-004** | Displays | [`left_screen/main/start_animation.hpp`](../left_screen/main/start_animation.hpp) | Visual ignition boot inspection |
+| **REQ-DSP-005** | Displays | [`left_screen/main/updateUI.hpp`](../left_screen/main/updateUI.hpp), [`left_screen/main/main.cpp`](../left_screen/main/main.cpp) | UI gear toggle & bench telemetry reception test |
 | **REQ-FAC-001** | Factory Apps | [`factory apps/ITF factory app/main/main.cpp`](../factory%20apps/ITF%20factory%20app/main/main.cpp) | Browser access & mDNS resolution |
 | **REQ-FAC-002** | Factory Apps | [`factory apps/ITF factory app/main/main.cpp`](../factory%20apps/ITF%20factory%20app/main/main.cpp), [`factory apps/left display factory app/main/main.cpp`](../factory%20apps/left%20display%20factory%20app/main/main.cpp), [`factory apps/right display factory app/main/main.cpp`](../factory%20apps/right%20display%20factory%20app/main/main.cpp) | NVS scan table verification & partition wipe test |
 | **REQ-FAC-003** | Factory Apps | [`factory apps/ITF factory app/main/main.cpp`](../factory%20apps/ITF%20factory%20app/main/main.cpp) | Oscilloscope power rail decay check |

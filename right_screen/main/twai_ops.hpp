@@ -986,7 +986,17 @@ inline esp_err_t itf_fast_metrics_Handler(const twai_frame_t *rxMsg)
         speed_kph = 0; // Default value
     }
 
-    ESP_LOGD(__func__, "Vehicle Metrics: RPM %lu, Speed %.2f", rpm, speed_kph);
+    if (binocan_itf_fast_metrics_itf_gear_position_st_is_in_range(binocan_itf_fast_metrics_msg.itf_gear_position_st))
+    {
+        gearPosition = (uint8_t)round(binocan_itf_fast_metrics_itf_gear_position_st_decode(binocan_itf_fast_metrics_msg.itf_gear_position_st));
+    }
+    else
+    {
+        ESP_LOGW(__func__,"Gear position out of range: %d", binocan_itf_fast_metrics_msg.itf_gear_position_st);
+        gearPosition = BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_UNCERTAIN_CHOICE;
+    }
+
+    ESP_LOGD(__func__, "Vehicle Metrics: RPM %lu, Speed %.2f, Gear %u", rpm, speed_kph, gearPosition);
     return ESP_OK;
 }
 

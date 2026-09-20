@@ -42,6 +42,9 @@ inline void startup_anim()
     // RPM decimation selector
     lv_obj_set_state(objects.decimation_sw, LV_STATE_CHECKED, (display_board_st.rpm_decimation > 10));
 
+    // Gear selector
+    lv_obj_set_state(objects.gear_on, LV_STATE_CHECKED, display_board_st.showGearPosition);
+
     // Buzz on hot selector
     lv_obj_set_state(objects.buzz_overtemp_sw, LV_STATE_CHECKED, display_board_st.overTemp_buzz);
 
