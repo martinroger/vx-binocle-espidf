@@ -7,6 +7,10 @@ graph TD
     A[Client Browser / Mobile] -->|Wi-Fi SoftAP / HTTP| B(ESP-IDF HTTP Server)
     B -->|REST API GET/POST| C(NVS Storage Engine)
     C -->|Read/Write Key-Values| D[NVS Flash Partition]
+    B -->|WebSocket Telemetry| WS(WS Telemetry Task)
+    ADC_TASK(Background ADC Task) -->|Lock-Free / Mutex Snapshot| WS
+    EXP_TASK(Background IO Expander Task) -->|Lock-Free / Semaphore Snapshot| WS
+    INT_PIN[TCA9555 INT Pin] -->|ISR Notification| EXP_TASK
     B -->|Reboot Command| E(Safe Shutdown Controller)
     E -->|GPIO Low| F[5V Power Rail Disconnect]
     E -->|esp_restart| G[MCU Hardware Reset]
@@ -68,19 +72,108 @@ graph TD
 - **`GET /nvs/list`**: Scans and enumerates all NVS partitions, namespaces, keys, and values dynamically at runtime as JSON.
 - **`POST /nvs/wipe`**: Safely erases all NVS partitions (`nvs`, `nvs_odo`) and re-initializes them cleanly without forcing an immediate MCU restart.
 
+### 3.4 WebSocket Telemetry & OTA Progress Engine (`/ws`)
+
+- **Telemetry JSON Packet Schema** (broadcast periodically at `CONFIG_FACTORY_WS_REFRESH_RATE_HZ` default 5 Hz):
+  ```json
+  {
+    "type": "telemetry",
+    "ios": {
+      "ignition": true,
+      "hi_beams": false,
+      "alternator": true,
+      "brake_fluid": false,
+      "handbrake": true,
+      "oil_press": false,
+      "airbag": false,
+      "cel": false,
+      "turn_r": false,
+      "turn_l": false,
+      "abs": false,
+      "door": false,
+      "button": false,
+      "backlight": false,
+      "coolant_low": false
+    },
+    "adc_raw": {
+      "ch0": 1250,
+      "ch1": 3120,
+      "ch2": 2048,
+      "ch3": 4096
+    },
+    "adc_phys": {
+      "fuel_r": 215.4,
+      "fuel_pc": 86.2,
+      "fuel_cal": "HIGH",
+      "batt_v": 12.60
+    },
+    "mcpwm": {
+      "coolant_hz": 45.2,
+      "coolant_c": 88.5,
+      "rpm_hz": 830.0,
+      "rpm_val": 24900,
+      "speed_hz": 60.5,
+      "speed_kph": 14.8
+    },
+    "can_nodes": {
+      "ldb": {
+        "alive": true,
+        "version": "v-.-.-"
+      },
+      "rdb": {
+        "alive": true,
+        "version": "v-.-.-"
+      }
+    }
+  }
+  ```
+
+- **OTA Progress JSON Packet Schema** (broadcast during `/upload` and `/flash` operations):
+  ```json
+  {
+    "type": "ota_progress",
+    "stage": "uploading",
+    "percent": 45,
+    "bytes_done": 460800,
+    "total_bytes": 1024000,
+    "speed_kbps": 128.5,
+    "message": "Writing OTA partition..."
+  }
+  ```
+
 ---
 
-## 4. Provisioning & Safety Sequencing Flow
+## 4. UI Architecture & Navigation
+
+The Factory App interface uses a responsive 4-tab layout built on top of [SimpleCSS](https://simplecss.org/):
+1. **Setup & Calibration**: Real-time NVS calibration parameters (`fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`) and live odometer/trip adjustment.
+2. **IO & Bus Debug**:
+   - **Telltales**: 15 telltale status pills updated via TCA9555 expander (including Button, Backlight, and Low Coolant).
+   - **ADS1115 ADC Raw Volts & Physical Interpreted Values**: 4 progress meters calibrated to 0–4096 mV (`max="4096"`), displaying un-filtered instant readings alongside fuel sender resistance ($\Omega$), percentage (%), automatic caliber state, and battery voltage (V).
+   - **MCPWM Capture Signals & Interpreted Metrics**: Live indicators for Coolant (Duty Cycle % & °C), RPM (Hz & RPM), and Speed (Hz & km/h).
+   - **xDB software versions**: Status cards displaying online/offline heartbeats and multiplexed firmware version strings (tag + short SHA commit + dirty indicator, e.g. `v1.4.0-a1b2c3d[-dirty]`, or fallback `v-.-.-`) for Left Display Board (LDB) and Right Display Board (RDB).
+3. **OTA & Partitions**:
+   - Active boot partition information (`ota_0`, `ota_1`, or `factory`).
+   - Local firmware upload (`/upload`) and remote CAN target firmware flash (`/flash`).
+   - Real-time animated progress bar with percentage, speed (kB/s), and operation status streamed over WebSocket.
+4. **NVS Storage**: Live interactive table listing all active NVS partitions and keys, complete with a safe partition wipe tool (`/nvs/wipe`).
+
+---
+
+## 5. Provisioning & Safety Sequencing Flow
 
 1. **Boot Initialization**:
    - Initializes NVS (`storage` in default partition and `storage` in `nvs_odo` partition).
    - Verifies existence of required keys (`fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`, `lastPart`, `odometer_m`, `trip_m`). Missing keys are initialized with defaults.
+   - Initializes I2C bus, TCA9555 IO expander (with optional IRQ on `CONFIG_EXP_INT_PIN`), ADS1115 ADC, and MCPWM capture channels.
+   - Starts TWAI CAN driver with `dispatch_can_frame` callback for LDB/RDB version and heartbeat monitoring.
+   - Spawns background hardware tasks:
+     - `adc_processing_task`: Asynchronously samples ADC channels at relaxed intervals (~150ms), performs instantaneous caliber switching with settling delays, and publishes to a protected snapshot buffer.
+     - `expander_processing_task`: Periodically polls (200ms) or is immediately woken by the TCA9555 falling-edge interrupt to read discrete inputs into a protected state struct.
+   - Launches `ws_telemetry_broadcast_task` running at configured frequency (`CONFIG_FACTORY_WS_REFRESH_RATE_HZ`, default 5 Hz), acting as a pure snapshot emitter decoupled from I2C bus transactions.
 2. **Web Portal Interaction**:
    - Embedded static HTML/JS assets (`/spiffs/index.html`) provide controls for real-time calibration parameter adjustments.
-   - Changing the `fuel_learn_en` toggle switch immediately persists the state to NVS.
-   - Manual override of `fuel_full_r` allows fine-tuning or resetting to the nominal $250\,\Omega$ standard baseline.
-3. **NVS Dynamic Inspection & Wipe**:
-   - Web UI triggers `GET /nvs/list` to display all active NVS entries in real time.
-   - `POST /nvs/wipe` allows safe recovery and defaults restoration.
-4. **Safe Shutdown**:
+   - WebSocket connection automatically establishes on page load (`ws://${window.location.host}/ws`) with auto-reconnect fallback.
+3. **Safe Shutdown**:
    - `/set_boot` or `/reboot` disables 5V peripheral rails before initiating MCU reset (`esp_restart()`).
+

@@ -1,0 +1,5 @@
+# Profile: Pre-v0.3 Hardware Revision
+# Swapped Coolant and RPM capture pins
+CONFIG_HW_REV_PRE_V0_3=y
+CONFIG_COOLANT_PWM_CAP_GPIO=4
+CONFIG_RPM_PWM_CAP_GPIO=6

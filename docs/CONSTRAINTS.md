@@ -29,7 +29,10 @@
   - The modernized `esp_driver_twai` operates on a zero-copy pointer model; all asynchronous transmissions must utilize persistent descriptor slots (`s_tx_slots` pool managed by `twai_daemon`) with ISR recycling via `on_tx_done` to prevent stack dangling pointer corruptions.
   - The CAN driver handles `TWAI_ERROR_BUS_OFF` and disconnected hardware gracefully via `on_state_change` ISR callbacks triggering non-blocking `twai_node_recover()` without watchdog resets or task hangs.
   - All nodes (including display factory apps) must initialize the TWAI peripheral to hold transceiver TX lines recessive (logic HIGH) preventing floating pin bus disruption.
-- **HTTP Server Handler Capacity**: Any project registering REST endpoints, static files, and WebSockets must set `httpd_cfg.max_uri_handlers` to at least 16 (exceeding the default of 8).
+- **HTTP Server Handler Capacity & WebSocket Support**: Any project registering REST endpoints, static files, and WebSockets must set `httpd_cfg.max_uri_handlers` to at least 16 (exceeding the default of 8) and enable `CONFIG_HTTPD_WS_SUPPORT=y`.
+- **Factory WebSocket Broadcast Rates & Caliber Standards**:
+  - The Factory App WebSocket broadcast task must run at a user-configurable rate governed by `CONFIG_FACTORY_WS_REFRESH_RATE_HZ` (default 5 Hz) to maintain low latency without overloading the Wi-Fi softAP stack.
+  - Raw ADC channel telemetry for ADS1115 external ADC must be reported without smoothing (SMA disabled) and normalized to the hardware input caliber scale of 0–4096 mV (`max="4096"` in UI meter elements) matching the `ADS111X_GAIN_4V096` full-scale calibration range.
 
 ---
 
