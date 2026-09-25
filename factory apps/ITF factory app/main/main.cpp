@@ -23,6 +23,16 @@
 #include "binocan.h"
 #include "twai_daemon.h"
 
+// Hardware and helper includes reused from interface_board
+#include "driver/gpio.h"
+#include "driver/mcpwm_prelude.h"
+#include "driver/gptimer.h"
+#include "i2cdev.h"
+#include "tca9555_helpers.h"
+#include "active_hi_low_processor.h"
+#include "adc_helpers.h"
+#include "mcpwm_capture_helpers.h"
+
 #ifdef TAG
 #undef TAG
 #endif
@@ -75,6 +85,78 @@ uint16_t fuel_full_r = 250;
 uint16_t fuel_low_level_threshold_pc = 20;
 uint16_t coolant_overtemp_threshold_degC = 106;
 
+#pragma region MCPWM and Sensor Globals
+// Capture PWM info buffers
+static volatile pwm_info_t pwm_cap_coolant = {.pos_edge_ts = 0, .prev_pos_edge_ts = 0, .period_ticks = 0, .neg_edge_ts = 0, .deltaT = 0};
+static volatile pwm_info_t pwm_cap_rpm = {.pos_edge_ts = 0, .prev_pos_edge_ts = 0, .period_ticks = 0, .neg_edge_ts = 0, .deltaT = 0};
+static volatile pwm_info_t pwm_cap_speed = {.pos_edge_ts = 0, .prev_pos_edge_ts = 0, .period_ticks = 0, .neg_edge_ts = 0, .deltaT = 0};
+
+// Capture channel handles
+static mcpwm_cap_channel_handle_t cap_chan_coolant = NULL;
+static mcpwm_cap_channel_handle_t cap_chan_rpm = NULL;
+static mcpwm_cap_channel_handle_t cap_chan_speed = NULL;
+
+// CAN Node Version tracking structures
+struct can_node_diag_t
+{
+	bool alive = false;
+	char version[32] = {0};
+	uint32_t last_seen_ms = 0;
+};
+static can_node_diag_t can_ldb_diag;
+static can_node_diag_t can_rdb_diag;
+
+// CAN frame dispatcher for factory app background monitoring
+static esp_err_t dispatch_can_frame(const twai_frame_t *msg)
+{
+	if (!msg) return ESP_ERR_INVALID_ARG;
+
+	uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+
+	if (msg->header.id == BINOCAN_LDB_BOARD_VERSION_FRAME_ID)
+	{
+		binocan_ldb_board_version_t ldb_ver;
+		if (binocan_ldb_board_version_unpack(&ldb_ver, msg->buffer, msg->buffer_len) == 0)
+		{
+			uint8_t maj = binocan_ldb_board_version_ldb_version_major_decode(ldb_ver.ldb_version_major);
+			uint8_t min = binocan_ldb_board_version_ldb_version_minor_decode(ldb_ver.ldb_version_minor);
+			uint8_t patch = binocan_ldb_board_version_ldb_version_patch_decode(ldb_ver.ldb_version_patch);
+			snprintf(can_ldb_diag.version, sizeof(can_ldb_diag.version), "v%u.%u.%u", maj, min, patch);
+			can_ldb_diag.last_seen_ms = now;
+			can_ldb_diag.alive = true;
+		}
+	}
+	else if (msg->header.id == BINOCAN_RDB_BOARD_VERSION_FRAME_ID)
+	{
+		binocan_rdb_board_version_t rdb_ver;
+		if (binocan_rdb_board_version_unpack(&rdb_ver, msg->buffer, msg->buffer_len) == 0)
+		{
+			uint8_t maj = binocan_rdb_board_version_rdb_version_major_decode(rdb_ver.rdb_version_major);
+			uint8_t min = binocan_rdb_board_version_rdb_version_minor_decode(rdb_ver.rdb_version_minor);
+			uint8_t patch = binocan_rdb_board_version_rdb_version_patch_decode(rdb_ver.rdb_version_patch);
+			snprintf(can_rdb_diag.version, sizeof(can_rdb_diag.version), "v%u.%u.%u", maj, min, patch);
+			can_rdb_diag.last_seen_ms = now;
+			can_rdb_diag.alive = true;
+		}
+	}
+	else if (msg->header.id == BINOCAN_LDB_ST_FRAME_ID)
+	{
+		can_ldb_diag.last_seen_ms = now;
+		can_ldb_diag.alive = true;
+	}
+	else if (msg->header.id == BINOCAN_RDB_ST_FRAME_ID)
+	{
+		can_rdb_diag.last_seen_ms = now;
+		can_rdb_diag.alive = true;
+	}
+
+	return ESP_OK;
+}
+
+// Global HTTP server handle for WebSocket broadcast
+static httpd_handle_t g_httpd_server = NULL;
+#pragma endregion
+
 #pragma endregion
 
 #pragma region 5V management
@@ -96,6 +178,22 @@ esp_err_t init_5V_ctrl(void)
 	if (ret != ESP_OK)
 	{
 		ESP_LOGE(TAG, "Issue setting up control pins for 5V outputs");
+	}
+	return ret;
+}
+
+esp_err_t init_fuel_sense_ctrl(void)
+{
+	esp_err_t ret = ESP_FAIL;
+	ESP_LOGI(TAG, "Initializing fuel sensing caliber control pin (GPIO %d)", CONFIG_SET_HIGH_CAL_GPIO);
+	ret = gpio_set_direction((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, GPIO_MODE_INPUT_OUTPUT);
+	ret = gpio_set_pull_mode((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, GPIO_PULLDOWN_ONLY);
+	ret = gpio_pulldown_en((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
+	ret = gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);
+	interface_board_st.EN_hi_R_sense_ST = false;
+	if (ret != ESP_OK)
+	{
+		ESP_LOGE(TAG, "Issue setting up fuel sensing caliber pin");
 	}
 	return ret;
 }
@@ -222,6 +320,172 @@ static void start_mdns(void)
 	mdns_hostname_set("interface-board");
 	mdns_instance_name_set("Interface Board Factory");
 }
+
+#pragma region WebSocket Engine & Telemetry Broadcaster
+// Broadcast a JSON payload to all active WebSocket clients safely
+esp_err_t ws_broadcast_text(const char *json_payload)
+{
+	if (!g_httpd_server || !json_payload) return ESP_ERR_INVALID_STATE;
+
+	size_t client_count = 16;
+	int client_fds[16] = {0};
+
+	if (httpd_get_client_list(g_httpd_server, &client_count, client_fds) != ESP_OK || client_count == 0)
+	{
+		return ESP_OK;
+	}
+
+	httpd_ws_frame_t ws_pkt;
+	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+	ws_pkt.payload = (uint8_t *)json_payload;
+	ws_pkt.len = strlen(json_payload);
+	ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+	ws_pkt.final = true;
+
+	for (size_t i = 0; i < client_count; i++)
+	{
+		int fd = client_fds[i];
+		if (fd > 0 && httpd_ws_get_fd_info(g_httpd_server, fd) == HTTPD_WS_CLIENT_WEBSOCKET)
+		{
+			httpd_ws_send_frame_async(g_httpd_server, fd, &ws_pkt);
+		}
+	}
+	return ESP_OK;
+}
+
+// Broadcast real-time OTA progress events over WebSocket
+void broadcast_ota_progress(const char *phase, size_t written, size_t total, const char *msg)
+{
+	char json[256];
+	snprintf(json, sizeof(json),
+			 "{\"type\":\"ota_progress\",\"phase\":\"%s\",\"written\":%lu,\"total\":%lu,\"message\":\"%s\"}",
+			 phase ? phase : "local_ota", (unsigned long)written, (unsigned long)total, msg ? msg : "");
+	ws_broadcast_text(json);
+}
+
+// WebSocket URI handler
+static esp_err_t ws_handler(httpd_req_t *req)
+{
+	if (req->method == HTTP_GET)
+	{
+		ESP_LOGI(TAG, "WS client connected, Handshake done");
+		return ESP_OK;
+	}
+
+	httpd_ws_frame_t ws_pkt;
+	uint8_t buf[64] = {0};
+	memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
+	ws_pkt.payload = buf;
+	ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+	esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, sizeof(buf) - 1);
+	if (ret != ESP_OK)
+	{
+		ESP_LOGD(TAG, "httpd_ws_recv_frame failed with %d", ret);
+		return ret;
+	}
+	// Echo / ping handling if needed
+	return ESP_OK;
+}
+
+// Periodic Telemetry Broadcast Task (default 5 Hz)
+static void ws_telemetry_broadcast_task(void *pvParameters)
+{
+	const uint32_t rate_hz = CONFIG_FACTORY_WS_REFRESH_RATE_HZ;
+	const TickType_t delay_ticks = pdMS_TO_TICKS(1000 / (rate_hz > 0 ? rate_hz : 5));
+	char json[768];
+
+	while (1)
+	{
+		vTaskDelay(delay_ticks);
+
+		if (!g_httpd_server) continue;
+
+		size_t client_count = 16;
+		int client_fds[16] = {0};
+		if (httpd_get_client_list(g_httpd_server, &client_count, client_fds) != ESP_OK || client_count == 0)
+		{
+			continue; // Do not waste CPU formatting JSON if no WebSocket clients connected
+		}
+
+		// 1. Read Discrete Inputs from TCA9555 IO Expander
+		// Alignment with interface_board twai_ops.hpp:
+		// Pin 0 (EXP_IO_0): AL_brake_low (Active Low, 0V = fault/active)
+		// Pin 1 (EXP_IO_1): AL_parking_brake (Active Low, 0V = pulled/active)
+		// Pin 2 (EXP_IO_2): AH_ignition (Active High, inverted at pin -> !pin: 12V = active)
+		// Pin 3 (EXP_IO_3): AL_oil_pressure (Active Low, 0V = low/active)
+		// Pin 4 (EXP_IO_4): AL_airbag (Active Low, 0V = fault/active)
+		// Pin 5 (EXP_IO_5): AL_CEL (Active Low, 0V = fault/active)
+		// Pin 8 (EXP_IO_8): AH_hi_beams (Active High, inverted at pin -> !pin: 12V = active)
+		// Pin 10 (EXP_IO_10): AL_alternator (Active Low, 0V = fault/active)
+		// Pin 12 (EXP_IO_12): AH_left_turn (Active High, inverted at pin -> !pin: 12V = active)
+		// Pin 13 (EXP_IO_13): AL_door (Active Low, 0V = open/active)
+		// Pin 14 (EXP_IO_14): AH_right_turn (Active High, inverted at pin -> !pin: 12V = active)
+		// Pin 15 (EXP_IO_15): AL_ABS (Active Low, 0V = fault/active)
+		uint16_t exp_raw = 0;
+		if (tca95x5_port_read(&tca_slave, &exp_raw) != ESP_OK)
+		{
+			exp_raw = 0;
+		}
+
+		bool al_brk = !read_bitmask(exp_raw, EXP_IO_0_BITMASK);
+		bool al_hbk = !read_bitmask(exp_raw, EXP_IO_1_BITMASK);
+		bool ah_ign = !read_bitmask(exp_raw, EXP_IO_2_BITMASK); // Inverted hardware buffer
+		bool al_oil = !read_bitmask(exp_raw, EXP_IO_3_BITMASK);
+		bool al_abg = !read_bitmask(exp_raw, EXP_IO_4_BITMASK);
+		bool al_cel = !read_bitmask(exp_raw, EXP_IO_5_BITMASK);
+		bool ah_hib = !read_bitmask(exp_raw, EXP_IO_8_BITMASK); // Inverted hardware buffer
+		bool al_alt = !read_bitmask(exp_raw, EXP_IO_10_BITMASK);
+		bool ah_tl  = !read_bitmask(exp_raw, EXP_IO_12_BITMASK); // Inverted hardware buffer
+		bool al_dor = !read_bitmask(exp_raw, EXP_IO_13_BITMASK);
+		bool ah_tr  = !read_bitmask(exp_raw, EXP_IO_14_BITMASK); // Inverted hardware buffer
+		bool al_abs = !read_bitmask(exp_raw, EXP_IO_15_BITMASK);
+
+		// 2. Read Raw ADC channels (ADS1115 without SMA)
+		// ADS1115 full scale is 4096mV for ADS111X_GAIN_4V096 (16-bit bipolar: 32768 counts = 4096mV -> counts * 4096 / 32768 = counts / 8)
+		int16_t raw0 = adc_measure_channel_raw(0);
+		vTaskDelay(pdMS_TO_TICKS(5));
+		int16_t raw1 = adc_measure_channel_raw(1);
+		vTaskDelay(pdMS_TO_TICKS(5));
+		int16_t raw2 = adc_measure_channel_raw(2);
+		vTaskDelay(pdMS_TO_TICKS(5));
+		int16_t raw3 = adc_measure_channel_raw(3);
+		int32_t mv0 = (raw0 > 0) ? ((int32_t)raw0 * 4096 / 32768) : 0;
+		int32_t mv1 = (raw1 > 0) ? ((int32_t)raw1 * 4096 / 32768) : 0;
+		int32_t mv2 = (raw2 > 0) ? ((int32_t)raw2 * 4096 / 32768) : 0;
+		int32_t mv3 = (raw3 > 0) ? ((int32_t)raw3 * 4096 / 32768) : 0;
+
+		// 3. Compute MCPWM frequencies
+		compute_freq_dut(&pwm_cap_coolant);
+		compute_freq_dut(&pwm_cap_rpm);
+		compute_freq_dut(&pwm_cap_speed);
+
+		// 4. Update alive flags based on GPIO and CAN message activity (timeout 3000ms)
+		uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+		bool ld_can_alive = (can_ldb_diag.last_seen_ms > 0) && ((now_ms - can_ldb_diag.last_seen_ms) < 3000);
+		bool rd_can_alive = (can_rdb_diag.last_seen_ms > 0) && ((now_ms - can_rdb_diag.last_seen_ms) < 3000);
+		bool ld_alive = check_LD_alive() || ld_can_alive;
+		bool rd_alive = check_RD_alive() || rd_can_alive;
+
+		// Format unified JSON frame
+		snprintf(json, sizeof(json),
+				 "{\"type\":\"telemetry\","
+				 "\"ios\":{\"ignition\":%s,\"hi_beams\":%s,\"alternator\":%s,\"brake_fluid\":%s,"
+				 "\"handbrake\":%s,\"oil_press\":%s,\"airbag\":%s,\"cel\":%s,\"turn_r\":%s,\"turn_l\":%s,\"abs\":%s,\"door\":%s},"
+				 "\"adc_raw\":{\"ch0\":%ld,\"ch1\":%ld,\"ch2\":%ld,\"ch3\":%ld},"
+				 "\"mcpwm\":{\"coolant_hz\":%.1f,\"rpm_hz\":%.1f,\"speed_hz\":%.1f},"
+				 "\"can_nodes\":{\"ldb\":{\"alive\":%s,\"version\":\"%s\"},\"rdb\":{\"alive\":%s,\"version\":\"%s\"}}}",
+				 ah_ign ? "true" : "false", ah_hib ? "true" : "false", al_alt ? "true" : "false", al_brk ? "true" : "false",
+				 al_hbk ? "true" : "false", al_oil ? "true" : "false", al_abg ? "true" : "false", al_cel ? "true" : "false",
+				 ah_tr ? "true" : "false", ah_tl ? "true" : "false", al_abs ? "true" : "false", al_dor ? "true" : "false",
+				 (long)mv0, (long)mv1, (long)mv2, (long)mv3,
+				 pwm_cap_coolant.frequency, pwm_cap_rpm.frequency, pwm_cap_speed.frequency,
+				 ld_alive ? "true" : "false", can_ldb_diag.version[0] ? can_ldb_diag.version : "v-.-.-",
+				 rd_alive ? "true" : "false", can_rdb_diag.version[0] ? can_rdb_diag.version : "v-.-.-");
+
+		ws_broadcast_text(json);
+	}
+}
+#pragma endregion
 
 /// @brief Handler for the general index GET request
 /// @param req GET /simple.min.css
@@ -986,9 +1250,11 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 		}
 
 		writtenBytes += bytesRetrieved;
+		broadcast_ota_progress("local_ota", writtenBytes, file_size, "Flashing local OTA partition...");
 	}
 	// Normal exit
 	ESP_LOGI(__func__, "Written : %lu bytes, file size target %lu", writtenBytes, file_size);
+	broadcast_ota_progress("local_ota", writtenBytes, file_size, "Verifying binary and SHA256...");
 	free(buf);
 	OTA_started = false;
 
@@ -1519,6 +1785,13 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				txMsgCursor = 1; // Reset the position of the txMsg cursor
 				blockCounter++;
 				CF_SN++;
+
+				// Periodic progress update over WebSocket (e.g. every 4KB or at end)
+				if ((sentBytes % 4096 < 8) || sentBytes == file_size)
+				{
+					broadcast_ota_progress("can_flash", sentBytes, file_size, "Streaming firmware over CAN to display...");
+				}
+
 				// Break out of the loop if we have sent all the allowed blocks, and there is still data to send (for the FC_wait)
 				if (CANBlockSize > 0 && blockCounter == CANBlockSize && sentBytes < file_size)
 				{
@@ -2146,6 +2419,18 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &nvs_list_uri);
 	httpd_uri_t nvs_wipe_uri = {.uri = "/nvs/wipe", .method = HTTP_POST, .handler = nvs_wipe_post_handler};
 	httpd_register_uri_handler(server, &nvs_wipe_uri);
+
+	// Register WebSocket endpoint /ws
+	httpd_uri_t ws_uri = {
+		.uri = "/ws",
+		.method = HTTP_GET,
+		.handler = ws_handler,
+		.user_ctx = NULL,
+		.is_websocket = true
+	};
+	httpd_register_uri_handler(server, &ws_uri);
+
+	g_httpd_server = server;
 	return server;
 }
 
@@ -2184,13 +2469,17 @@ extern "C" void app_main(void)
 	if (V5_ctrl_err != ESP_OK)
 		ESP_LOGE(__func__, "Could not start 5V auxiliary");
 
+	esp_err_t fuel_sense_err = init_fuel_sense_ctrl();
+	if (fuel_sense_err != ESP_OK)
+		ESP_LOGE(__func__, "Could not initialize fuel sense caliber pin");
+
 	ESP_LOGI(__func__, "Configuring XDB Check alive...");
 	esp_err_t check_alive_err = init_XDB_alive_check();
 	if (check_alive_err != ESP_OK)
 		ESP_LOGE(__func__, "Could not start XDB check alive IOs");
 
 	ESP_LOGI(__func__, "Starting TWAI");
-	esp_err_t twai_err = initCAN(NULL);
+	esp_err_t twai_err = initCAN(dispatch_can_frame);
 	if (twai_err != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not start TWAI : %s", esp_err_to_name(twai_err));
@@ -2300,6 +2589,35 @@ extern "C" void app_main(void)
 	start_ap_mode();
 	start_mdns();
 	start_webserver();
+
+	// Initialize I2C Bus, Expander & ADC
+	ESP_LOGI(TAG, "Initializing I2C bus...");
+	if (i2cdev_init() == ESP_OK)
+	{
+		ESP_LOGI(TAG, "Initializing TCA9555 IO Expander...");
+		if (initialize_io_expanders() != ESP_OK)
+		{
+			ESP_LOGW(TAG, "TCA9555 Expander init failed");
+		}
+		ESP_LOGI(TAG, "Initializing ADS1115 ADC...");
+		if (initialize_ADC() != ESP_OK)
+		{
+			ESP_LOGW(TAG, "ADS1115 ADC init failed");
+		}
+	}
+	else
+	{
+		ESP_LOGW(TAG, "i2cdev_init failed");
+	}
+
+	// Initialize MCPWM Capture Channels for Coolant, RPM, Speed
+	ESP_LOGI(TAG, "Setting up MCPWM capture channels...");
+	set_capture_channel(cap_chan_coolant, (gpio_num_t)CONFIG_COOLANT_PWM_CAP_GPIO, &pwm_cap_coolant);
+	set_capture_channel(cap_chan_rpm, (gpio_num_t)CONFIG_RPM_PWM_CAP_GPIO, &pwm_cap_rpm);
+	set_capture_channel(cap_chan_speed, (gpio_num_t)CONFIG_SPEED_PWM_CAP_GPIO, &pwm_cap_speed);
+
+	// Launch WebSocket Telemetry Broadcast Task
+	xTaskCreate(ws_telemetry_broadcast_task, "WS_TELEM", 4096, NULL, 3, NULL);
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
 	xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);

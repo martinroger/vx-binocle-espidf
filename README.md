@@ -77,9 +77,11 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `right_screen` | `lvgl/lvgl` | `9.5.0` | `^9.4.0` |
 | `right_screen` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
 | `right_screen` | `espressif/esp32_io_expander` | `1.1.1` | `1.*` *(transitive)* |
-| `factory apps/ITF factory app` | `twai_daemon` | `0.1.0` | `~0.1.0` *(git: martinroger/twai_daemon)* |
+| `factory apps/ITF factory app` | `twai_daemon` | `0.1.0` (`588c470`) | `~0.1.0` *(git: martinroger/twai_daemon)* |
 | `factory apps/ITF factory app` | `binocan` | `0.2.1` (`775e968`) | `v0.2.1` *(git: martinroger/binocan)* |
-| `factory apps/ITF factory app` | `espressif/mdns` | `1.11.3` | `*` |
+| `factory apps/ITF factory app` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.12` |
+| `factory apps/ITF factory app` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
+| `factory apps/ITF factory app` | `espressif/mdns` | `1.13.1` | `*` |
 | `factory apps/left display factory app` | `twai_daemon` | `0.1.0` | `~0.1.0` *(git: martinroger/twai_daemon)* |
 | `factory apps/left display factory app` | `espressif/mdns` | `1.9.1` | `*` |
 | `factory apps/right display factory app` | `twai_daemon` | `0.1.0` | `~0.1.0` *(git: martinroger/twai_daemon)* |

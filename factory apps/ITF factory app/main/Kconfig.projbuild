@@ -205,4 +205,14 @@ menu "ITF Factory configuration"
         
     endmenu
 
+    menu "WebSocket Telemetry Configuration"
+        config FACTORY_WS_REFRESH_RATE_HZ
+            int "WebSocket telemetry broadcast rate (Hz)"
+            range 1 20
+            default 5
+            help
+                Cadence in Hz for periodic broadcast of raw inputs, ADC voltages, MCPWM frequencies,
+                and CAN node status to connected browser clients over /ws.
+    endmenu
+
 endmenu

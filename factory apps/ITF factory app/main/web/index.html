@@ -1,139 +1,747 @@
 <!doctype html>
-<html>
+<html lang="en">
 
 <head>
-    <link rel="stylesheet" href="simple.min.css">
     <meta charset="utf-8">
-    <title>Interface board factory app</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="simple.min.css">
+    <title>Interface Board Setup</title>
+    <style>
+        :root {
+            --pill-on: #2e7d32;
+            --pill-on-bg: #e8f5e9;
+            --pill-off: #c62828;
+            --pill-off-bg: #ffebee;
+            --pill-warn: #ef6c00;
+            --pill-warn-bg: #fff3e0;
+            --pill-neutral: #585858;
+            --pill-neutral-bg: #f5f5f5;
+            --badge-bg: #e3f2fd;
+            --badge-text: #0d47a1;
+        }
+
+        body {
+            grid-template-columns: 1fr min(62rem, 95%) 1fr;
+        }
+
+        header {
+            padding: 1rem 0.5rem 1.2rem !important;
+            margin-bottom: 1.5rem;
+        }
+
+        header h1 {
+            font-size: 2.2rem !important;
+            margin: 0.2rem auto !important;
+        }
+
+        .header-meta {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1rem;
+            flex-wrap: wrap;
+            font-size: 0.95rem;
+            color: var(--text-light);
+            margin-top: 0.5rem;
+        }
+
+        .ws-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.2rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            background: #eee;
+            color: #555;
+            transition: all 0.3s;
+        }
+
+        .ws-badge.connected {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .ws-badge.reconnecting {
+            background: #fff3e0;
+            color: #ef6c00;
+        }
+
+        .ws-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* Tab Navigation Bar */
+        .tab-nav {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 0.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text);
+            padding: 0.6rem 1.2rem;
+            font-weight: 600;
+            font-size: 1rem;
+            border-radius: var(--standard-border-radius);
+            cursor: pointer;
+            transition: all 0.15s ease-in-out;
+            margin: 0;
+        }
+
+        .tab-btn:hover {
+            background: var(--accent-bg);
+            border-color: var(--border);
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: var(--accent-text);
+            border-color: var(--accent);
+        }
+
+        /* Card Layouts */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card {
+            background: var(--accent-bg);
+            border: var(--border-width) solid var(--border);
+            border-radius: var(--standard-border-radius);
+            padding: 1.2rem;
+        }
+
+        .card h3 {
+            font-size: 1.3rem;
+            margin-top: 0;
+            margin-bottom: 0.8rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.4rem;
+        }
+
+        /* Pill Switches & Status Badges */
+        .pill-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+            gap: 0.6rem;
+        }
+
+        .io-pill {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 0.3rem;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            text-align: center;
+            background: var(--bg);
+            transition: background 0.2s, color 0.2s;
+        }
+
+        .io-pill .io-name {
+            font-weight: 600;
+            font-size: 0.8rem;
+            margin-bottom: 0.2rem;
+        }
+
+        .io-pill.ok {
+            background: var(--pill-on-bg);
+            border-color: var(--pill-on);
+            color: var(--pill-on);
+            font-weight: bold;
+        }
+
+        .io-pill.bad {
+            background: var(--pill-off-bg);
+            border-color: var(--pill-off);
+            color: var(--pill-off);
+            font-weight: bold;
+        }
+
+        .io-pill.warn {
+            background: var(--pill-warn-bg);
+            border-color: var(--pill-warn);
+            color: var(--pill-warn);
+            font-weight: bold;
+        }
+
+        .io-pill.off {
+            background: var(--pill-neutral-bg);
+            border-color: var(--border);
+            color: var(--pill-neutral);
+        }
+
+        /* Progress Bar & Gauges */
+        .meter-row {
+            margin-bottom: 0.8rem;
+        }
+
+        .meter-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.9rem;
+            margin-bottom: 0.2rem;
+        }
+
+        progress {
+            height: 1.1rem;
+            margin-bottom: 0.2rem;
+            width: 100%;
+            border-radius: var(--standard-border-radius);
+            overflow: hidden;
+            border: var(--border-width) solid var(--border);
+            background-color: var(--accent-bg);
+        }
+
+        progress::-webkit-progress-bar {
+            background-color: var(--accent-bg);
+            border-radius: 0;
+        }
+
+        progress::-webkit-progress-value {
+            background-color: var(--accent);
+            border-radius: 0;
+        }
+
+        progress::-moz-progress-bar {
+            background-color: var(--accent);
+            border-radius: 0;
+            transition-property: width;
+            transition-duration: .3s;
+        }
+
+        /* Partition Indicator Badges */
+        .part-badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .part-running { background: #c8e6c9; color: #1b5e20; }
+        .part-prev { background: #fff9c4; color: #f57f17; }
+        .part-target { background: #bbdefb; color: #0d47a1; }
+
+        /* Form Actions inline */
+        .form-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            margin-bottom: 0.6rem;
+            flex-wrap: wrap;
+        }
+
+        .form-row input[type=number], .form-row input[type=text] {
+            flex: 1;
+            min-width: 120px;
+            margin: 0;
+        }
+
+        .form-row button {
+            margin: 0;
+            white-space: nowrap;
+        }
+
+        /* Responsive tweaks */
+        @media (max-width: 600px) {
+            body { grid-template-columns: 1fr 96% 1fr; font-size: 1rem; }
+            header h1 { font-size: 1.8rem !important; }
+            .tab-btn { flex: 1 1 45%; text-align: center; padding: 0.5rem; font-size: 0.9rem; }
+            .card-grid { grid-template-columns: 1fr; }
+            .pill-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
 </head>
 
 <body>
-    <h1>Interface board setup</h1>
-    <p class="notice">
-        The current factory app software version is :<br>
-        <mark id="info">Loading...</mark>
-    </p>
-    <details>
-        <summary>Odometer and trip</summary>
-        <p>
-            Odometer : <mark id="odometer">-</mark> m <input id="new_odo" type="number" min="0" step="1"> <button type="button"
-                onclick="updateOdometer()">Set odometer</button>
-            <br>
-
-            Trip : <mark id="trip">-</mark> m <input id="new_trip" type="number" min="0" step="1"> <button type="button"
-                onclick="updateTrip()">Set trip</button>
-        </p>
-    </details>
-
-    <details>
-        <summary>Calibration values</summary>
-        <p>
-            Fuel self-learning : <label><input id="fuel_learn_en" type="checkbox" onchange="toggleFuelLearn(this.checked)"> <span id="fuel_learn_status">Enabled</span></label><br>
-            Fuel full baseline resistance : <mark><span id="fuel_full_r">-</span> &Omega;</mark> <input
-                id="new_fuel_full_r" type="number" min="150" max="350" step="1"> <button type="button"
-                onclick="updateCalParam('new_fuel_full_r')">Update</button> <button type="button"
-                onclick="resetFuelFullR()">Reset to 250 &Omega;</button><br>
-            Low fuel alarm threshold : <mark><span id="low_fuel_threshold">-</span>%</mark> <input
-                id="new_low_fuel_threshold" type="number" min="0" max="100" step="1"> <button type="button"
-                onclick="updateCalParam('new_low_fuel_threshold')">Update</button><br>
-            Overtemp warning : <mark><span id="overtemp_threshold">-</span>°C</mark> <input id="new_overtemp_threshold"
-                type="number" min="0" max="250" step="1"> <button type="button"
-                onclick="updateCalParam('new_overtemp_threshold')">Update</button><br>
-        </p>
-    </details>
-
-    <details>
-        <summary>Partitions</summary>
-        <p>
-            Factory slot : <br><mark><span id="factory_project">-</span> (<span
-                    id="factory_version">-</span>)</mark><br>
-            OTA 0 slot : <br><mark><span id="ota0_project">-</span> (<span id="ota0_version">-</span>)</mark><br>
-            OTA 1 slot : <br><mark><span id="ota1_project">-</span> (<span id="ota1_version">-</span>)</mark><br>
-        </p>
-        <button onclick="refreshPartitions()">Refresh Partitions</button>
-        <button onclick="fetch('/reboot',{method:'POST'}).then(()=>alert('Rebooting...'))">Reboot</button>
-    </details>
-
-    <details>
-        <summary>OTA update</summary>
-        <p class="notice">
-            Last running partition : <mark id="prevRunningPart">...</mark><br>
-            Recommended update partition : <mark id="recOTAPart">...</mark>
-        </p>
-        Update partition : <select name="target" id="target">
-            <option value="ota_0">OTA slot 0</option>
-            <option value="ota_1">OTA slot 1</option>
-        </select><br>
-        Update binary file : <input type="file" name="file" id="file" accept=".bin"> <button type="button"
-            onclick="doUpload()">Update !</button>
-        <pre id="result"></pre>
-    </details>
-
-    <details>
-        <summary>Display update over CAN</summary>
-        <p class="notice">Updating the displays over CAN requires selecting the correct <code>*.bin</code> file for
-            each, and takes about 2 minutes per side. Double check the correct side is selected before starting the
-            update !
-        </p>
-        Display to update : <select name="targetECU" id="targetECU">
-            <option value="RDB">Right Display (RDB)</option>
-            <option value="LDB">Left Display (LDB)</option>
-        </select><br>
-        Update binary file : <input type="file" name="CANfile" id="CANfile" accept=".bin"> <button type="button"
-            onclick="doCANUpload()">Flash !</button>
-        <pre id="flashresult"></pre>
-    </details>
-
-    <details>
-        <summary>NVS storage content</summary>
-        <p>
-            <button type="button" onclick="refreshNvsContent()">Scan / Refresh NVS</button>
-            <span id="nvs_count" class="notice"></span>
-        </p>
-        <div style="overflow-x:auto;">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Partition</th>
-                        <th>Namespace</th>
-                        <th>Key</th>
-                        <th>Type</th>
-                        <th>Value</th>
-                    </tr>
-                </thead>
-                <tbody id="nvs_tbody">
-                    <tr><td colspan="5">Click "Scan / Refresh NVS" to load entries.</td></tr>
-                </tbody>
-            </table>
+    <header>
+        <h1>Interface Board Factory App</h1>
+        <div class="header-meta">
+            <span>App: <strong id="info">Loading...</strong></span>
+            <div id="ws-badge" class="ws-badge reconnecting">
+                <span class="ws-dot"></span>
+                <span id="ws-status-text">WS Connecting...</span>
+            </div>
         </div>
-    </details>
+    </header>
 
-    <details>
-        <summary>Flush NVS storage</summary>
-        <p class="notice">
-            ⚠️ <strong>Warning:</strong> Flashing/wiping NVS will erase all configuration keys, calibration constants, and odometer tracking in all NVS partitions (<code>nvs</code>, <code>nvs_odo</code>).
-        </p>
-        <button type="button" onclick="wipeNvsStorage()" style="background-color: #d73a4a; color: white;">Wipe All NVS Storage</button>
-        <pre id="nvs_wipe_result"></pre>
-    </details>
+    <main>
+        <!-- Tab Navigation -->
+        <nav class="tab-nav">
+            <button id="btn-tab-setup" class="tab-btn active" onclick="switchTab('setup')">⚙️ Setup & Calibration</button>
+            <button id="btn-tab-debug" class="tab-btn" onclick="switchTab('debug')">⚡ IO & Bus Debug</button>
+            <button id="btn-tab-ota" class="tab-btn" onclick="switchTab('ota')">🚀 OTA & Partitions</button>
+            <button id="btn-tab-nvs" class="tab-btn" onclick="switchTab('nvs')">💾 NVS Storage</button>
+        </nav>
 
-    <div>
-        <p class="notice"> The <code>Factory</code> partition is the currently running one. <br>After flashing
-            successfully one of the OTA slots, this selection will be automatically updated.</p>
-        <p>Next reboot will be on :<br>
-        <pre id="bootPart"></pre>
-        </p>
-        <select id="bootsel">
-            <option value="factory">Factory App</option>
-            <option value="ota_0">OTA slot 0</option>
-            <option value="ota_1">OTA slot 1</option>
-        </select>
-        <button
-            onclick="fetch('/set_boot?target='+document.getElementById('bootsel').value,{method:'POST'}).then(r=>r.text()).then(t=>alert(t))">Set
-            and reboot now</button>
-    </div>
+        <!-- TAB 1: SETUP & CALIBRATION -->
+        <section id="tab-setup">
+            <div class="card-grid">
+                <!-- Odometer & Trip Card -->
+                <div class="card">
+                    <h3>Odometer & Trip</h3>
+                    <div class="form-row">
+                        <label style="width: 100%;">Total Odometer (meters):</label>
+                        <input id="new_odo" type="number" min="0" step="1" placeholder="Meters">
+                        <button type="button" onclick="updateOdometer()">Set Odo</button>
+                    </div>
+                    <small>Current stored: <mark id="odometer">-</mark> m</small>
+                    <hr>
+                    <div class="form-row">
+                        <label style="width: 100%;">Trip Counter (meters):</label>
+                        <input id="new_trip" type="number" min="0" step="1" placeholder="Meters">
+                        <button type="button" onclick="updateTrip()">Set Trip</button>
+                    </div>
+                    <small>Current trip: <mark id="trip">-</mark> m</small>
+                </div>
+
+                <!-- Calibration Card -->
+                <div class="card">
+                    <h3>Sensor Calibration</h3>
+                    <div class="form-row">
+                        <label style="width: 100%;">
+                            <input id="fuel_learn_en" type="checkbox" onchange="toggleFuelLearn(this.checked)">
+                            <strong>Fuel Full Dynamic Learning:</strong> <span id="fuel_learn_status">Enabled</span>
+                        </label>
+                    </div>
+                    <hr>
+                    <div class="form-row">
+                        <label style="width: 100%;">Fuel Full Sender Baseline (&Omega;): <mark><span id="fuel_full_r">-</span> &Omega;</mark></label>
+                        <input id="new_fuel_full_r" type="number" min="150" max="350" step="1">
+                        <button type="button" onclick="updateCalParam('new_fuel_full_r')">Save</button>
+                        <button type="button" onclick="resetFuelFullR()">Reset 250&Omega;</button>
+                    </div>
+                    <hr>
+                    <div class="form-row">
+                        <label style="width: 100%;">Low Fuel Alarm Threshold (%): <mark><span id="low_fuel_threshold">-</span>%</mark></label>
+                        <input id="new_low_fuel_threshold" type="number" min="0" max="100" step="1">
+                        <button type="button" onclick="updateCalParam('new_low_fuel_threshold')">Save</button>
+                    </div>
+                    <hr>
+                    <div class="form-row">
+                        <label style="width: 100%;">Coolant Overtemp Warning (&deg;C): <mark><span id="overtemp_threshold">-</span>&deg;C</mark></label>
+                        <input id="new_overtemp_threshold" type="number" min="0" max="250" step="1">
+                        <button type="button" onclick="updateCalParam('new_overtemp_threshold')">Save</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 2: LIVE IO & BUS DEBUG -->
+        <section id="tab-debug" style="display:none;">
+            <!-- CAN Nodes Version & Alive Card -->
+            <div class="card" style="margin-bottom: 1.2rem;">
+                <h3>CAN Bus Node Diagnostics (LDB / RDB)</h3>
+                <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
+                    <div>
+                        <strong>Left Display Board (LDB):</strong>
+                        <span id="ldb-status" class="part-badge part-prev">WAITING</span>
+                        <span id="ldb-version" style="margin-left: 0.5rem; font-family: var(--mono-font);">-</span>
+                    </div>
+                    <div>
+                        <strong>Right Display Board (RDB):</strong>
+                        <span id="rdb-status" class="part-badge part-prev">WAITING</span>
+                        <span id="rdb-version" style="margin-left: 0.5rem; font-family: var(--mono-font);">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-grid">
+                <!-- Discrete Active Hi/Lo Inputs -->
+                <div class="card">
+                    <h3>Discrete Inputs (Active High / Low)</h3>
+                    <p style="font-size:0.85rem; color:var(--text-light); margin-top:0;">Raw decoded state from TCA9555 expander & direct GPIOs:</p>
+                    <div class="pill-grid" id="pill-container">
+                        <div class="io-pill off" id="pill-ignition"><span class="io-name">Ignition</span><span id="txt-ignition">OFF (0V)</span></div>
+                        <div class="io-pill off" id="pill-hi_beams"><span class="io-name">Hi-Beams</span><span id="txt-hi_beams">OFF (0V)</span></div>
+                        <div class="io-pill ok" id="pill-alternator"><span class="io-name">Alternator</span><span id="txt-alternator">OK (12V)</span></div>
+                        <div class="io-pill ok" id="pill-brake_fluid"><span class="io-name">Brake Fluid</span><span id="txt-brake_fluid">OK (12V)</span></div>
+                        <div class="io-pill ok" id="pill-handbrake"><span class="io-name">Handbrake</span><span id="txt-handbrake">RELEASE (12V)</span></div>
+                        <div class="io-pill ok" id="pill-oil_press"><span class="io-name">Oil Pressure</span><span id="txt-oil_press">OK (12V)</span></div>
+                        <div class="io-pill ok" id="pill-airbag"><span class="io-name">Airbag</span><span id="txt-airbag">OK (12V)</span></div>
+                        <div class="io-pill ok" id="pill-cel"><span class="io-name">Check Engine</span><span id="txt-cel">OFF (12V)</span></div>
+                        <div class="io-pill off" id="pill-turn_l"><span class="io-name">Turn Left</span><span id="txt-turn_l">OFF (0V)</span></div>
+                        <div class="io-pill off" id="pill-turn_r"><span class="io-name">Turn Right</span><span id="txt-turn_r">OFF (0V)</span></div>
+                        <div class="io-pill ok" id="pill-abs"><span class="io-name">ABS Fault</span><span id="txt-abs">OK (12V)</span></div>
+                        <div class="io-pill ok" id="pill-door"><span class="io-name">Door Open</span><span id="txt-door">CLOSED (12V)</span></div>
+                    </div>
+                </div>
+
+                <!-- Raw ADC Channels -->
+                <div class="card">
+                    <h3>Raw ADC Voltages (ADS1115)</h3>
+                    <p style="font-size:0.85rem; color:var(--text-light); margin-top:0;">Unfiltered instantaneous millivolt readings (0–4096 mV caliber):</p>
+                    
+                    <div class="meter-row">
+                        <div class="meter-header">
+                            <span>Ch 0: Fuel Sender</span>
+                            <strong id="val-adc-0">- mV</strong>
+                        </div>
+                        <progress id="prog-adc-0" value="0" max="4096"></progress>
+                    </div>
+
+                    <div class="meter-row">
+                        <div class="meter-header">
+                            <span>Ch 1: Battery Sense</span>
+                            <strong id="val-adc-1">- mV</strong>
+                        </div>
+                        <progress id="prog-adc-1" value="0" max="4096"></progress>
+                    </div>
+
+                    <div class="meter-row">
+                        <div class="meter-header">
+                            <span>Ch 2: Aux Sensor</span>
+                            <strong id="val-adc-2">- mV</strong>
+                        </div>
+                        <progress id="prog-adc-2" value="0" max="4096"></progress>
+                    </div>
+
+                    <div class="meter-row">
+                        <div class="meter-header">
+                            <span>Ch 3: Reference Vdd</span>
+                            <strong id="val-adc-3">- mV</strong>
+                        </div>
+                        <progress id="prog-adc-3" value="0" max="4096"></progress>
+                    </div>
+
+                    <hr>
+                    <h3>MCPWM Capture Frequencies</h3>
+                    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center;">
+                        <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
+                            <small>Coolant</small><br>
+                            <strong id="val-pwm-coolant" style="font-size:1.1rem; color:var(--accent);">- Hz</strong>
+                        </div>
+                        <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
+                            <small>RPM</small><br>
+                            <strong id="val-pwm-rpm" style="font-size:1.1rem; color:var(--accent);">- Hz</strong>
+                        </div>
+                        <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
+                            <small>Speed</small><br>
+                            <strong id="val-pwm-speed" style="font-size:1.1rem; color:var(--accent);">- Hz</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: OTA & PARTITIONS -->
+        <section id="tab-ota" style="display:none;">
+            <!-- Partition Identification Card -->
+            <div class="card" style="margin-bottom: 1.2rem;">
+                <h3>Boot Partition Identification</h3>
+                <div style="display:flex; flex-direction:column; gap:0.5rem;">
+                    <div>• <strong>Current Running Partition:</strong> <span id="cur-running-badge" class="part-badge part-running">-</span> <small id="cur-running-desc"></small></div>
+                    <div>• <strong>Previous Boot Partition:</strong> <span id="prev-boot-badge" class="part-badge part-prev">-</span> <small id="prev-boot-desc"></small></div>
+                    <div>• <strong>Recommended Update Target:</strong> <span id="rec-target-badge" class="part-badge part-target">-</span></div>
+                </div>
+                <hr>
+                <div style="font-size: 0.9rem;">
+                    <div>Factory slot: <mark id="factory_project">-</mark> (<span id="factory_version">-</span>)</div>
+                    <div>OTA 0 slot: <mark id="ota0_project">-</mark> (<span id="ota0_version">-</span>)</div>
+                    <div>OTA 1 slot: <mark id="ota1_project">-</mark> (<span id="ota1_version">-</span>)</div>
+                </div>
+                <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <button type="button" onclick="refreshPartitions()">Refresh Status</button>
+                    <button type="button" onclick="rebootMcu()">Reboot MCU</button>
+                </div>
+            </div>
+
+            <div class="card-grid">
+                <!-- Local ESP32 OTA Update -->
+                <div class="card">
+                    <h3>Local ESP32 Firmware Update</h3>
+                    <p style="font-size:0.85rem; color:var(--text-light); margin-top:0;">Flash new firmware directly into ITF partition:</p>
+                    <div class="form-row">
+                        <label style="width: 100%;">Target Partition:</label>
+                        <select id="target" style="width:100%;">
+                            <option value="ota_0">ota_0</option>
+                            <option value="ota_1">ota_1</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <input id="file" type="file" accept=".bin" style="width:100%;">
+                    </div>
+                    <button id="btn-ota-upload" type="button" onclick="doUpload()" style="width:100%;">Start Local Flash</button>
+
+                    <!-- Real-Time Progress -->
+                    <div id="ota-progress-box" style="margin-top: 1rem; display:none;">
+                        <div class="meter-header">
+                            <span id="ota-status-label">Starting...</span>
+                            <strong id="ota-pct-label">0%</strong>
+                        </div>
+                        <progress id="ota-progress-bar" value="0" max="100"></progress>
+                        <small id="ota-byte-counter">0 / 0 bytes</small>
+                    </div>
+                    <pre id="result" style="margin-top:0.8rem; font-size:0.85rem; max-height:120px; overflow-y:auto;"></pre>
+                </div>
+
+                <!-- Display Flash over CAN -->
+                <div class="card">
+                    <h3>Display Update over CAN</h3>
+                    <p style="font-size:0.85rem; color:var(--text-light); margin-top:0;">Stream firmware chunks over TWAI to LDB or RDB:</p>
+                    <div class="form-row">
+                        <label style="width: 100%;">Target ECU:</label>
+                        <select id="targetECU" style="width:100%;">
+                            <option value="RDB">Right Display (RDB)</option>
+                            <option value="LDB">Left Display (LDB)</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <input id="CANfile" type="file" accept=".bin" style="width:100%;">
+                    </div>
+                    <button id="btn-can-flash" type="button" onclick="doCANUpload()" style="width:100%;">Flash Node via CAN</button>
+
+                    <!-- CAN Progress -->
+                    <div id="can-progress-box" style="margin-top: 1rem; display:none;">
+                        <div class="meter-header">
+                            <span id="can-status-label">Starting CAN transfer...</span>
+                            <strong id="can-pct-label">0%</strong>
+                        </div>
+                        <progress id="can-progress-bar" value="0" max="100"></progress>
+                        <small id="can-byte-counter">0 / 0 bytes</small>
+                    </div>
+                    <pre id="flashresult" style="margin-top:0.8rem; font-size:0.85rem; max-height:120px; overflow-y:auto;"></pre>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: NVS STORAGE -->
+        <section id="tab-nvs" style="display:none;">
+            <div class="card">
+                <h3>Non-Volatile Storage (NVS) Explorer</h3>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; flex-wrap:wrap; gap:0.5rem;">
+                    <button type="button" onclick="refreshNvsContent()">Scan / Refresh NVS</button>
+                    <span id="nvs_count" class="notice" style="padding:0.4rem 0.8rem; margin:0;"></span>
+                    <button type="button" onclick="wipeNvsStorage()" style="background:#c62828; border-color:#c62828; color:#fff;">⚠️ Erase All NVS</button>
+                </div>
+                <div id="nvs_wipe_result" style="font-weight:bold; margin-bottom:0.5rem;"></div>
+
+                <div style="overflow-x:auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Partition</th>
+                                <th>Namespace</th>
+                                <th>Key</th>
+                                <th>Type</th>
+                                <th>Value</th>
+                            </tr>
+                        </thead>
+                        <tbody id="nvs_tbody">
+                            <tr><td colspan="5"><em>Click Scan / Refresh to inspect NVS entries.</em></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
 
     <script>
+        // Tab switching logic
+        function switchTab(tabId) {
+            const tabs = ['setup', 'debug', 'ota', 'nvs'];
+            tabs.forEach(t => {
+                const el = document.getElementById('tab-' + t);
+                const btn = document.getElementById('btn-tab-' + t);
+                if (el && btn) {
+                    if (t === tabId) {
+                        el.style.display = 'block';
+                        btn.classList.add('active');
+                    } else {
+                        el.style.display = 'none';
+                        btn.classList.remove('active');
+                    }
+                }
+            });
+        }
+
+        // WebSocket Telemetry & OTA Progress Engine
+        var ws = null;
+        var wsReconnectTimer = null;
+
+        function connectWs() {
+            var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            var wsUrl = protocol + '//' + window.location.host + '/ws';
+            var badge = document.getElementById('ws-badge');
+            var statusText = document.getElementById('ws-status-text');
+
+            try {
+                ws = new WebSocket(wsUrl);
+            } catch (e) {
+                console.error('WS init error', e);
+                scheduleWsReconnect();
+                return;
+            }
+
+            ws.onopen = function () {
+                badge.className = 'ws-badge connected';
+                statusText.innerText = 'WS Connected (5 Hz)';
+                if (wsReconnectTimer) {
+                    clearTimeout(wsReconnectTimer);
+                    wsReconnectTimer = null;
+                }
+            };
+
+            ws.onmessage = function (evt) {
+                try {
+                    var msg = JSON.parse(evt.data);
+                    if (msg.type === 'telemetry') {
+                        handleTelemetryMsg(msg);
+                    } else if (msg.type === 'ota_progress') {
+                        handleOtaProgressMsg(msg);
+                    }
+                } catch (e) {
+                    console.error('WS JSON parse error:', e, evt.data);
+                }
+            };
+
+            ws.onclose = function () {
+                badge.className = 'ws-badge reconnecting';
+                statusText.innerText = 'WS Disconnected';
+                scheduleWsReconnect();
+            };
+
+            ws.onerror = function (err) {
+                console.warn('WS error:', err);
+                ws.close();
+            };
+        }
+
+        function scheduleWsReconnect() {
+            if (!wsReconnectTimer) {
+                wsReconnectTimer = setTimeout(function () {
+                    wsReconnectTimer = null;
+                    connectWs();
+                }, 2000);
+            }
+        }
+
+        function handleTelemetryMsg(msg) {
+            // 1. Discrete Inputs
+            // Each input displays semantic status and actual 12V side voltage (12V or 0V)
+            if (msg.ios) {
+                // AH_ignition: Active HIGH (12V = ON [ok], 0V = OFF [off])
+                updateIoPill('ignition', msg.ios.ignition, 'ON (12V)', 'ok', 'OFF (0V)', 'off');
+                // AH_hi_beams: Active HIGH (12V = ON [warn/active], 0V = OFF [off])
+                updateIoPill('hi_beams', msg.ios.hi_beams, 'ON (12V)', 'warn', 'OFF (0V)', 'off');
+                // AL_alternator: Active LOW (0V = CHARGE FAULT [bad], 12V = OK [ok])
+                updateIoPill('alternator', !msg.ios.alternator, 'OK (12V)', 'ok', 'FAULT (0V)', 'bad');
+                // AL_brake_low: Active LOW (0V = LOW [bad], 12V = OK [ok])
+                updateIoPill('brake_fluid', !msg.ios.brake_fluid, 'OK (12V)', 'ok', 'LOW (0V)', 'bad');
+                // AL_parking_brake: Active LOW (0V = PULL/ENGAGED [warn], 12V = RELEASED [ok])
+                updateIoPill('handbrake', !msg.ios.handbrake, 'RELEASE (12V)', 'ok', 'ENGAGED (0V)', 'warn');
+                // AL_oil_press: Active LOW (0V = LOW [bad], 12V = OK [ok])
+                updateIoPill('oil_press', !msg.ios.oil_press, 'OK (12V)', 'ok', 'LOW (0V)', 'bad');
+                // AL_airbag: Active LOW (0V = FAULT [bad], 12V = OK [ok])
+                updateIoPill('airbag', !msg.ios.airbag, 'OK (12V)', 'ok', 'FAULT (0V)', 'bad');
+                // AL_cel: Active LOW (0V = ON/FAULT [bad], 12V = OFF [ok])
+                updateIoPill('cel', !msg.ios.cel, 'OFF (12V)', 'ok', 'ON (0V)', 'bad');
+                // AH_turn_l: Active HIGH (12V = ACTIVE [ok], 0V = OFF [off])
+                updateIoPill('turn_l', msg.ios.turn_l, 'ACTIVE (12V)', 'ok', 'OFF (0V)', 'off');
+                // AH_turn_r: Active HIGH (12V = ACTIVE [ok], 0V = OFF [off])
+                updateIoPill('turn_r', msg.ios.turn_r, 'ACTIVE (12V)', 'ok', 'OFF (0V)', 'off');
+                // AL_abs: Active LOW (0V = FAULT [bad], 12V = OK [ok])
+                updateIoPill('abs', !msg.ios.abs, 'OK (12V)', 'ok', 'FAULT (0V)', 'bad');
+                // AL_door: Active LOW (0V = OPEN [warn], 12V = CLOSED [ok])
+                updateIoPill('door', !msg.ios.door, 'CLOSED (12V)', 'ok', 'OPEN (0V)', 'warn');
+            }
+
+            // 2. Raw ADC Voltages (0-4096mV)
+            if (msg.adc_raw) {
+                setAdcMeter(0, msg.adc_raw.ch0);
+                setAdcMeter(1, msg.adc_raw.ch1);
+                setAdcMeter(2, msg.adc_raw.ch2);
+                setAdcMeter(3, msg.adc_raw.ch3);
+            }
+
+            // 3. MCPWM Frequencies
+            if (msg.mcpwm) {
+                if (msg.mcpwm.coolant_hz !== undefined) document.getElementById('val-pwm-coolant').innerText = msg.mcpwm.coolant_hz.toFixed(1) + ' Hz';
+                if (msg.mcpwm.rpm_hz !== undefined) document.getElementById('val-pwm-rpm').innerText = msg.mcpwm.rpm_hz.toFixed(1) + ' Hz';
+                if (msg.mcpwm.speed_hz !== undefined) document.getElementById('val-pwm-speed').innerText = msg.mcpwm.speed_hz.toFixed(1) + ' Hz';
+            }
+
+            // 4. CAN Node Versions
+            if (msg.can_nodes) {
+                if (msg.can_nodes.ldb) {
+                    var ldb = msg.can_nodes.ldb;
+                    var st = document.getElementById('ldb-status');
+                    st.innerText = ldb.alive ? 'ALIVE' : 'OFFLINE';
+                    st.className = 'part-badge ' + (ldb.alive ? 'part-running' : 'part-prev');
+                    document.getElementById('ldb-version').innerText = (ldb.version && ldb.version.trim() !== '') ? ldb.version : 'v-.-.-';
+                }
+                if (msg.can_nodes.rdb) {
+                    var rdb = msg.can_nodes.rdb;
+                    var st = document.getElementById('rdb-status');
+                    st.innerText = rdb.alive ? 'ALIVE' : 'OFFLINE';
+                    st.className = 'part-badge ' + (rdb.alive ? 'part-running' : 'part-prev');
+                    document.getElementById('rdb-version').innerText = (rdb.version && rdb.version.trim() !== '') ? rdb.version : 'v-.-.-';
+                }
+            }
+        }
+
+        function updateIoPill(id, isTrueState, trueTxt, trueClass, falseTxt, falseClass) {
+            var el = document.getElementById('pill-' + id);
+            var txt = document.getElementById('txt-' + id);
+            if (el && txt) {
+                if (isTrueState) {
+                    el.className = 'io-pill ' + trueClass;
+                    txt.innerText = trueTxt;
+                } else {
+                    el.className = 'io-pill ' + falseClass;
+                    txt.innerText = falseTxt;
+                }
+            }
+        }
+
+        function setAdcMeter(ch, mv) {
+            if (mv === undefined) return;
+            var valEl = document.getElementById('val-adc-' + ch);
+            var progEl = document.getElementById('prog-adc-' + ch);
+            if (valEl && progEl) {
+                valEl.innerText = mv + ' mV';
+                progEl.value = Math.max(0, Math.min(4096, mv));
+            }
+        }
+
+        function handleOtaProgressMsg(msg) {
+            var isCan = (msg.phase === 'can_flash');
+            var pbox = document.getElementById(isCan ? 'can-progress-box' : 'ota-progress-box');
+            var pbar = document.getElementById(isCan ? 'can-progress-bar' : 'ota-progress-bar');
+            var pct = document.getElementById(isCan ? 'can-pct-label' : 'ota-pct-label');
+            var counter = document.getElementById(isCan ? 'can-byte-counter' : 'ota-byte-counter');
+            var status = document.getElementById(isCan ? 'can-status-label' : 'ota-status-label');
+
+            if (pbox) pbox.style.display = 'block';
+            if (pbar && msg.total > 0) {
+                var p = Math.floor((msg.written / msg.total) * 100);
+                pbar.value = p;
+                if (pct) pct.innerText = p + '%';
+                if (counter) counter.innerText = Number(msg.written).toLocaleString() + ' / ' + Number(msg.total).toLocaleString() + ' bytes';
+            }
+            if (status && msg.message) {
+                status.innerText = msg.message;
+            }
+        }
+
+        // REST API operations for Odometer & Trip
         function updateOdometer() {
             var val = document.getElementById('new_odo').value;
             if (val === '' || isNaN(val)) {
@@ -241,18 +849,33 @@
             });
         }
 
+        function formatVersion(ver) {
+            if (!ver || typeof ver !== 'string' || ver.trim() === '' || ver.trim() === '-') {
+                return 'v-.-.-';
+            }
+            return ver.trim();
+        }
+
         function refreshPartitions() {
             fetch('/partitions').then(r => r.json()).then(j => {
-                if (j.factory) { document.getElementById('factory_project').innerText = j.factory.project_name || '-'; document.getElementById('factory_version').innerText = (j.factory.version + ' built ' + j.factory.date) || '-'; }
-                if (j.ota_0) { document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-'; document.getElementById('ota0_version').innerText = (j.ota_0.version + ' built ' + j.ota_0.date + ' STATE : ' + j.ota_0.state) || '-'; }
-                if (j.ota_1) { document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-'; document.getElementById('ota1_version').innerText = (j.ota_1.version + ' built ' + j.ota_1.date + ' STATE : ' + j.ota_1.state) || '-'; }
+                if (j.factory) {
+                    document.getElementById('factory_project').innerText = j.factory.project_name || '-';
+                    document.getElementById('factory_version').innerText = (formatVersion(j.factory.version) + (j.factory.date ? (' built ' + j.factory.date) : ''));
+                }
+                if (j.ota_0) {
+                    document.getElementById('ota0_project').innerText = j.ota_0.project_name || '-';
+                    document.getElementById('ota0_version').innerText = (formatVersion(j.ota_0.version) + (j.ota_0.date ? (' built ' + j.ota_0.date) : '') + (j.ota_0.state ? (' STATE : ' + j.ota_0.state) : ''));
+                }
+                if (j.ota_1) {
+                    document.getElementById('ota1_project').innerText = j.ota_1.project_name || '-';
+                    document.getElementById('ota1_version').innerText = (formatVersion(j.ota_1.version) + (j.ota_1.date ? (' built ' + j.ota_1.date) : '') + (j.ota_1.state ? (' STATE : ' + j.ota_1.state) : ''));
+                }
             });
             fetch('/prevboot').then(r => r.json()).then(j => {
-                document.getElementById('bootPart').innerText = j.bootPart;
-                document.getElementById('prevRunningPart').innerText = j.prevRunningPart;
-                document.getElementById('recOTAPart').innerText = j.recOTAPart;
-                document.getElementById('bootsel').value = j.bootPart;
-                document.getElementById('target').value = j.recOTAPart
+                document.getElementById('cur-running-badge').innerText = j.bootPart || 'factory';
+                document.getElementById('prev-boot-badge').innerText = j.prevRunningPart || 'none';
+                document.getElementById('rec-target-badge').innerText = j.recOTAPart || 'ota_0';
+                document.getElementById('target').value = j.recOTAPart || 'ota_0';
             });
         }
 
@@ -329,6 +952,12 @@
                 .replace(/'/g, '&#039;');
         }
 
+        function rebootMcu() {
+            if (confirm('Reboot MCU now?')) {
+                fetch('/reboot', { method: 'POST' }).then(() => alert('Reboot command sent. Reconnecting...'));
+            }
+        }
+
         function doUpload() {
             var f = document.getElementById('file').files[0];
             if (!f) {
@@ -337,7 +966,7 @@
             }
             var target = document.getElementById('target').value;
             const baseURL = '/upload?target=' + target + '&';
-            uploadFile(f, baseURL, 'result').then(() => refreshPartitions());
+            uploadFile(f, baseURL, 'result', false).then(() => refreshPartitions());
         }
 
         function doCANUpload() {
@@ -348,55 +977,85 @@
             }
             var targetECU = document.getElementById('targetECU').value;
             const baseURL = '/flash?targetECU=' + targetECU + '&';
-            uploadFile(f, baseURL, 'flashresult').then(() => refreshPartitions());
+            uploadFile(f, baseURL, 'flashresult', true).then(() => refreshPartitions());
         }
 
-        async function uploadFile(file, baseURL, resultID) {
-            const uploadURL = baseURL; // Your ESP32 endpoint
+        async function uploadFile(file, baseURL, resultID, isCan) {
             const fileSize = file.size;
             const logOutput = document.getElementById(resultID);
-            // Reset UI elements
+            const pbox = document.getElementById(isCan ? 'can-progress-box' : 'ota-progress-box');
+            const pbar = document.getElementById(isCan ? 'can-progress-bar' : 'ota-progress-bar');
+            const pct = document.getElementById(isCan ? 'can-pct-label' : 'ota-pct-label');
+            const counter = document.getElementById(isCan ? 'can-byte-counter' : 'ota-byte-counter');
+            const status = document.getElementById(isCan ? 'can-status-label' : 'ota-status-label');
+
+            if (pbox) pbox.style.display = 'block';
+            if (pbar) pbar.value = 0;
+            if (pct) pct.innerText = '0%';
+            if (counter) counter.innerText = '0 / ' + fileSize.toLocaleString() + ' bytes';
+            if (status) status.innerText = 'Uploading binary stream...';
+
             logOutput.textContent = 'Starting file upload...';
-            // 1. Construct the URL with file size
-            const finalURL = `${uploadURL}size=${fileSize}`;
-            logOutput.textContent += `\nTarget URL: ${finalURL}`;
-            logOutput.textContent += `\nFile Size: ${fileSize} bytes.`;
+            const finalURL = `${baseURL}size=${fileSize}`;
+            logOutput.textContent += `\nTarget URL: ${finalURL}\nFile Size: ${fileSize} bytes.`;
+
             try {
-                // 3. Make the fetch request with the custom stream
                 const response = await fetch(finalURL, {
                     method: 'POST',
                     body: file,
-                    headers: {
-                        'Content-Type': 'application/octet-stream',
-                    },
+                    headers: { 'Content-Type': 'application/octet-stream' },
                 });
                 if (response.ok) {
                     const resultText = await response.text();
                     let formattedText;
                     try {
                         const j = JSON.parse(resultText);
-                        formattedText = `\nStatus: ${j.status}\nProject: ${j.project_name}\nVersion: ${j.version}\nBuilt : ${j.date_time}`;
+                        formattedText = `\nStatus: ${j.status}\nProject: ${j.project_name}\nVersion: ${j.version}\nBuilt: ${j.date_time}`;
                     } catch (e) {
                         formattedText = resultText;
                     }
                     logOutput.textContent += `\n\n✅ Upload Success! Server Response: ${formattedText}`;
+                    if (status) status.innerText = 'Upload complete & verified!';
+                    if (pbar) pbar.value = 100;
+                    if (pct) pct.innerText = '100%';
+                    if (counter) counter.innerText = fileSize.toLocaleString() + ' / ' + fileSize.toLocaleString() + ' bytes';
                 } else {
                     const errorText = await response.text();
                     logOutput.textContent += `\n\n❌ Upload Failed! HTTP Status: ${response.status}. Error: ${errorText}`;
+                    if (status) status.innerText = 'Upload failed!';
                 }
             } catch (error) {
                 logOutput.textContent += `\n\n❌ Network Error: Could not connect to the ESP32. ${error.message}`;
+                if (status) status.innerText = 'Network error!';
             }
+        }
+
+        function loadAppVersion(retryCount = 0) {
+            fetch('/version')
+                .then(r => {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(j => {
+                    var el = document.getElementById('info');
+                    if (el) {
+                        el.innerText = ((j.project_name || 'Interface Board') + ' ' + formatVersion(j.version) + (j.date ? ' (' + j.date + ')' : ''));
+                    }
+                })
+                .catch(err => {
+                    console.warn('Could not load /version (attempt ' + (retryCount + 1) + '):', err);
+                    if (retryCount < 5) {
+                        setTimeout(() => loadAppVersion(retryCount + 1), 1500 * (retryCount + 1));
+                    }
+                });
         }
 
         window.addEventListener('load', function () {
             refreshCalVariables();
             refreshPartitions();
             refreshOdometer();
-            refreshNvsContent();
-            fetch('/version').then(r => r.json()).then(j => {
-                document.getElementById('info').innerText = ('Project: ' + j.project_name + ' Version: ' + j.version + ' Built : ' + j.date)
-            });
+            connectWs();
+            loadAppVersion();
         });
     </script>
 </body>
