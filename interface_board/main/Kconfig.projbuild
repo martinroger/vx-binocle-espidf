@@ -176,6 +176,20 @@ menu "Interface board configuration"
 
     endmenu
 
+    choice HARDWARE_REVISION
+        prompt "Hardware Revision"
+        default HW_REV_POST_V0_3
+        help
+            Select board hardware revision. Pre-v0.3 boards have swapped RPM and Coolant
+            MCPWM GPIO capture pins compared to v0.3 and later revisions.
+
+        config HW_REV_POST_V0_3
+            bool "Hardware Revision v0.3 or later (Coolant GPIO 6, RPM GPIO 4)"
+
+        config HW_REV_PRE_V0_3
+            bool "Hardware Revision pre-v0.3 (Coolant GPIO 4, RPM GPIO 6)"
+    endchoice
+
     menu "MCPWM configuration"
         config PWM_DETECT_TIMEOUT
             int "Timeout in ms for which 0Hz and 0% will be declared for a PWM signal"
@@ -187,10 +201,14 @@ menu "Interface board configuration"
 
         config COOLANT_PWM_CAP_GPIO
             int "GPIO for the capture of the coolant PWM"
+            default 6 if HW_REV_POST_V0_3
+            default 4 if HW_REV_PRE_V0_3
             default 6
 
         config RPM_PWM_CAP_GPIO
             int "GPIO for the capture of the RPM pulses"
+            default 4 if HW_REV_POST_V0_3
+            default 6 if HW_REV_PRE_V0_3
             default 4
 
         config SPEED_PWM_CAP_GPIO

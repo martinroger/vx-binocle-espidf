@@ -104,6 +104,26 @@ struct can_node_diag_t
 	bool alive = false;
 	char version[32] = {0};
 	uint32_t last_seen_ms = 0;
+	// Multiplexed version fields
+	uint8_t major = 0;
+	uint8_t minor = 0;
+	uint8_t patch = 0;
+	bool dirty = false;
+	bool has_base_version = false;
+	char commit[8] = {0}; // 7 characters + null terminator
+	bool has_commit = false;
+
+	void update_version_string()
+	{
+		if (has_base_version && has_commit && commit[0] != '\0')
+		{
+			snprintf(version, sizeof(version), "v%u.%u.%u-%s%s", major, minor, patch, commit, dirty ? "-dirty" : "");
+		}
+		else if (has_base_version)
+		{
+			snprintf(version, sizeof(version), "v%u.%u.%u%s", major, minor, patch, dirty ? "-dirty" : "");
+		}
+	}
 };
 static can_node_diag_t can_ldb_diag;
 static can_node_diag_t can_rdb_diag;
@@ -120,12 +140,35 @@ static esp_err_t dispatch_can_frame(const twai_frame_t *msg)
 		binocan_ldb_board_version_t ldb_ver;
 		if (binocan_ldb_board_version_unpack(&ldb_ver, msg->buffer, msg->buffer_len) == 0)
 		{
-			uint8_t maj = binocan_ldb_board_version_ldb_version_major_decode(ldb_ver.ldb_version_major);
-			uint8_t min = binocan_ldb_board_version_ldb_version_minor_decode(ldb_ver.ldb_version_minor);
-			uint8_t patch = binocan_ldb_board_version_ldb_version_patch_decode(ldb_ver.ldb_version_patch);
-			snprintf(can_ldb_diag.version, sizeof(can_ldb_diag.version), "v%u.%u.%u", maj, min, patch);
 			can_ldb_diag.last_seen_ms = now;
 			can_ldb_diag.alive = true;
+
+			if (ldb_ver.ldb_version_mux == BINOCAN_LDB_BOARD_VERSION_LDB_VERSION_MUX_BASE_VERSION_TAG_AND_DIRTY_FLAG_CHOICE)
+			{
+				can_ldb_diag.major = (uint8_t)binocan_ldb_board_version_ldb_version_major_decode(ldb_ver.ldb_version_major);
+				can_ldb_diag.minor = (uint8_t)binocan_ldb_board_version_ldb_version_minor_decode(ldb_ver.ldb_version_minor);
+				can_ldb_diag.patch = (uint8_t)binocan_ldb_board_version_ldb_version_patch_decode(ldb_ver.ldb_version_patch);
+				can_ldb_diag.dirty = (binocan_ldb_board_version_ldb_version_dirty_decode(ldb_ver.ldb_version_dirty) != 0);
+				can_ldb_diag.has_base_version = true;
+				can_ldb_diag.update_version_string();
+			}
+			else if (ldb_ver.ldb_version_mux == BINOCAN_LDB_BOARD_VERSION_LDB_VERSION_MUX_COMMIT_ID_CHOICE)
+			{
+				// Read directly from uint64 to avoid float/double truncation on 56-bit commit value.
+				// If msg buffer contains valid payload, bytes 1..7 directly map to the 7-character SHA.
+				uint64_t commit_val = ldb_ver.ldb_version_commit;
+				for (int i = 0; i < 7; ++i)
+				{
+					char c = (char)((commit_val >> (8 * i)) & 0xFF);
+					// Work around IEEE-754 double precision loss on sender side where
+					// 56-bit integer converted to 53-bit double rounds 'a' (0x61) -> '`' (0x60).
+					if (i == 0 && c == '`') c = 'a';
+					can_ldb_diag.commit[i] = c;
+				}
+				can_ldb_diag.commit[7] = '\0';
+				can_ldb_diag.has_commit = true;
+				can_ldb_diag.update_version_string();
+			}
 		}
 	}
 	else if (msg->header.id == BINOCAN_RDB_BOARD_VERSION_FRAME_ID)
@@ -133,12 +176,31 @@ static esp_err_t dispatch_can_frame(const twai_frame_t *msg)
 		binocan_rdb_board_version_t rdb_ver;
 		if (binocan_rdb_board_version_unpack(&rdb_ver, msg->buffer, msg->buffer_len) == 0)
 		{
-			uint8_t maj = binocan_rdb_board_version_rdb_version_major_decode(rdb_ver.rdb_version_major);
-			uint8_t min = binocan_rdb_board_version_rdb_version_minor_decode(rdb_ver.rdb_version_minor);
-			uint8_t patch = binocan_rdb_board_version_rdb_version_patch_decode(rdb_ver.rdb_version_patch);
-			snprintf(can_rdb_diag.version, sizeof(can_rdb_diag.version), "v%u.%u.%u", maj, min, patch);
 			can_rdb_diag.last_seen_ms = now;
 			can_rdb_diag.alive = true;
+
+			if (rdb_ver.rdb_version_mux == BINOCAN_RDB_BOARD_VERSION_RDB_VERSION_MUX_BASE_VERSION_TAG_AND_DIRTY_FLAG_CHOICE)
+			{
+				can_rdb_diag.major = (uint8_t)binocan_rdb_board_version_rdb_version_major_decode(rdb_ver.rdb_version_major);
+				can_rdb_diag.minor = (uint8_t)binocan_rdb_board_version_rdb_version_minor_decode(rdb_ver.rdb_version_minor);
+				can_rdb_diag.patch = (uint8_t)binocan_rdb_board_version_rdb_version_patch_decode(rdb_ver.rdb_version_patch);
+				can_rdb_diag.dirty = (binocan_rdb_board_version_rdb_version_dirty_decode(rdb_ver.rdb_version_dirty) != 0);
+				can_rdb_diag.has_base_version = true;
+				can_rdb_diag.update_version_string();
+			}
+			else if (rdb_ver.rdb_version_mux == BINOCAN_RDB_BOARD_VERSION_RDB_VERSION_MUX_COMMIT_ID_CHOICE)
+			{
+				uint64_t commit_val = rdb_ver.rdb_version_commit;
+				for (int i = 0; i < 7; ++i)
+				{
+					char c = (char)((commit_val >> (8 * i)) & 0xFF);
+					if (i == 0 && c == '`') c = 'a';
+					can_rdb_diag.commit[i] = c;
+				}
+				can_rdb_diag.commit[7] = '\0';
+				can_rdb_diag.has_commit = true;
+				can_rdb_diag.update_version_string();
+			}
 		}
 	}
 	else if (msg->header.id == BINOCAN_LDB_ST_FRAME_ID)
@@ -389,7 +451,167 @@ static esp_err_t ws_handler(httpd_req_t *req)
 	return ESP_OK;
 }
 
+#pragma region Background Hardware Processing Tasks (ADC & Expander)
+
+// Global buffers & structures updated asynchronously in background tasks
+static volatile int16_t g_adc_raw_buffer[4] = {0};
+static SemaphoreHandle_t g_adc_mutex = NULL;
+static TaskHandle_t g_adc_task_hdl = NULL;
+
+static volatile float g_fuel_r = 0.0f;
+static volatile float g_fuel_pc = 0.0f;
+static volatile bool g_is_hi_cal = false;
+static volatile float g_batt_v = 0.0f;
+
+// Background ADC Acquisition & Caliber Switching Task
+// Relaxed sampling interval (~100-200ms) running asynchronously from WebSocket emitter.
+// No 5-values debounce ceiling: switches caliber cleanly based on instantaneous resistance with settling.
+static void adc_processing_task(void *pvParameters)
+{
+	ESP_LOGI(TAG, "Starting background ADC processing task");
+	while (1)
+	{
+		// Wait for conversion interval or relaxed cycle time
+		vTaskDelay(pdMS_TO_TICKS(150));
+
+		// Sample all 4 ADC channels
+		int16_t s0 = adc_measure_channel_raw(0);
+		vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 2));
+		int16_t s1 = adc_measure_channel_raw(1);
+		vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 2));
+		int16_t s2 = adc_measure_channel_raw(2);
+		vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 2));
+		int16_t s3 = adc_measure_channel_raw(3);
+
+		// Reference Vdd (3.3V) validation on ADC channel 3
+		float vref_3v3 = (float)s3 * 4.096f / 32768.0f;
+		float vref_raw_valid = 0.0f;
+		if (vref_3v3 >= (float)COEFF_VREF_MIN_V && vref_3v3 <= (float)COEFF_VREF_MAX_V && s3 > 0)
+		{
+			vref_raw_valid = (float)s3;
+		}
+		else
+		{
+			vref_raw_valid = (float)(COEFF_VREF_DEFAULT_V * 32768.0 / 4.096);
+		}
+
+		bool cur_hi_cal = (gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO) != 0);
+		double k_factor = cur_hi_cal ? COEFF_K_FACTOR_HI_SENSE : COEFF_K_FACTOR_LOW_SENSE;
+
+		// Calculate instantaneous fuel resistance
+		float instant_R = 0.0f;
+		if (s0 > 0 && vref_raw_valid > 0.0f)
+		{
+			instant_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)s0 / vref_raw_valid);
+		}
+
+		// Asynchronous caliber switching without multi-cycle delays or 5-value 1s checks
+		if (!cur_hi_cal && instant_R > (float)COEFF_FUEL_SWITCH_TO_HI_R)
+		{
+			// Switch to High Caliber
+			gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 1);
+			interface_board_st.EN_hi_R_sense_ST = true;
+			cur_hi_cal = true;
+
+			// Settle and discard transient sample
+			vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 10));
+			s0 = adc_measure_channel_raw(0);
+			k_factor = COEFF_K_FACTOR_HI_SENSE;
+			if (s0 > 0 && vref_raw_valid > 0.0f)
+			{
+				instant_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)s0 / vref_raw_valid);
+			}
+		}
+		else if (cur_hi_cal && instant_R < (float)COEFF_FUEL_SWITCH_TO_LOW_R)
+		{
+			// Switch to Low Caliber
+			gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);
+			interface_board_st.EN_hi_R_sense_ST = false;
+			cur_hi_cal = false;
+
+			// Settle and discard transient sample
+			vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 10));
+			s0 = adc_measure_channel_raw(0);
+			k_factor = COEFF_K_FACTOR_LOW_SENSE;
+			if (s0 > 0 && vref_raw_valid > 0.0f)
+			{
+				instant_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)s0 / vref_raw_valid);
+			}
+		}
+
+		// Compute physical interpretations
+		float fuel_r = instant_R;
+		if (fuel_r < 0.0f) fuel_r = 0.0f;
+		if (fuel_r > 4095.0f) fuel_r = 4095.0f;
+
+		float fuel_pc = (fuel_full_r > 0) ? (100.0f * fuel_r / (float)fuel_full_r) : 0.0f;
+		if (fuel_pc > 100.0f) fuel_pc = 100.0f;
+		if (fuel_pc < 0.0f) fuel_pc = 0.0f;
+
+		int32_t mv1 = (s1 > 0) ? ((int32_t)s1 * 4096 / 32768) : 0;
+		float lv_raw_v = (float)mv1 / 1000.0f;
+		float batt_v = (float)(lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P);
+		if (batt_v < 0.0f) batt_v = 0.0f;
+
+		// Safely update buffered values
+		if (xSemaphoreTake(g_adc_mutex, pdMS_TO_TICKS(20)) == pdTRUE)
+		{
+			g_adc_raw_buffer[0] = s0;
+			g_adc_raw_buffer[1] = s1;
+			g_adc_raw_buffer[2] = s2;
+			g_adc_raw_buffer[3] = s3;
+			g_fuel_r = fuel_r;
+			g_fuel_pc = fuel_pc;
+			g_is_hi_cal = cur_hi_cal;
+			g_batt_v = batt_v;
+			xSemaphoreGive(g_adc_mutex);
+		}
+	}
+}
+
+// Background Expander Processing Task
+// Uses relaxed periodic polling (200ms) with task notification from the TCA9555 interrupt
+// to trigger immediate on-demand reads when inputs change.
+static void expander_processing_task(void *pvParameters)
+{
+	ESP_LOGI(TAG, "Starting background IO expander processing task");
+	uint16_t exp_raw = 0;
+
+	while (1)
+	{
+		// Wait for either interrupt notification or timeout for periodic poll (200ms)
+		ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(200));
+
+		if (tca95x5_port_read(&tca_slave, &exp_raw) == ESP_OK)
+		{
+			if (xSemaphoreTake(exp_act_hilo_semaphore, pdMS_TO_TICKS(20)) == pdTRUE)
+			{
+				active_hi_lo_grp.AL_brake_low     = !read_bitmask(exp_raw, EXP_IO_0_BITMASK);  // Active LOW: pin HIGH = inactive (OK), pin LOW = active (fault)
+				active_hi_lo_grp.AL_parking_brake = !read_bitmask(exp_raw, EXP_IO_1_BITMASK);  // Active LOW
+				active_hi_lo_grp.AH_ignition      = !read_bitmask(exp_raw, EXP_IO_2_BITMASK);  // Inverted hardware buffer
+				active_hi_lo_grp.AL_oil_pressure  = !read_bitmask(exp_raw, EXP_IO_3_BITMASK);  // Active LOW
+				active_hi_lo_grp.AL_airbag        = !read_bitmask(exp_raw, EXP_IO_4_BITMASK);  // Active LOW
+				active_hi_lo_grp.AL_CEL           = !read_bitmask(exp_raw, EXP_IO_5_BITMASK);  // Active LOW
+				active_hi_lo_grp.AH_backlight     = !read_bitmask(exp_raw, EXP_IO_6_BITMASK);  // Inverted hardware buffer
+				active_hi_lo_grp.AH_alarm         = !read_bitmask(exp_raw, EXP_IO_7_BITMASK);  // Inverted hardware buffer
+				active_hi_lo_grp.AH_hi_beams      = !read_bitmask(exp_raw, EXP_IO_8_BITMASK);  // Inverted hardware buffer
+				active_hi_lo_grp.AL_button        = !read_bitmask(exp_raw, EXP_IO_9_BITMASK);  // Active LOW (pressed = LOW)
+				active_hi_lo_grp.AL_alternator    = !read_bitmask(exp_raw, EXP_IO_10_BITMASK); // Active LOW
+				active_hi_lo_grp.AH_coolant_low   = !read_bitmask(exp_raw, EXP_IO_11_BITMASK); // Inverted hardware buffer
+				active_hi_lo_grp.AH_left_turn     = !read_bitmask(exp_raw, EXP_IO_12_BITMASK); // Inverted hardware buffer
+				active_hi_lo_grp.AL_door          = !read_bitmask(exp_raw, EXP_IO_13_BITMASK); // Active LOW
+				active_hi_lo_grp.AH_right_turn    = !read_bitmask(exp_raw, EXP_IO_14_BITMASK); // Inverted hardware buffer
+				active_hi_lo_grp.AL_ABS           = !read_bitmask(exp_raw, EXP_IO_15_BITMASK); // Active LOW
+				xSemaphoreGive(exp_act_hilo_semaphore);
+			}
+		}
+	}
+}
+
+#pragma endregion
+
 // Periodic Telemetry Broadcast Task (default 5 Hz)
+// Pure emitter: simply reads snapshot from background buffers without performing I2C bus traffic
 static void ws_telemetry_broadcast_task(void *pvParameters)
 {
 	const uint32_t rate_hz = CONFIG_FACTORY_WS_REFRESH_RATE_HZ;
@@ -409,105 +631,42 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 			continue; // Do not waste CPU formatting JSON if no WebSocket clients connected
 		}
 
-		// 1. Read Discrete Inputs from TCA9555 IO Expander
-		// Alignment with interface_board twai_ops.hpp:
-		// Pin 0 (EXP_IO_0): AL_brake_low (Active Low, 0V = fault/active)
-		// Pin 1 (EXP_IO_1): AL_parking_brake (Active Low, 0V = pulled/active)
-		// Pin 2 (EXP_IO_2): AH_ignition (Active High, inverted at pin -> !pin: 12V = active)
-		// Pin 3 (EXP_IO_3): AL_oil_pressure (Active Low, 0V = low/active)
-		// Pin 4 (EXP_IO_4): AL_airbag (Active Low, 0V = fault/active)
-		// Pin 5 (EXP_IO_5): AL_CEL (Active Low, 0V = fault/active)
-		// Pin 8 (EXP_IO_8): AH_hi_beams (Active High, inverted at pin -> !pin: 12V = active)
-		// Pin 10 (EXP_IO_10): AL_alternator (Active Low, 0V = fault/active)
-		// Pin 12 (EXP_IO_12): AH_left_turn (Active High, inverted at pin -> !pin: 12V = active)
-		// Pin 13 (EXP_IO_13): AL_door (Active Low, 0V = open/active)
-		// Pin 14 (EXP_IO_14): AH_right_turn (Active High, inverted at pin -> !pin: 12V = active)
-		// Pin 15 (EXP_IO_15): AL_ABS (Active Low, 0V = fault/active)
-		uint16_t exp_raw = 0;
-		if (tca95x5_port_read(&tca_slave, &exp_raw) != ESP_OK)
+		// 1. Snapshot discrete IO states from active_hi_lo_grp (protected by semaphore)
+		active_hi_lo_grp_t io_snap;
+		if (xSemaphoreTake(exp_act_hilo_semaphore, pdMS_TO_TICKS(10)) == pdTRUE)
 		{
-			exp_raw = 0;
-		}
-
-		bool al_brk = !read_bitmask(exp_raw, EXP_IO_0_BITMASK);
-		bool al_hbk = !read_bitmask(exp_raw, EXP_IO_1_BITMASK);
-		bool ah_ign = !read_bitmask(exp_raw, EXP_IO_2_BITMASK); // Inverted hardware buffer
-		bool al_oil = !read_bitmask(exp_raw, EXP_IO_3_BITMASK);
-		bool al_abg = !read_bitmask(exp_raw, EXP_IO_4_BITMASK);
-		bool al_cel = !read_bitmask(exp_raw, EXP_IO_5_BITMASK);
-		bool ah_hib = !read_bitmask(exp_raw, EXP_IO_8_BITMASK); // Inverted hardware buffer
-		bool al_alt = !read_bitmask(exp_raw, EXP_IO_10_BITMASK);
-		bool ah_tl  = !read_bitmask(exp_raw, EXP_IO_12_BITMASK); // Inverted hardware buffer
-		bool al_dor = !read_bitmask(exp_raw, EXP_IO_13_BITMASK);
-		bool ah_tr  = !read_bitmask(exp_raw, EXP_IO_14_BITMASK); // Inverted hardware buffer
-		bool al_abs = !read_bitmask(exp_raw, EXP_IO_15_BITMASK);
-
-		// 2. Read Raw ADC channels (ADS1115 without SMA)
-		// ADS1115 full scale is 4096mV for ADS111X_GAIN_4V096 (16-bit bipolar: 32768 counts = 4096mV -> counts * 4096 / 32768 = counts / 8)
-		int16_t raw0 = adc_measure_channel_raw(0);
-		vTaskDelay(pdMS_TO_TICKS(5));
-		int16_t raw1 = adc_measure_channel_raw(1);
-		vTaskDelay(pdMS_TO_TICKS(5));
-		int16_t raw2 = adc_measure_channel_raw(2);
-		vTaskDelay(pdMS_TO_TICKS(5));
-		int16_t raw3 = adc_measure_channel_raw(3);
-
-		// Reference Vdd (3.3V) validation on ADC channel 3
-		float vref_3v3 = (float)raw3 * 4.096f / 32768.0f;
-		float vref_raw_valid = 0.0f;
-		if (vref_3v3 >= (float)COEFF_VREF_MIN_V && vref_3v3 <= (float)COEFF_VREF_MAX_V && raw3 > 0)
-		{
-			vref_raw_valid = (float)raw3;
+			io_snap = active_hi_lo_grp;
+			xSemaphoreGive(exp_act_hilo_semaphore);
 		}
 		else
 		{
-			vref_raw_valid = (float)(COEFF_VREF_DEFAULT_V * 32768.0 / 4.096);
+			io_snap = active_hi_lo_grp;
 		}
 
-		// Automatic caliber switching on A0 (Fuel Sender)
-		bool is_hi_cal = (gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO) != 0);
-		double k_factor = is_hi_cal ? COEFF_K_FACTOR_HI_SENSE : COEFF_K_FACTOR_LOW_SENSE;
-		float instant_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)raw0 / vref_raw_valid);
+		// 2. Snapshot ADC measurements & physical values from background buffer
+		int16_t raw0 = 0, raw1 = 0, raw2 = 0, raw3 = 0;
+		float fuel_level_R = 0.0f;
+		float fuel_level_pc = 0.0f;
+		bool is_hi_cal = false;
+		float batt_v = 0.0f;
 
-		if (!is_hi_cal && instant_R > (float)COEFF_FUEL_SWITCH_TO_HI_R)
+		if (xSemaphoreTake(g_adc_mutex, pdMS_TO_TICKS(10)) == pdTRUE)
 		{
-			// Switch to High Caliber
-			gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 1);
-			interface_board_st.EN_hi_R_sense_ST = true;
-			is_hi_cal = true;
-			vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 5));
-			raw0 = adc_measure_channel_raw(0);
-			k_factor = COEFF_K_FACTOR_HI_SENSE;
-		}
-		else if (is_hi_cal && instant_R < (float)COEFF_FUEL_SWITCH_TO_LOW_R)
-		{
-			// Switch to Low Caliber
-			gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);
-			interface_board_st.EN_hi_R_sense_ST = false;
-			is_hi_cal = false;
-			vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 5));
-			raw0 = adc_measure_channel_raw(0);
-			k_factor = COEFF_K_FACTOR_LOW_SENSE;
+			raw0 = g_adc_raw_buffer[0];
+			raw1 = g_adc_raw_buffer[1];
+			raw2 = g_adc_raw_buffer[2];
+			raw3 = g_adc_raw_buffer[3];
+			fuel_level_R = g_fuel_r;
+			fuel_level_pc = g_fuel_pc;
+			is_hi_cal = g_is_hi_cal;
+			batt_v = g_batt_v;
+			xSemaphoreGive(g_adc_mutex);
 		}
 
 		int32_t mv0 = (raw0 > 0) ? ((int32_t)raw0 * 4096 / 32768) : 0;
 		int32_t mv1 = (raw1 > 0) ? ((int32_t)raw1 * 4096 / 32768) : 0;
 		int32_t mv2 = (raw2 > 0) ? ((int32_t)raw2 * 4096 / 32768) : 0;
 		int32_t mv3 = (raw3 > 0) ? ((int32_t)raw3 * 4096 / 32768) : 0;
-
-		// Physical interpretations:
-		// Fuel resistance (Ohms) and Level (%)
-		float fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)raw0 / vref_raw_valid);
-		if (fuel_level_R < 0.0f) fuel_level_R = 0.0f;
-		if (fuel_level_R > 4095.0f) fuel_level_R = 4095.0f;
-		float fuel_level_pc = (fuel_full_r > 0) ? (100.0f * fuel_level_R / (float)fuel_full_r) : 0.0f;
-		if (fuel_level_pc > 100.0f) fuel_level_pc = 100.0f;
-		if (fuel_level_pc < 0.0f) fuel_level_pc = 0.0f;
-
-		// Battery 12V voltage (V)
-		float lv_raw_v = (float)mv1 / 1000.0f;
-		float batt_v = (float)(lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P);
-		if (batt_v < 0.0f) batt_v = 0.0f;
 
 		// 3. Compute MCPWM frequencies & duty cycle interpretations
 		compute_freq_dut(&pwm_cap_coolant);
@@ -523,6 +682,10 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 		float speed_val_kph = (float)(COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P);
 		if (speed_val_kph < 0.0f) speed_val_kph = 0.0f;
 
+		float coolant_duty_pc = (float)(100.0f * pwm_cap_coolant.duty_cycle);
+		if (coolant_duty_pc < 0.0f) coolant_duty_pc = 0.0f;
+		if (coolant_duty_pc > 100.0f) coolant_duty_pc = 100.0f;
+
 		// 4. Update alive flags based on GPIO and CAN message activity (timeout 3000ms)
 		uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
 		bool ld_can_alive = (can_ldb_diag.last_seen_ms > 0) && ((now_ms - can_ldb_diag.last_seen_ms) < 3000);
@@ -534,17 +697,23 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 		snprintf(json, sizeof(json),
 				 "{\"type\":\"telemetry\","
 				 "\"ios\":{\"ignition\":%s,\"hi_beams\":%s,\"alternator\":%s,\"brake_fluid\":%s,"
-				 "\"handbrake\":%s,\"oil_press\":%s,\"airbag\":%s,\"cel\":%s,\"turn_r\":%s,\"turn_l\":%s,\"abs\":%s,\"door\":%s},"
+				 "\"handbrake\":%s,\"oil_press\":%s,\"airbag\":%s,\"cel\":%s,\"turn_r\":%s,\"turn_l\":%s,\"abs\":%s,\"door\":%s,"
+				 "\"button\":%s,\"backlight\":%s,\"coolant_low\":%s},"
 				 "\"adc_raw\":{\"ch0\":%ld,\"ch1\":%ld,\"ch2\":%ld,\"ch3\":%ld},"
 				 "\"adc_phys\":{\"fuel_r\":%.1f,\"fuel_pc\":%.1f,\"fuel_cal\":\"%s\",\"batt_v\":%.2f},"
-				 "\"mcpwm\":{\"coolant_hz\":%.1f,\"coolant_c\":%.1f,\"rpm_hz\":%.1f,\"rpm_val\":%.0f,\"speed_hz\":%.1f,\"speed_kph\":%.1f},"
+				 "\"mcpwm\":{\"coolant_hz\":%.1f,\"coolant_duty\":%.1f,\"coolant_c\":%.1f,\"rpm_hz\":%.1f,\"rpm_val\":%.0f,\"speed_hz\":%.1f,\"speed_kph\":%.1f},"
 				 "\"can_nodes\":{\"ldb\":{\"alive\":%s,\"version\":\"%s\"},\"rdb\":{\"alive\":%s,\"version\":\"%s\"}}}",
-				 ah_ign ? "true" : "false", ah_hib ? "true" : "false", al_alt ? "true" : "false", al_brk ? "true" : "false",
-				 al_hbk ? "true" : "false", al_oil ? "true" : "false", al_abg ? "true" : "false", al_cel ? "true" : "false",
-				 ah_tr ? "true" : "false", ah_tl ? "true" : "false", al_abs ? "true" : "false", al_dor ? "true" : "false",
+				 io_snap.AH_ignition ? "true" : "false", io_snap.AH_hi_beams ? "true" : "false",
+				 io_snap.AL_alternator ? "true" : "false", io_snap.AL_brake_low ? "true" : "false",
+				 io_snap.AL_parking_brake ? "true" : "false", io_snap.AL_oil_pressure ? "true" : "false",
+				 io_snap.AL_airbag ? "true" : "false", io_snap.AL_CEL ? "true" : "false",
+				 io_snap.AH_right_turn ? "true" : "false", io_snap.AH_left_turn ? "true" : "false",
+				 io_snap.AL_ABS ? "true" : "false", io_snap.AL_door ? "true" : "false",
+				 io_snap.AL_button ? "true" : "false", io_snap.AH_backlight ? "true" : "false",
+				 io_snap.AH_coolant_low ? "true" : "false",
 				 (long)mv0, (long)mv1, (long)mv2, (long)mv3,
 				 fuel_level_R, fuel_level_pc, is_hi_cal ? "HIGH" : "LOW", batt_v,
-				 pwm_cap_coolant.frequency, coolant_degC, pwm_cap_rpm.frequency, rpm_val, pwm_cap_speed.frequency, speed_val_kph,
+				 pwm_cap_coolant.frequency, coolant_duty_pc, coolant_degC, pwm_cap_rpm.frequency, rpm_val, pwm_cap_speed.frequency, speed_val_kph,
 				 ld_alive ? "true" : "false", can_ldb_diag.version[0] ? can_ldb_diag.version : "v-.-.-",
 				 rd_alive ? "true" : "false", can_rdb_diag.version[0] ? can_rdb_diag.version : "v-.-.-");
 
@@ -1236,6 +1405,8 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 	bool OTA_started = false;
 	esp_err_t OTA_err;
 
+	uint32_t last_broadcast_bytes = 0;
+
 	while (writtenBytes < file_size)
 	{
 		// Request a new chunk only if previous chunk is exhausted
@@ -1316,7 +1487,15 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 		}
 
 		writtenBytes += bytesRetrieved;
-		broadcast_ota_progress("local_ota", writtenBytes, file_size, "Flashing local OTA partition...");
+
+		// Throttled progress update every 32KB or upon reaching EOF, with a brief yield
+		// so the HTTP server thread can process and transmit queued async WebSocket frames
+		if ((writtenBytes - last_broadcast_bytes >= 32768) || (writtenBytes == file_size))
+		{
+			broadcast_ota_progress("local_ota", writtenBytes, file_size, "Flashing local OTA partition...");
+			last_broadcast_bytes = writtenBytes;
+			vTaskDelay(pdMS_TO_TICKS(1));
+		}
 	}
 	// Normal exit
 	ESP_LOGI(__func__, "Written : %lu bytes, file size target %lu", writtenBytes, file_size);
@@ -1533,6 +1712,7 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	esp_err_t tx_err;
 	esp_err_t rx_err;
 	char out[256]; // Char buffer for special output to results field
+	uint32_t last_can_broadcast_bytes = 0;
 
 	// Create the OTA timeout timer if it does not exist yet
 	if (OTA_TO_timer == NULL)
@@ -1852,10 +2032,12 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				blockCounter++;
 				CF_SN++;
 
-				// Periodic progress update over WebSocket (e.g. every 4KB or at end)
-				if ((sentBytes % 4096 < 8) || sentBytes == file_size)
+				// Periodic progress update over WebSocket (every 32KB or upon reaching EOF)
+				if ((sentBytes - last_can_broadcast_bytes >= 32768) || sentBytes == file_size)
 				{
 					broadcast_ota_progress("can_flash", sentBytes, file_size, "Streaming firmware over CAN to display...");
+					last_can_broadcast_bytes = sentBytes;
+					vTaskDelay(pdMS_TO_TICKS(1));
 				}
 
 				// Break out of the loop if we have sent all the allowed blocks, and there is still data to send (for the FC_wait)
@@ -2675,6 +2857,13 @@ extern "C" void app_main(void)
 	{
 		ESP_LOGW(TAG, "i2cdev_init failed");
 	}
+
+	// Create mutex for ADC background buffer protection
+	g_adc_mutex = xSemaphoreCreateMutex();
+
+	// Spawn background hardware acquisition tasks (ADC and IO Expander)
+	xTaskCreate(expander_processing_task, "EXP_PROC", 4096, NULL, 4, &exp_act_hilo_proc_task_hdl);
+	xTaskCreate(adc_processing_task, "ADC_PROC", 4096, NULL, 4, &g_adc_task_hdl);
 
 	// Initialize MCPWM Capture Channels for Coolant, RPM, Speed
 	ESP_LOGI(TAG, "Setting up MCPWM capture channels...");

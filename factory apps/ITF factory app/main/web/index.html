@@ -347,8 +347,9 @@
         <!-- TAB 2: LIVE IO & BUS DEBUG -->
         <section id="tab-debug" style="display:none;">
             <!-- CAN Nodes Version & Alive Card -->
+            <!-- CAN Diagnostics -->
             <div class="card" style="margin-bottom: 1.2rem;">
-                <h3>CAN Bus Node Diagnostics (LDB / RDB)</h3>
+                <h3>xDB software versions</h3>
                 <div style="display: flex; gap: 2rem; flex-wrap: wrap;">
                     <div>
                         <strong>Left Display Board (LDB):</strong>
@@ -366,7 +367,7 @@
             <div class="card-grid">
                 <!-- Discrete Active Hi/Lo Inputs -->
                 <div class="card">
-                    <h3>Discrete Inputs (Active High / Low)</h3>
+                    <h3>Telltales</h3>
                     <p style="font-size:0.85rem; color:var(--text-light); margin-top:0;">Raw decoded state from TCA9555 expander & direct GPIOs:</p>
                     <div class="pill-grid" id="pill-container">
                         <div class="io-pill off" id="pill-ignition"><span class="io-name">Ignition</span><span id="txt-ignition">OFF (0V)</span></div>
@@ -381,6 +382,9 @@
                         <div class="io-pill off" id="pill-turn_r"><span class="io-name">Turn Right</span><span id="txt-turn_r">OFF (0V)</span></div>
                         <div class="io-pill ok" id="pill-abs"><span class="io-name">ABS Fault</span><span id="txt-abs">OK (12V)</span></div>
                         <div class="io-pill ok" id="pill-door"><span class="io-name">Door Open</span><span id="txt-door">CLOSED (12V)</span></div>
+                        <div class="io-pill off" id="pill-button"><span class="io-name">Button</span><span id="txt-button">RELEASED (0V)</span></div>
+                        <div class="io-pill off" id="pill-backlight"><span class="io-name">Backlight</span><span id="txt-backlight">OFF (0V)</span></div>
+                        <div class="io-pill ok" id="pill-coolant_low"><span class="io-name">Low Coolant</span><span id="txt-coolant_low">OK (0V)</span></div>
                     </div>
                 </div>
 
@@ -426,17 +430,17 @@
                     <h3>MCPWM Capture Signals</h3>
                     <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center;">
                         <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
-                            <small>Coolant Temp</small><br>
-                            <strong id="val-pwm-coolant" style="font-size:1.1rem; color:var(--accent);">- Hz</strong><br>
+                            <small>Coolant</small><br>
+                            <strong id="val-pwm-coolant" style="font-size:1.1rem; color:var(--accent);">- %</strong><br>
                             <small id="val-coolant-phys" style="font-weight:600; color:var(--text);">- &deg;C</small>
                         </div>
                         <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
-                            <small>Engine RPM</small><br>
+                            <small>RPM</small><br>
                             <strong id="val-pwm-rpm" style="font-size:1.1rem; color:var(--accent);">- Hz</strong><br>
                             <small id="val-rpm-phys" style="font-weight:600; color:var(--text);">- RPM</small>
                         </div>
                         <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
-                            <small>Vehicle Speed</small><br>
+                            <small>Speed</small><br>
                             <strong id="val-pwm-speed" style="font-size:1.1rem; color:var(--accent);">- Hz</strong><br>
                             <small id="val-speed-phys" style="font-weight:600; color:var(--text);">- km/h</small>
                         </div>
@@ -461,7 +465,17 @@
                     <div>OTA 0 slot: <mark id="ota0_project">-</mark> (<span id="ota0_version">-</span>)</div>
                     <div>OTA 1 slot: <mark id="ota1_project">-</mark> (<span id="ota1_version">-</span>)</div>
                 </div>
-                <div style="margin-top: 1rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <hr>
+                <div class="form-row" style="margin-top:0.75rem; align-items:center; gap:0.5rem; flex-wrap:wrap;">
+                    <label style="white-space:nowrap; font-weight:600;">Set Boot Partition:</label>
+                    <select id="bootsel" style="flex:1; min-width:120px;">
+                        <option value="factory">Factory App</option>
+                        <option value="ota_0">OTA slot 0</option>
+                        <option value="ota_1">OTA slot 1</option>
+                    </select>
+                    <button type="button" onclick="setBootAndReboot()" style="white-space:nowrap;">Set &amp; Reboot</button>
+                </div>
+                <div style="margin-top: 0.75rem; display:flex; gap:0.5rem; flex-wrap:wrap;">
                     <button type="button" onclick="refreshPartitions()">Refresh Status</button>
                     <button type="button" onclick="rebootMcu()">Reboot MCU</button>
                 </div>
@@ -665,6 +679,12 @@
                 updateIoPill('abs', !msg.ios.abs, 'OK (12V)', 'ok', 'FAULT (0V)', 'bad');
                 // AL_door: Active LOW (0V = OPEN [warn], 12V = CLOSED [ok])
                 updateIoPill('door', !msg.ios.door, 'CLOSED (12V)', 'ok', 'OPEN (0V)', 'warn');
+                // Button telltale: Active state (inverted logic: PRESSED when msg.ios.button is active)
+                updateIoPill('button', msg.ios.button, 'PRESSED', 'ok', 'RELEASED', 'off');
+                // AH_backlight: Active HIGH (12V = ON [ok], 0V = OFF [off])
+                updateIoPill('backlight', msg.ios.backlight, 'ON (12V)', 'ok', 'OFF (0V)', 'off');
+                // AH_coolant_low: Active HIGH (12V = LOW ALERT [bad], 0V = OK [ok])
+                updateIoPill('coolant_low', msg.ios.coolant_low, 'LOW (12V)', 'bad', 'OK (0V)', 'ok');
             }
 
             // 2. Raw ADC Voltages (0-4096mV) & Physical Interpretations
@@ -686,9 +706,11 @@
                 }
             }
 
-            // 3. MCPWM Frequencies & Physical Interpretations
+            // 3. MCPWM Signals & Physical Interpretations
             if (msg.mcpwm) {
-                if (msg.mcpwm.coolant_hz !== undefined) {
+                if (msg.mcpwm.coolant_duty !== undefined) {
+                    document.getElementById('val-pwm-coolant').innerText = msg.mcpwm.coolant_duty.toFixed(1) + ' %';
+                } else if (msg.mcpwm.coolant_hz !== undefined) {
                     document.getElementById('val-pwm-coolant').innerText = msg.mcpwm.coolant_hz.toFixed(1) + ' Hz';
                 }
                 if (msg.mcpwm.coolant_c !== undefined) {
@@ -906,6 +928,7 @@
                 document.getElementById('prev-boot-badge').innerText = j.prevRunningPart || 'none';
                 document.getElementById('rec-target-badge').innerText = j.recOTAPart || 'ota_0';
                 document.getElementById('target').value = j.recOTAPart || 'ota_0';
+                document.getElementById('bootsel').value = j.recOTAPart || 'ota_0';
             });
         }
 
@@ -986,6 +1009,15 @@
             if (confirm('Reboot MCU now?')) {
                 fetch('/reboot', { method: 'POST' }).then(() => alert('Reboot command sent. Reconnecting...'));
             }
+        }
+
+        function setBootAndReboot() {
+            var target = document.getElementById('bootsel').value;
+            if (!confirm('Set next boot partition to "' + target + '" and reboot now?')) return;
+            fetch('/set_boot?target=' + encodeURIComponent(target), { method: 'POST' })
+                .then(r => r.text())
+                .then(t => alert(t || 'Boot partition set. Device is rebooting…'))
+                .catch(e => alert('Error: ' + e));
         }
 
         function doUpload() {

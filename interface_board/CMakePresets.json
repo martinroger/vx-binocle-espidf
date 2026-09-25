@@ -1,0 +1,48 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "default",
+      "displayName": "Default (Post-v0.3 HW)",
+      "description": "Default configuration for post-v0.3 hardware revisions",
+      "binaryDir": "${sourceDir}/build/default",
+      "cacheVariables": {
+        "SDKCONFIG": "${sourceDir}/build/default/sdkconfig",
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults"
+      }
+    },
+    {
+      "name": "prev03",
+      "displayName": "Pre-v0.3 HW Revision",
+      "description": "Configuration for pre-v0.3 hardware revisions (swapped Coolant & RPM capture GPIOs)",
+      "binaryDir": "${sourceDir}/build/prev03",
+      "cacheVariables": {
+        "SDKCONFIG": "${sourceDir}/build/prev03/sdkconfig",
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults;${sourceDir}/sdkconfig.defaults.prev03",
+        "IDF_TARGET": "esp32s3"
+      },
+      "vendor": {
+        "espressif/vscode-esp-idf": {
+          "schemaVersion": 1,
+          "settings": [
+            {
+              "type": "openOCD",
+              "value": {
+                "debugLevel": 2,
+                "configs": [
+                  "board/esp32s3-builtin.cfg"
+                ],
+                "args": []
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
