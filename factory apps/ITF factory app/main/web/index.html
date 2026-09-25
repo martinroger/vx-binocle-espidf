@@ -385,13 +385,14 @@
                 </div>
 
                 <!-- Raw ADC Channels -->
+                <!-- Raw ADC Channels & Interpreted Metrics -->
                 <div class="card">
-                    <h3>Raw ADC Voltages (ADS1115)</h3>
-                    <p style="font-size:0.85rem; color:var(--text-light); margin-top:0;">Unfiltered instantaneous millivolt readings (0–4096 mV caliber):</p>
+                    <h3>ADC Voltages & Physical Values</h3>
+                    <p style="font-size:0.85rem; color:var(--text-light); margin-top:0;">Raw instantaneous millivolt readings (0–4096 mV) & converted vehicle values:</p>
                     
                     <div class="meter-row">
                         <div class="meter-header">
-                            <span>Ch 0: Fuel Sender</span>
+                            <span>Ch 0: Fuel Sender <small id="lbl-fuel-phys" style="color:var(--accent); font-weight:600;">(- &Omega; | -% [- Cal])</small></span>
                             <strong id="val-adc-0">- mV</strong>
                         </div>
                         <progress id="prog-adc-0" value="0" max="4096"></progress>
@@ -399,7 +400,7 @@
 
                     <div class="meter-row">
                         <div class="meter-header">
-                            <span>Ch 1: Battery Sense</span>
+                            <span>Ch 1: Battery Sense <small id="lbl-batt-phys" style="color:var(--accent); font-weight:600;">(- V)</small></span>
                             <strong id="val-adc-1">- mV</strong>
                         </div>
                         <progress id="prog-adc-1" value="0" max="4096"></progress>
@@ -415,26 +416,29 @@
 
                     <div class="meter-row">
                         <div class="meter-header">
-                            <span>Ch 3: Reference Vdd</span>
+                            <span>Ch 3: Reference Vdd (3.3V)</span>
                             <strong id="val-adc-3">- mV</strong>
                         </div>
                         <progress id="prog-adc-3" value="0" max="4096"></progress>
                     </div>
 
                     <hr>
-                    <h3>MCPWM Capture Frequencies</h3>
+                    <h3>MCPWM Capture Signals</h3>
                     <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; text-align: center;">
                         <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
-                            <small>Coolant</small><br>
-                            <strong id="val-pwm-coolant" style="font-size:1.1rem; color:var(--accent);">- Hz</strong>
+                            <small>Coolant Temp</small><br>
+                            <strong id="val-pwm-coolant" style="font-size:1.1rem; color:var(--accent);">- Hz</strong><br>
+                            <small id="val-coolant-phys" style="font-weight:600; color:var(--text);">- &deg;C</small>
                         </div>
                         <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
-                            <small>RPM</small><br>
-                            <strong id="val-pwm-rpm" style="font-size:1.1rem; color:var(--accent);">- Hz</strong>
+                            <small>Engine RPM</small><br>
+                            <strong id="val-pwm-rpm" style="font-size:1.1rem; color:var(--accent);">- Hz</strong><br>
+                            <small id="val-rpm-phys" style="font-weight:600; color:var(--text);">- RPM</small>
                         </div>
                         <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
-                            <small>Speed</small><br>
-                            <strong id="val-pwm-speed" style="font-size:1.1rem; color:var(--accent);">- Hz</strong>
+                            <small>Vehicle Speed</small><br>
+                            <strong id="val-pwm-speed" style="font-size:1.1rem; color:var(--accent);">- Hz</strong><br>
+                            <small id="val-speed-phys" style="font-weight:600; color:var(--text);">- km/h</small>
                         </div>
                     </div>
                 </div>
@@ -663,7 +667,7 @@
                 updateIoPill('door', !msg.ios.door, 'CLOSED (12V)', 'ok', 'OPEN (0V)', 'warn');
             }
 
-            // 2. Raw ADC Voltages (0-4096mV)
+            // 2. Raw ADC Voltages (0-4096mV) & Physical Interpretations
             if (msg.adc_raw) {
                 setAdcMeter(0, msg.adc_raw.ch0);
                 setAdcMeter(1, msg.adc_raw.ch1);
@@ -671,11 +675,37 @@
                 setAdcMeter(3, msg.adc_raw.ch3);
             }
 
-            // 3. MCPWM Frequencies
+            if (msg.adc_phys) {
+                var fuelLbl = document.getElementById('lbl-fuel-phys');
+                if (fuelLbl && msg.adc_phys.fuel_r !== undefined) {
+                    fuelLbl.innerText = `(${msg.adc_phys.fuel_r.toFixed(1)} \u03A9 | ${msg.adc_phys.fuel_pc.toFixed(0)}% [${msg.adc_phys.fuel_cal || 'LOW'} Cal])`;
+                }
+                var battLbl = document.getElementById('lbl-batt-phys');
+                if (battLbl && msg.adc_phys.batt_v !== undefined) {
+                    battLbl.innerText = `(${msg.adc_phys.batt_v.toFixed(1)} V)`;
+                }
+            }
+
+            // 3. MCPWM Frequencies & Physical Interpretations
             if (msg.mcpwm) {
-                if (msg.mcpwm.coolant_hz !== undefined) document.getElementById('val-pwm-coolant').innerText = msg.mcpwm.coolant_hz.toFixed(1) + ' Hz';
-                if (msg.mcpwm.rpm_hz !== undefined) document.getElementById('val-pwm-rpm').innerText = msg.mcpwm.rpm_hz.toFixed(1) + ' Hz';
-                if (msg.mcpwm.speed_hz !== undefined) document.getElementById('val-pwm-speed').innerText = msg.mcpwm.speed_hz.toFixed(1) + ' Hz';
+                if (msg.mcpwm.coolant_hz !== undefined) {
+                    document.getElementById('val-pwm-coolant').innerText = msg.mcpwm.coolant_hz.toFixed(1) + ' Hz';
+                }
+                if (msg.mcpwm.coolant_c !== undefined) {
+                    document.getElementById('val-coolant-phys').innerText = msg.mcpwm.coolant_c.toFixed(1) + ' \u00B0C';
+                }
+                if (msg.mcpwm.rpm_hz !== undefined) {
+                    document.getElementById('val-pwm-rpm').innerText = msg.mcpwm.rpm_hz.toFixed(1) + ' Hz';
+                }
+                if (msg.mcpwm.rpm_val !== undefined) {
+                    document.getElementById('val-rpm-phys').innerText = msg.mcpwm.rpm_val.toFixed(0) + ' RPM';
+                }
+                if (msg.mcpwm.speed_hz !== undefined) {
+                    document.getElementById('val-pwm-speed').innerText = msg.mcpwm.speed_hz.toFixed(1) + ' Hz';
+                }
+                if (msg.mcpwm.speed_kph !== undefined) {
+                    document.getElementById('val-speed-phys').innerText = msg.mcpwm.speed_kph.toFixed(1) + ' km/h';
+                }
             }
 
             // 4. CAN Node Versions

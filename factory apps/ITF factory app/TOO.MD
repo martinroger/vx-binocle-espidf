@@ -94,10 +94,19 @@ graph TD
       "ch2": 2048,
       "ch3": 4096
     },
+    "adc_phys": {
+      "fuel_r": 215.4,
+      "fuel_pc": 86.2,
+      "fuel_cal": "HIGH",
+      "batt_v": 12.60
+    },
     "mcpwm": {
       "coolant_hz": 45.2,
+      "coolant_c": 88.5,
       "rpm_hz": 830.0,
-      "speed_hz": 60.5
+      "rpm_val": 24900,
+      "speed_hz": 60.5,
+      "speed_kph": 14.8
     },
     "can_nodes": {
       "ldb": {

@@ -48,7 +48,7 @@ menu "ITF Factory configuration"
 
     endmenu
 
-    menu "ADC and SMA configuration"
+    menu "ADC configuration"
                 
         config PRIMARY_ADC_ADDR
             hex "Hex address for primary ADC chip"
@@ -61,14 +61,6 @@ menu "ITF Factory configuration"
             int "GPIO to set high caliber sense resistor for channel A"
             default 15
 
-        config FUEL_LEVEL_SENSE_ADC_CHANNEL
-            int "ADC channel for the fuel level sensing"
-            default 0
-        
-        config BATTERY_VOLT_SENSE_ADC_CHANNEL
-            int "ADC channel for the battery voltage sensing"
-            default 1
-
         # choice ADC_DATA_RATE
         #     prompt "Choose target conversion data rate"
         #     config ADS111X_DATA_RATE_8
@@ -79,36 +71,28 @@ menu "ITF Factory configuration"
         #         bool "ADS111X_DATA_RATE_128"
         # endchoice
         
-        config ADC_TO_SMA_POLLING_RATE_MS
+        config ADC_POLLING_RATE_MS
             int "Polling interval to add an element to the SMA"
             default 200
             help
-                Keep it relative to the SMA size to increase filtering and lag or not.
+                This will be superseded by the minimum time required to convert all channels (4 by default).
+    endmenu
 
-        config SMA_0_SIZE
-            int "Size of SMA filter for ADC 0"
+    menu "SMA Filters"
+        config FUEL_SMA_SIZE
+            int "Size of SMA filter for Fuel level sensing"
             default 100
             help
                 Multiply it by polling rate to get time window. E.g. 200ms at 100 elements -> 20s filtering.
             
-        config SMA_1_SIZE
-            int "Size of SMA filter for ADC 1"
+        config LV_SMA_SIZE
+            int "Size of SMA filter for low voltage sensing"
             default 10
             help
                 Multiply it by polling rate to get time window. E.g. 200ms at 100 elements -> 20s filtering.
-
-        config SMA_2_SIZE
-            int "Size of SMA filter for ADC 2"
-            default 10
-            help
-                Multiply it by polling rate to get time window. E.g. 200ms at 100 elements -> 20s filtering.
-
-        config SMA_3_SIZE
-            int "Size of SMA filter for ADC 3"
-            default 10
-            help
-                Multiply it by polling rate to get time window. E.g. 200ms at 100 elements -> 20s filtering.
+        
     endmenu
+
 
     menu "IO Expander configuration"
 
@@ -149,11 +133,11 @@ menu "ITF Factory configuration"
 
         config COOLANT_PWM_CAP_GPIO
             int "GPIO for the capture of the coolant PWM"
-            default 4
+            default 6
 
         config RPM_PWM_CAP_GPIO
             int "GPIO for the capture of the RPM pulses"
-            default 6
+            default 4
 
         config SPEED_PWM_CAP_GPIO
             int "GPIO for the capture of the speed PWM"

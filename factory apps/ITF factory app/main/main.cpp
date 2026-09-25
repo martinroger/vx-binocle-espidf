@@ -32,6 +32,8 @@
 #include "active_hi_low_processor.h"
 #include "adc_helpers.h"
 #include "mcpwm_capture_helpers.h"
+#include "coefficients.h"
+#include <math.h>
 
 #ifdef TAG
 #undef TAG
@@ -392,7 +394,7 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 {
 	const uint32_t rate_hz = CONFIG_FACTORY_WS_REFRESH_RATE_HZ;
 	const TickType_t delay_ticks = pdMS_TO_TICKS(1000 / (rate_hz > 0 ? rate_hz : 5));
-	char json[768];
+	char json[1024];
 
 	while (1)
 	{
@@ -449,15 +451,77 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 		int16_t raw2 = adc_measure_channel_raw(2);
 		vTaskDelay(pdMS_TO_TICKS(5));
 		int16_t raw3 = adc_measure_channel_raw(3);
+
+		// Reference Vdd (3.3V) validation on ADC channel 3
+		float vref_3v3 = (float)raw3 * 4.096f / 32768.0f;
+		float vref_raw_valid = 0.0f;
+		if (vref_3v3 >= (float)COEFF_VREF_MIN_V && vref_3v3 <= (float)COEFF_VREF_MAX_V && raw3 > 0)
+		{
+			vref_raw_valid = (float)raw3;
+		}
+		else
+		{
+			vref_raw_valid = (float)(COEFF_VREF_DEFAULT_V * 32768.0 / 4.096);
+		}
+
+		// Automatic caliber switching on A0 (Fuel Sender)
+		bool is_hi_cal = (gpio_get_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO) != 0);
+		double k_factor = is_hi_cal ? COEFF_K_FACTOR_HI_SENSE : COEFF_K_FACTOR_LOW_SENSE;
+		float instant_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)raw0 / vref_raw_valid);
+
+		if (!is_hi_cal && instant_R > (float)COEFF_FUEL_SWITCH_TO_HI_R)
+		{
+			// Switch to High Caliber
+			gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 1);
+			interface_board_st.EN_hi_R_sense_ST = true;
+			is_hi_cal = true;
+			vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 5));
+			raw0 = adc_measure_channel_raw(0);
+			k_factor = COEFF_K_FACTOR_HI_SENSE;
+		}
+		else if (is_hi_cal && instant_R < (float)COEFF_FUEL_SWITCH_TO_LOW_R)
+		{
+			// Switch to Low Caliber
+			gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);
+			interface_board_st.EN_hi_R_sense_ST = false;
+			is_hi_cal = false;
+			vTaskDelay(pdMS_TO_TICKS(conversion_interval_ms + 5));
+			raw0 = adc_measure_channel_raw(0);
+			k_factor = COEFF_K_FACTOR_LOW_SENSE;
+		}
+
 		int32_t mv0 = (raw0 > 0) ? ((int32_t)raw0 * 4096 / 32768) : 0;
 		int32_t mv1 = (raw1 > 0) ? ((int32_t)raw1 * 4096 / 32768) : 0;
 		int32_t mv2 = (raw2 > 0) ? ((int32_t)raw2 * 4096 / 32768) : 0;
 		int32_t mv3 = (raw3 > 0) ? ((int32_t)raw3 * 4096 / 32768) : 0;
 
-		// 3. Compute MCPWM frequencies
+		// Physical interpretations:
+		// Fuel resistance (Ohms) and Level (%)
+		float fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * (float)raw0 / vref_raw_valid);
+		if (fuel_level_R < 0.0f) fuel_level_R = 0.0f;
+		if (fuel_level_R > 4095.0f) fuel_level_R = 4095.0f;
+		float fuel_level_pc = (fuel_full_r > 0) ? (100.0f * fuel_level_R / (float)fuel_full_r) : 0.0f;
+		if (fuel_level_pc > 100.0f) fuel_level_pc = 100.0f;
+		if (fuel_level_pc < 0.0f) fuel_level_pc = 0.0f;
+
+		// Battery 12V voltage (V)
+		float lv_raw_v = (float)mv1 / 1000.0f;
+		float batt_v = (float)(lv_raw_v * COEFF_V_TO_LV_M + COEFF_V_TO_LV_P);
+		if (batt_v < 0.0f) batt_v = 0.0f;
+
+		// 3. Compute MCPWM frequencies & duty cycle interpretations
 		compute_freq_dut(&pwm_cap_coolant);
 		compute_freq_dut(&pwm_cap_rpm);
 		compute_freq_dut(&pwm_cap_speed);
+
+		float coolant_degC = (float)(100.0f * pwm_cap_coolant.duty_cycle * COEFF_DUTY_TO_COOLANT_DEGC_M + COEFF_DUTY_TO_COOLANT_DEGC_P);
+		if (coolant_degC < 70.0f) coolant_degC = 70.0f;
+		if (coolant_degC > 130.0f) coolant_degC = 130.0f;
+
+		float rpm_val = (float)(COEFF_FREQ_TO_RPM_M * pwm_cap_rpm.frequency + COEFF_FREQ_TO_RPM_P);
+		if (rpm_val < 0.0f) rpm_val = 0.0f;
+		float speed_val_kph = (float)(COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P);
+		if (speed_val_kph < 0.0f) speed_val_kph = 0.0f;
 
 		// 4. Update alive flags based on GPIO and CAN message activity (timeout 3000ms)
 		uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
@@ -466,19 +530,21 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 		bool ld_alive = check_LD_alive() || ld_can_alive;
 		bool rd_alive = check_RD_alive() || rd_can_alive;
 
-		// Format unified JSON frame
+		// Format unified JSON frame with raw ADC and interpreted physical metrics
 		snprintf(json, sizeof(json),
 				 "{\"type\":\"telemetry\","
 				 "\"ios\":{\"ignition\":%s,\"hi_beams\":%s,\"alternator\":%s,\"brake_fluid\":%s,"
 				 "\"handbrake\":%s,\"oil_press\":%s,\"airbag\":%s,\"cel\":%s,\"turn_r\":%s,\"turn_l\":%s,\"abs\":%s,\"door\":%s},"
 				 "\"adc_raw\":{\"ch0\":%ld,\"ch1\":%ld,\"ch2\":%ld,\"ch3\":%ld},"
-				 "\"mcpwm\":{\"coolant_hz\":%.1f,\"rpm_hz\":%.1f,\"speed_hz\":%.1f},"
+				 "\"adc_phys\":{\"fuel_r\":%.1f,\"fuel_pc\":%.1f,\"fuel_cal\":\"%s\",\"batt_v\":%.2f},"
+				 "\"mcpwm\":{\"coolant_hz\":%.1f,\"coolant_c\":%.1f,\"rpm_hz\":%.1f,\"rpm_val\":%.0f,\"speed_hz\":%.1f,\"speed_kph\":%.1f},"
 				 "\"can_nodes\":{\"ldb\":{\"alive\":%s,\"version\":\"%s\"},\"rdb\":{\"alive\":%s,\"version\":\"%s\"}}}",
 				 ah_ign ? "true" : "false", ah_hib ? "true" : "false", al_alt ? "true" : "false", al_brk ? "true" : "false",
 				 al_hbk ? "true" : "false", al_oil ? "true" : "false", al_abg ? "true" : "false", al_cel ? "true" : "false",
 				 ah_tr ? "true" : "false", ah_tl ? "true" : "false", al_abs ? "true" : "false", al_dor ? "true" : "false",
 				 (long)mv0, (long)mv1, (long)mv2, (long)mv3,
-				 pwm_cap_coolant.frequency, pwm_cap_rpm.frequency, pwm_cap_speed.frequency,
+				 fuel_level_R, fuel_level_pc, is_hi_cal ? "HIGH" : "LOW", batt_v,
+				 pwm_cap_coolant.frequency, coolant_degC, pwm_cap_rpm.frequency, rpm_val, pwm_cap_speed.frequency, speed_val_kph,
 				 ld_alive ? "true" : "false", can_ldb_diag.version[0] ? can_ldb_diag.version : "v-.-.-",
 				 rd_alive ? "true" : "false", can_rdb_diag.version[0] ? can_rdb_diag.version : "v-.-.-");
 
