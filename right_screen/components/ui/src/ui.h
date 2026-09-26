@@ -8,7 +8,6 @@
 #define SCREEN_ID_MAIN 1
 #endif
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -20,8 +19,6 @@ void animateTargetArc(lv_obj_t* targetArc, int32_t targetValue);
 void animateTargetArcWithDuration(lv_obj_t* targetArc, int32_t targetValue, uint32_t duration);
 
 void loadScreen(enum ScreensEnum screenId,bool animate);
-
-
 
 #ifdef __cplusplus
 }

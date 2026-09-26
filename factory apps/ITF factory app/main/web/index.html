@@ -908,7 +908,7 @@
             return ver.trim();
         }
 
-        function refreshPartitions() {
+        function refreshPartitions(useBootPart = false) {
             fetch('/partitions').then(r => r.json()).then(j => {
                 if (j.factory) {
                     document.getElementById('factory_project').innerText = j.factory.project_name || '-';
@@ -928,7 +928,11 @@
                 document.getElementById('prev-boot-badge').innerText = j.prevRunningPart || 'none';
                 document.getElementById('rec-target-badge').innerText = j.recOTAPart || 'ota_0';
                 document.getElementById('target').value = j.recOTAPart || 'ota_0';
-                document.getElementById('bootsel').value = j.recOTAPart || 'ota_0';
+                if (useBootPart) {
+                    document.getElementById('bootsel').value = j.bootPart || 'ota_0';
+                } else {
+                    document.getElementById('bootsel').value = j.prevRunningPart || 'ota_0';
+                }
             });
         }
 
@@ -1028,7 +1032,7 @@
             }
             var target = document.getElementById('target').value;
             const baseURL = '/upload?target=' + target + '&';
-            uploadFile(f, baseURL, 'result', false).then(() => refreshPartitions());
+            uploadFile(f, baseURL, 'result', false).then((ok) => refreshPartitions(ok === true));
         }
 
         function doCANUpload() {
@@ -1081,14 +1085,17 @@
                     if (pbar) pbar.value = 100;
                     if (pct) pct.innerText = '100%';
                     if (counter) counter.innerText = fileSize.toLocaleString() + ' / ' + fileSize.toLocaleString() + ' bytes';
+                    return true;
                 } else {
                     const errorText = await response.text();
                     logOutput.textContent += `\n\n❌ Upload Failed! HTTP Status: ${response.status}. Error: ${errorText}`;
                     if (status) status.innerText = 'Upload failed!';
+                    return false;
                 }
             } catch (error) {
                 logOutput.textContent += `\n\n❌ Network Error: Could not connect to the ESP32. ${error.message}`;
                 if (status) status.innerText = 'Network error!';
+                return false;
             }
         }
 

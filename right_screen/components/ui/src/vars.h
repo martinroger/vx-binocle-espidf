@@ -3,9 +3,6 @@
 
 #include <stdint.h>
 
-
-
-
 // extern int32_t engineCoolantTemp_max ;
 // extern int32_t engineCoolantTemp_min ;
 

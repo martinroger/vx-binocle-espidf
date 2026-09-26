@@ -15,5 +15,4 @@ extern void action_decimation_update(lv_event_t * e);
 extern void action_buzz_overtemp_toggled(lv_event_t * e);
 extern void action_enable_gears(lv_event_t * e);
 
-
 #endif /*EEZ_LVGL_UI_ACTIONS_H*/

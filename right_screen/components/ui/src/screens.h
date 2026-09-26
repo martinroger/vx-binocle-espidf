@@ -8,6 +8,14 @@
 extern "C" {
 #endif
 
+// Screens
+
+enum ScreensEnum {
+    _SCREEN_ID_FIRST = 1,
+    SCREEN_ID_MAIN_SCR = 1,
+    _SCREEN_ID_LAST = 1
+};
+
 typedef struct _objects_t {
     lv_obj_t *main_scr;
     lv_obj_t *main_tabview;
@@ -55,10 +63,6 @@ typedef struct _objects_t {
 
 extern objects_t objects;
 
-enum ScreensEnum {
-    SCREEN_ID_MAIN_SCR = 1,
-};
-
 void create_screen_main_scr();
 void tick_screen_main_scr();
 
@@ -66,7 +70,6 @@ void tick_screen_by_id(enum ScreensEnum screenId);
 void tick_screen(int screen_index);
 
 void create_screens();
-
 
 #ifdef __cplusplus
 }

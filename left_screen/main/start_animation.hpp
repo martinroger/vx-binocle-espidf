@@ -19,7 +19,7 @@
 inline void startup_anim()
 {
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
-    lv_obj_set_style_pad_radial(objects.rpm_scale, 10, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
+    // lv_obj_set_style_pad_radial(objects.rpm_scale, 10, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     lv_scale_set_text_src(objects.rpm_scale, rpm_scale_labels);
 
     // Settings screen alarm section
@@ -57,7 +57,7 @@ inline void startup_anim()
     lv_obj_set_state(objects.theme_switch, LV_STATE_DISABLED, !(display_board_st.modeLocked));
     lv_obj_set_state(objects.theme_switch, LV_STATE_CHECKED, !(display_board_st.lightMode));
 
-    lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
+    // lv_obj_set_style_pad_radial(objects.speed_scale, 15, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks
     if (!(display_board_st.mph_selected))
     {
         lv_scale_set_range(objects.speed_scale, 0, 2400);
