@@ -103,19 +103,21 @@ For technical specifications, platform constraints, and interaction flows, refer
 This project targets **ESP-IDF v5.5.x** on the **ESP32-S3** architecture.
 
 ```bash
-# Build Interface Board
-cd interface_board
-idf.py set-target esp32s3
-idf.py build
+# Build all 3 main cluster applications (ITF, Left Display, Right Display)
+python tools/build_main_apps.py --app all
 
-# Build Left Display
-cd ../left_screen
-idf.py set-target esp32s3
-idf.py build
+# Clean previous build & root sdkconfig before building main apps
+python tools/build_main_apps.py --app all --clean
+
+# Export full flashing bundles (bootloader, partition-table, app binary)
+python tools/build_main_apps.py --app itf --flash-bundle --output-dir dist/itf_release
 
 # Generate Bennu Special Delivery Packages (ITF_bennu.bin, LDB_bennu.bin, RDB_bennu.bin)
 python tools/build_deliveries.py --app all
+
+# Check and interactively update project dependencies across all apps
+python tools/manage_dependencies.py
 ```
 
 > [!TIP]
-> When modifying `Kconfig`, `Kconfig.projbuild`, or `sdkconfig.defaults`, always run a full clean build (`idf.py fullclean build`).
+> When modifying `Kconfig`, `Kconfig.projbuild`, or `sdkconfig.defaults`, always run a full clean build (`idf.py fullclean build` or pass `--clean` to `tools/build_main_apps.py` / `tools/build_deliveries.py`).
