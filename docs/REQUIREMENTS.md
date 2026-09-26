@@ -54,6 +54,10 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 - **REQ-OTA-CAN-003 (Non-Blocking Flash Ingestion)**: Buffer incoming CAN chunks into RAM rings and flash asynchronously in page blocks without triggering task watchdog timers (TWDT) or dropping bus frames.
 - **REQ-OTA-CAN-004 (End-of-Transfer Activation & Node Reboot)**: Provide end-of-transfer validation handshake, setting active boot partition (`esp_ota_set_boot_partition`), and synchronized bus reset sequence.
 
+### 2.7 Developer Tooling & Automation
+- **REQ-TOOL-001 (Automated Multi-App Firmware Compilation & Packaging)**: Provide automated command-line tooling (`tools/build_main_apps.py`) to build all primary cluster firmware targets (`interface_board`, `left_screen`, `right_screen`) sequentially or individually, supporting clean rebuilds (purging build outputs and root `sdkconfig`), runner auto-detection (`eim` / `idf.py`), full offline flashing bundle exports (`bootloader.bin`, `partition-table.bin`, `flasher_args.json`), and MD5 verification digests.
+- **REQ-TOOL-002 (Interactive Component Dependency Management & Documentation Sync)**: Provide interactive dependency management tooling (`tools/manage_dependencies.py`) to inspect and update external component versions in `idf_component.yml` manifests against Espressif Component Registry and Git remote repositories, trigger automated clean rebuilds for modified projects, and synchronize the Global External Dependency Matrix in `README.md`.
+
 ---
 
 ## 3. Implementation Traceability Matrix
@@ -88,3 +92,5 @@ The **VX Binocle** project is an automotive dual-display digital instrument clus
 | **REQ-OTA-CAN-002** | CAN Transceiver / Ops | [External `twai_daemon`](https://github.com/martinroger/twai_daemon), [`interface_board/main/twai_ops.hpp`](../interface_board/main/twai_ops.hpp) | Segmented chunk streaming & CRC verification |
 | **REQ-OTA-CAN-003** | Core / Flash | [`esp_ota_ops.h`](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-reference/system/ota.html) | RAM ring buffer to flash throughput benchmark |
 | **REQ-OTA-CAN-004** | Core / Reboot | [`esp_ota_ops.h`](https://docs.espressif.com/projects/esp-idf/en/v5.5.5/esp32s3/api-reference/system/ota.html) | Post-flash partition switch & reboot test |
+| **REQ-TOOL-001** | Build Tools | [`tools/build_main_apps.py`](../tools/build_main_apps.py) | CLI argument verification & automated compilation execution |
+| **REQ-TOOL-002** | Dependency Tools | [`tools/manage_dependencies.py`](../tools/manage_dependencies.py) | Upstream registry & git querying, manifest bump, & doc sync |

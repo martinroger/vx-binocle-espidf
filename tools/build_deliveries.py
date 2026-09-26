@@ -100,12 +100,17 @@ def build_factory_project(target_key: str, runner: list[str], clean: bool = Fals
     print(f"  Building Factory App: {cfg['display_name']} ({cfg['name']})")
     print(f"========================================================")
 
-    if clean and build_dir.exists():
-        print(f"[CLEAN] Removing {build_dir}")
-        shutil.rmtree(build_dir, ignore_errors=True)
+    if clean:
+        if build_dir.exists():
+            print(f"[CLEAN] Removing {build_dir}")
+            shutil.rmtree(build_dir, ignore_errors=True)
+        sdkconfig_path = proj_dir / "sdkconfig"
+        if sdkconfig_path.exists():
+            print(f"[CLEAN] Removing {sdkconfig_path}")
+            sdkconfig_path.unlink()
 
     if runner[0] == "eim":
-        cmd = ["eim", "run", "idf.py build"]
+        cmd = ["eim", "run", "idf.py build", "v5.5.5"]
     else:
         cmd = ["idf.py", "build"]
 
@@ -144,9 +149,14 @@ def build_bennu_delivery(
     print(f"  Payload: {payload_bin} ({human_size(payload_bin.stat().st_size)})")
     print(f"  Storage: {storage_bin} ({human_size(storage_bin.stat().st_size)})")
 
-    if clean and bennu_build_dir.exists():
-        print(f"[CLEAN] Removing {bennu_build_dir}")
-        shutil.rmtree(bennu_build_dir, ignore_errors=True)
+    if clean:
+        if bennu_build_dir.exists():
+            print(f"[CLEAN] Removing {bennu_build_dir}")
+            shutil.rmtree(bennu_build_dir, ignore_errors=True)
+        bennu_sdkconfig = BENNU_DIR / "sdkconfig"
+        if bennu_sdkconfig.exists():
+            print(f"[CLEAN] Removing {bennu_sdkconfig}")
+            bennu_sdkconfig.unlink()
 
     bennu_build_dir.mkdir(parents=True, exist_ok=True)
     # Stage payload and storage binaries into target build folder
@@ -159,7 +169,7 @@ def build_bennu_delivery(
 
     if runner[0] == "eim":
         idf_cmd = f"idf.py -B {build_dir_str} build"
-        cmd = ["eim", "run", idf_cmd]
+        cmd = ["eim", "run", idf_cmd, "v5.5.5"]
     else:
         cmd = [
             "idf.py",
