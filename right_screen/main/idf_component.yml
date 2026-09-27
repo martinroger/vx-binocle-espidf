@@ -7,9 +7,7 @@ dependencies:
   lvgl/lvgl: ^9.4.0
   twai_daemon:
     git: "https://github.com/martinroger/twai_daemon.git"
-    version: "v0.1.0"
   binocan:
     git: "https://github.com/martinroger/binocan.git"
-    version: "v0.2.1"
   lvgl_v9_port:
     path: "../../common/lvgl_v9_port"

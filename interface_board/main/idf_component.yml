@@ -7,7 +7,7 @@ dependencies:
   esp-idf-lib/tca95x5: ^1.0.7
   twai_daemon:
     git: "https://github.com/martinroger/twai_daemon.git"
-    version: "v0.1.0"
+
   binocan:
     git: "https://github.com/martinroger/binocan.git"
-    version: "v0.2.1"
+
