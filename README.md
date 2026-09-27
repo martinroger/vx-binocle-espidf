@@ -61,25 +61,25 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `emulator-console` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
 | `interface_board` | `twai_daemon` | `0.1.0` | `~0.1.0` *(git: martinroger/twai_daemon)* |
 | `interface_board` | `binocan` | `0.2.1` (`775e968`) | `v0.2.1` *(git: martinroger/binocan)* |
-| `interface_board` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.12` |
+| `interface_board` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
 | `interface_board` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
 | `interface_board` | `esp-idf-lib/esp_idf_lib_helpers` | `1.4.0` | `*` *(transitive)* |
 | `interface_board` | `esp-idf-lib/i2cdev` | `2.1.2` | `*` *(transitive)* |
 | `left_screen` | `twai_daemon` | `0.1.0` | `~0.1.0` *(git: martinroger/twai_daemon)* |
 | `left_screen` | `binocan` | `0.2.1` (`775e968`) | `v0.2.1` *(git: martinroger/binocan)* |
-| `left_screen` | `espressif/esp32_display_panel` | `1.0.4` | `^1.0.2` |
+| `left_screen` | `espressif/esp32_display_panel` | `1.0.4` | `^1.0.4` |
 | `left_screen` | `lvgl/lvgl` | `9.5.0` | `^9.4.0` |
 | `left_screen` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
 | `left_screen` | `espressif/esp32_io_expander` | `1.1.1` | `1.*` *(transitive)* |
 | `right_screen` | `twai_daemon` | `0.1.0` | `~0.1.0` *(git: martinroger/twai_daemon)* |
 | `right_screen` | `binocan` | `0.2.1` (`775e968`) | `v0.2.1` *(git: martinroger/binocan)* |
-| `right_screen` | `espressif/esp32_display_panel` | `1.0.4` | `^1.0.2` |
+| `right_screen` | `espressif/esp32_display_panel` | `1.0.4` | `^1.0.4` |
 | `right_screen` | `lvgl/lvgl` | `9.5.0` | `^9.4.0` |
 | `right_screen` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
 | `right_screen` | `espressif/esp32_io_expander` | `1.1.1` | `1.*` *(transitive)* |
 | `factory apps/ITF factory app` | `twai_daemon` | `0.1.0` (`588c470`) | `~0.1.0` *(git: martinroger/twai_daemon)* |
 | `factory apps/ITF factory app` | `binocan` | `0.2.1` (`775e968`) | `v0.2.1` *(git: martinroger/binocan)* |
-| `factory apps/ITF factory app` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.12` |
+| `factory apps/ITF factory app` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
 | `factory apps/ITF factory app` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
 | `factory apps/ITF factory app` | `espressif/mdns` | `1.13.1` | `*` |
 | `factory apps/left display factory app` | `twai_daemon` | `0.1.0` | `~0.1.0` *(git: martinroger/twai_daemon)* |

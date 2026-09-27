@@ -3,7 +3,7 @@ dependencies:
   ## Required IDF version
   idf:
     version: '>=4.1.0'
-  esp-idf-lib/ads111x: ^1.1.12
+  esp-idf-lib/ads111x: ^1.1.14
   esp-idf-lib/tca95x5: ^1.0.7
   twai_daemon:
     git: "https://github.com/martinroger/twai_daemon.git"

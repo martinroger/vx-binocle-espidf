@@ -3,7 +3,7 @@ dependencies:
   ## Required IDF version
   idf:
     version: '>=4.1.0'
-  espressif/esp32_display_panel: ^1.0.2
+  espressif/esp32_display_panel: ^1.0.4
   lvgl/lvgl: ^9.4.0
   twai_daemon:
     git: "https://github.com/martinroger/twai_daemon.git"
