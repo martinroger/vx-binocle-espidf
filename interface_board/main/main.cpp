@@ -404,7 +404,7 @@ extern "C" void app_main(void)
     }
 
     // Start TWAI
-    if (initCAN(NULL) != ESP_OK)
+    if (initCAN(&dispatchFrame) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialize TWAI daemon, marking invalid and rebooting.");
         attemptRollBack();
@@ -660,8 +660,11 @@ extern "C" void app_main(void)
     xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
 
-    // Here we should listen for the display boards to be ready and if the animation has not been sent, then we should execute it once and move on
-
+    while(!(LDB_ready && RDB_ready ))
+    {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    if (LDB_ready && RDB_ready && !animationDone) sendAnimation();
 
 
     while (1)

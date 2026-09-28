@@ -845,3 +845,42 @@ esp_err_t fullTellTales()
 }
 
 #pragma endregion
+
+#pragma region CANRX dispatcher
+
+/// @brief Dispatcher linked to the TWAI daemon. Parses received CAN frames
+/// @param rxMsg Received TWAI frame
+/// @return Error code, if relevant
+inline esp_err_t dispatchFrame(const twai_frame_t *rxMsg)
+{
+    if (LDB_ready && RDB_ready) return ESP_OK; // early exit
+    binocan_ldb_st_t LDB_state;
+    binocan_ldb_st_init(&LDB_state);
+    binocan_rdb_st_t RDB_state;
+    binocan_rdb_st_init(&RDB_state);
+    
+    if (rxMsg == nullptr)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    switch (rxMsg->header.id)
+    {
+    case BINOCAN_LDB_ST_FRAME_ID:
+        binocan_ldb_st_unpack(&LDB_state,rxMsg->buffer,rxMsg->buffer_len);
+        LDB_ready = (LDB_state.ldb_sm_st == BINOCAN_LDB_ST_LDB_SM_ST_OK_CHOICE);
+        break;
+    
+    case BINOCAN_RDB_ST_FRAME_ID:
+        binocan_rdb_st_unpack(&RDB_state,rxMsg->buffer,rxMsg->buffer_len);
+        RDB_ready = (RDB_state.rdb_sm_st == BINOCAN_RDB_ST_RDB_SM_ST_OK_CHOICE);
+        break;
+    
+    default:
+        break;
+    }
+
+    return ESP_OK;
+}
+
+#pragma endregion

@@ -27,6 +27,8 @@ struct board_ST
 
 bool rollBackPossible;      // Is rollback possible ?
 bool firstBoot;             // Is this the first boot after OTA ?
+bool LDB_ready = false;
+bool RDB_ready = false;
 bool animationDone = false; // Has the animation been sent out
 
 // Placeholders editable in factory mode

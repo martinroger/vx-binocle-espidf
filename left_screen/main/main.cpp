@@ -739,7 +739,6 @@ extern "C" void app_main()
     if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
     {
         esp_ota_mark_app_valid_cancel_rollback();
-        display_board_st.internal_ST = XDB_SM_ST_OK;
         ESP_LOGI(__func__, "App image is valid.");
 
         if (firstBoot)
@@ -776,6 +775,8 @@ extern "C" void app_main()
             }
 #endif
         }
+        // Everything is OK, inform the rest of the network
+        display_board_st.internal_ST = XDB_SM_ST_OK;
     }
     vTaskResume(CAN_RX_tsk_hdl);
     TO_timers_start();
