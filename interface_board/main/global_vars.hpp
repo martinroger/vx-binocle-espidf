@@ -25,8 +25,9 @@ struct board_ST
     parsed_app_meta_t *app_metadata; // Parsed app metadata for serving over CAN
 } interface_board_st;
 
-bool rollBackPossible; // Is rollback possible ?
-bool firstBoot;        // Is this the first boot after OTA ?
+bool rollBackPossible;      // Is rollback possible ?
+bool firstBoot;             // Is this the first boot after OTA ?
+bool animationDone = false; // Has the animation been sent out
 
 // Placeholders editable in factory mode
 uint16_t fuel_full_r = (uint16_t)COEFF_FUEL_FULL_R; // Learned or calibrated full tank resistance in Ohms (Default: 250)

@@ -220,6 +220,35 @@ esp_err_t attemptRollBack()
     }
 }
 
+esp_err_t sendAnimation()
+{
+    esp_err_t ret = ESP_FAIL;
+    // Acquisition tasks are continuing in the back
+    // We just stop the sender tasks. Probably should guard against empty pointers
+    vTaskSuspend(itf_fast_metrics_PKG_hdl);
+    vTaskSuspend(exp_act_hilo_proc_task_hdl);
+
+    float speed =0;
+    float rpm = 0;
+    float speed_delta = 50.0 * 270.0/2000.0;
+    float rpm_delta = 50.0 * 8000.0/2000.0;
+
+    while ((speed<270)&& (rpm<8000))
+    {
+        fullTellTales();
+        sendFastMetrics(speed,rpm);
+        speed += speed_delta;
+        rpm += rpm_delta;
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskResume(exp_act_hilo_proc_task_hdl);
+    vTaskResume(itf_fast_metrics_PKG_hdl);
+    
+    animationDone = true;
+    return ret;
+}
+
 extern "C" void app_main(void)
 {
 #pragma region OTA pre-checks
@@ -630,6 +659,10 @@ extern "C" void app_main(void)
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
     xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
+
+    // Here we should listen for the display boards to be ready and if the animation has not been sent, then we should execute it once and move on
+
+
 
     while (1)
     {
