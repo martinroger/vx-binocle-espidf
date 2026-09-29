@@ -228,23 +228,31 @@ esp_err_t sendAnimation()
     vTaskSuspend(itf_fast_metrics_PKG_hdl);
     vTaskSuspend(exp_act_hilo_proc_task_hdl);
 
-    float speed =0;
+    float speed = 0;
     float rpm = 0;
-    float speed_delta = 50.0 * 270.0/2000.0;
-    float rpm_delta = 50.0 * 8000.0/2000.0;
+    float speed_delta = 50.0 * 270.0 / 2000.0;
+    float rpm_delta = 50.0 * 8000.0 / 2000.0;
 
-    while ((speed<270)&& (rpm<8000))
+    while ((speed < 270) && (rpm < 8000))
     {
         fullTellTales();
-        sendFastMetrics(speed,rpm);
+        sendFastMetrics(speed, rpm);
         speed += speed_delta;
         rpm += rpm_delta;
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    vTaskDelay(pdMS_TO_TICKS(500));
+    uint8_t loop_counter = 0;
+    while (loop_counter < 70)
+    {
+        fullTellTales();
+        sendFastMetrics(speed, rpm);
+        loop_counter++;
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
     vTaskResume(exp_act_hilo_proc_task_hdl);
     vTaskResume(itf_fast_metrics_PKG_hdl);
-    
+
     animationDone = true;
     return ret;
 }
@@ -660,12 +668,12 @@ extern "C" void app_main(void)
     xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
 
-    while(!(LDB_ready && RDB_ready ))
+    while (!(LDB_ready && RDB_ready))
     {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    if (LDB_ready && RDB_ready && !animationDone) sendAnimation();
-
+    if (LDB_ready && RDB_ready && !animationDone)
+        sendAnimation();
 
     while (1)
     {

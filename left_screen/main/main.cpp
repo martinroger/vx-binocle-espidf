@@ -9,7 +9,7 @@
 #include "theme.hpp"
 #include "updateUI.hpp"
 #include "twai_ops.hpp"
-#include "start_animation.hpp"
+#include "setup_ui.hpp"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -421,7 +421,7 @@ extern "C" void action_decimation_update(lv_event_t *e)
  */
 extern "C" void action_enable_gears(lv_event_t *e)
 {
-    display_board_st.showGearPosition =  lv_obj_has_state(objects.gear_on,LV_STATE_CHECKED);
+    display_board_st.showGearPosition = lv_obj_has_state(objects.gear_on, LV_STATE_CHECKED);
     nvs_handle_t h;
     if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
         ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
@@ -433,7 +433,7 @@ extern "C" void action_enable_gears(lv_event_t *e)
         nvs_commit(h);
         nvs_close(h);
     }
-    p_gearPosition = gearPosition +1;
+    p_gearPosition = gearPosition + 1;
 }
 
 /// @brief Updates the overtemperature buzzer enabled status
@@ -562,7 +562,7 @@ extern "C" void app_main()
 
         if (nvs_get_u8(h, "mph_on", (uint8_t *)&(display_board_st.mph_selected)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve MPH status from NVS");
-        if (nvs_get_u8(h,"gear_on", (uint8_t *)&(display_board_st.showGearPosition)) != ESP_OK)
+        if (nvs_get_u8(h, "gear_on", (uint8_t *)&(display_board_st.showGearPosition)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve gear estimator display state from NVS");
 
         if (nvs_get_u8(h, "rpm_al_overr", (uint8_t *)&(display_board_st.rpm_alarm_override)) != ESP_OK)
@@ -637,6 +637,7 @@ extern "C" void app_main()
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
     }
+    TO_timers_start();
 #pragma endregion
 
 #pragma region BOARD INIT
@@ -675,6 +676,9 @@ extern "C" void app_main()
             }
 #endif
         }
+        //
+        // (board->getBacklight())->off();
+
         // Board start
         if (!(board->begin()))
         {
@@ -686,25 +690,7 @@ extern "C" void app_main()
         {
             // Get pointer to the Backlight class
             display_board_st.backLight = board->getBacklight();
-            if (display_board_st.lightMode)
-            {
-                display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
-            }
-            else
-            {
-                display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
-            }
-            // Get pointer to the IO Expander class
-            display_board_st.ioExpander = board->getIO_Expander();
-            display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
-            if (display_board_st.overTemp_buzz && overTemperatureOn)
-            {
-                display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
-            }
-            else
-            {
-                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
-            }
+            display_board_st.backLight->setBrightness(0);
         }
     }
 #pragma endregion
@@ -721,16 +707,15 @@ extern "C" void app_main()
     if (lvgl_port_lock(-1))
     {
         ui_init(); // Load the UI library and draw it
-        if (display_board_st.modeLocked)
-            switch_theme(!(display_board_st.lightMode));
         // Set up the debug screen
         lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", app_metadata->version, app_metadata->date, app_metadata->time);
         lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
         lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
 
-        startup_anim();
+        setup_ui();
         lvgl_port_unlock();
     }
+
     if (initBlinkTimer() != ESP_OK)
         ESP_LOGW(__func__, "Blinking timer could not be started.");
 
@@ -748,6 +733,29 @@ extern "C" void app_main()
     {
         esp_ota_mark_app_valid_cancel_rollback();
         ESP_LOGI(__func__, "App image is valid.");
+
+        triggerUIForceRefresh();
+        if (display_board_st.modeLocked)
+            switch_theme(!(display_board_st.lightMode), true);
+        if (display_board_st.lightMode)
+        {
+            display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+        }
+        else
+        {
+            display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+        }
+        // Get pointer to the IO Expander class
+        display_board_st.ioExpander = board->getIO_Expander();
+        display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
+        if (display_board_st.overTemp_buzz && overTemperatureOn)
+        {
+            display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
+        }
+        else
+        {
+            display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+        }
 
         if (firstBoot)
         {
@@ -784,10 +792,9 @@ extern "C" void app_main()
 #endif
         }
         // Everything is OK, inform the rest of the network
+        vTaskDelay(pdMS_TO_TICKS(500));
         display_board_st.internal_ST = XDB_SM_ST_OK;
     }
-    vTaskResume(CAN_RX_tsk_hdl);
-    TO_timers_start();
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
     xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);

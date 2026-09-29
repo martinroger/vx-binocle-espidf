@@ -16,7 +16,7 @@
 #include "theme.hpp"
 #include "updateUI.hpp"
 
-inline void startup_anim()
+inline void setup_ui()
 {
 #ifdef CONFIG_LEFT_SIDE_DISPLAY
     // lv_obj_set_style_pad_radial(objects.rpm_scale, 10, LV_PART_INDICATOR); // Pad the scale labels away from the tick marks

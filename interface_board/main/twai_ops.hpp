@@ -816,19 +816,19 @@ esp_err_t fullTellTales()
 
     binocan_itf_active_hi_lo.itf_ignition_ah_st = true;
     binocan_itf_active_hi_lo.itf_hi_beams_ah_tt = true;
-    binocan_itf_active_hi_lo.itf_alternator_al_tt = true;
-    binocan_itf_active_hi_lo.itf_brake_low_al_tt = true;
-    binocan_itf_active_hi_lo.itf_parking_brake_al_tt = true;
-    binocan_itf_active_hi_lo.itf_oil_pressure_al_tt = true;
-    binocan_itf_active_hi_lo.itf_airbag_al_tt = true;
-    binocan_itf_active_hi_lo.itf_cel_al_tt = true;
+    binocan_itf_active_hi_lo.itf_alternator_al_tt = false;
+    binocan_itf_active_hi_lo.itf_brake_low_al_tt = false;
+    binocan_itf_active_hi_lo.itf_parking_brake_al_tt = false;
+    binocan_itf_active_hi_lo.itf_oil_pressure_al_tt = false;
+    binocan_itf_active_hi_lo.itf_airbag_al_tt = false;
+    binocan_itf_active_hi_lo.itf_cel_al_tt = false;
     binocan_itf_active_hi_lo.itf_right_turn_ah_tt = true;
     binocan_itf_active_hi_lo.itf_left_turn_ah_tt = true;
-    binocan_itf_active_hi_lo.itf_abs_al_tt = true;
-    binocan_itf_active_hi_lo.itf_door_al_tt = true;
+    binocan_itf_active_hi_lo.itf_abs_al_tt = false;
+    binocan_itf_active_hi_lo.itf_door_al_tt = false;
     binocan_itf_active_hi_lo.itf_coolant_low_ah_tt = true;
     binocan_itf_active_hi_lo.itf_button_al = true;
-    binocan_itf_active_hi_lo.itf_alarm_ah = true;
+    binocan_itf_active_hi_lo.itf_alarm_ah = false;
     binocan_itf_active_hi_lo.itf_backlight_ah = true;
     // Virtual tell tales
     binocan_itf_active_hi_lo.itf_over_temperature_tt = true;
