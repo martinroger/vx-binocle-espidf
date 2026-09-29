@@ -80,68 +80,8 @@ inline void startup_anim()
     }
 #endif
 
-    vTaskSuspend(CAN_RX_tsk_hdl); // Ignore new inputs
-    TO_timers_stop();             // Stop the watchdogs
-    // Prepare values for the starting/check sequence
-    p_screen_interlock_OK = !screen_interlock_OK;
-    lv_obj_set_style_opa(objects.interlock_state, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_internal_ST = 0xFF;
-    lv_obj_set_style_opa(objects.internal_state, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_itf_board_st = 0xFF;
-    lv_obj_set_style_opa(objects.itf_state, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_CAN_RX_TimedOut = !CAN_RX_TimedOut;
-    lv_obj_set_style_opa(objects.can_state, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_indicatorsOn = !indicatorsOn;
-    lv_obj_set_style_opa(objects.indicators_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_rightTurnOn = !rightTurnOn;
-    p_leftTurnOn = !leftTurnOn;
-    p_highBeamOn = !highBeamOn;
-    lv_obj_set_style_opa(objects.hi_beam_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_lowFuelOn = !lowFuelOn;
-    lv_obj_set_style_opa(objects.low_fuel_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_overTemperatureOn = !overTemperatureOn;
-    lv_obj_set_style_opa(objects.over_temperature_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_brakesOn = !brakesOn;
-    lv_obj_set_style_opa(objects.brakes_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_absOn = !absOn;
-    lv_obj_set_style_opa(objects.abs_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_parkingBrakeOn = !parkingBrakeOn;
-    lv_obj_set_style_opa(objects.parkingbrake_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_lowCoolantOn = !lowCoolantOn;
-    lv_obj_set_style_opa(objects.low_coolant_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_batteryOn = !batteryOn;
-    lv_obj_set_style_opa(objects.battery_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_lowOilOn = !lowOilOn;
-    lv_obj_set_style_opa(objects.low_oil_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_milOn = !milOn;
-    lv_obj_set_style_opa(objects.mil_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    p_airbagOn = !airbagOn;
-    lv_obj_set_style_opa(objects.airbag_tt, LV_OPA_COVER, LV_STATE_DEFAULT);
-    lvgl_port_unlock();
-    vTaskDelay(100);
-    // ESP_LOGI(__func__, "Backlight : %d", board->getBacklight()->on());
     if (display_board_st.lightMode)
         display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
     else
         display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
-    // This probably needs to be called in a second point
-    lvgl_port_lock(-1);
-#ifdef CONFIG_LEFT_SIDE_DISPLAY
-    animateTargetArcWithDuration(objects.rpm_arc, 8000, 1000);
-    lvgl_port_unlock();
-    vTaskDelay(pdMS_TO_TICKS(1600));
-    lvgl_port_lock(-1);
-    animateTargetArcWithDuration(objects.rpm_arc, 0, 500);
-#elifdef CONFIG_RIGHT_SIDE_DISPLAY
-    animateTargetArcWithDuration(objects.speed_arc, 2400, 1000);
-    lvgl_port_unlock();
-    vTaskDelay(pdMS_TO_TICKS(1600));
-    lvgl_port_lock(-1);
-    animateTargetArcWithDuration(objects.speed_arc, 0, 500);
-#endif
-    lvgl_port_unlock();
-    vTaskDelay(pdMS_TO_TICKS(600));
-    lvgl_port_lock(-1);
-    updateLVGLObjects(true);
-    lvgl_port_unlock();
 }

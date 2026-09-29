@@ -7,6 +7,10 @@
 #include "esp_display_panel.hpp"
 #include "version_parser.h"
 #include "binocan.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+TaskHandle_t updateUI_task_hdl = NULL;
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;

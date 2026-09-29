@@ -717,7 +717,7 @@ extern "C" void app_main()
         attemptRollBack();
     }
 
-#pragma region Starting animation
+#pragma region UI Setup
     if (lvgl_port_lock(-1))
     {
         ui_init(); // Load the UI library and draw it
@@ -729,17 +729,24 @@ extern "C" void app_main()
         lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
 
         startup_anim();
+        lvgl_port_unlock();
     }
     if (initBlinkTimer() != ESP_OK)
         ESP_LOGW(__func__, "Blinking timer could not be started.");
 
+    // Launch UI elements update task
+    if (xTaskCreatePinnedToCore(updateUI_task, "UI_UPDATE", 8192, NULL, 2, &updateUI_task_hdl, 1) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create UI update task");
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+        attemptRollBack();
+    }
 #pragma endregion
 
     ESP_LOGI(__func__, "Setup done");
     if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
     {
         esp_ota_mark_app_valid_cancel_rollback();
-        display_board_st.internal_ST = XDB_SM_ST_OK;
         ESP_LOGI(__func__, "App image is valid.");
 
         if (firstBoot)
@@ -755,8 +762,8 @@ extern "C" void app_main()
                 {
                     lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
                     lv_label_set_text(objects.speed, "0");
-                    updateLVGLObjects(true);
                     lvgl_port_unlock();
+                    triggerUIForceRefresh();
                 }
             }
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
@@ -770,12 +777,14 @@ extern "C" void app_main()
                 {
                     lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
                     lv_label_set_text(objects.rpm, "0");
-                    updateLVGLObjects(true);
                     lvgl_port_unlock();
+                    triggerUIForceRefresh();
                 }
             }
 #endif
         }
+        // Everything is OK, inform the rest of the network
+        display_board_st.internal_ST = XDB_SM_ST_OK;
     }
     vTaskResume(CAN_RX_tsk_hdl);
     TO_timers_start();
@@ -784,16 +793,6 @@ extern "C" void app_main()
     xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
 
-#pragma region Main Loop
-    while (true)
-    {
-        vTaskDelay(pdMS_TO_TICKS(CONFIG_DATA_REFRESH_INTERVAL));
-        // Attempt locking LVGL elements prior to updating them (issue with jumping frames ?)
-        if (lvgl_port_lock(-1))
-        {
-            updateLVGLObjects();
-            lvgl_port_unlock();
-        }
-    }
-#pragma endregion
+    // Initialization complete: return cleanly so the main task is deleted and its stack memory is reclaimed
+    return;
 }

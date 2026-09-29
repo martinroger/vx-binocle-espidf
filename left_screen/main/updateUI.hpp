@@ -6,6 +6,9 @@
 #include <math.h>
 
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "lvgl_v9_port.h"
 
 #include "coefficients.h"
 
@@ -416,4 +419,35 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     }
 
     return updatedElements;
+}
+
+/// @brief FreeRTOS task responsible for periodic and notified updates of LVGL objects
+/// @param pvParameters Task parameters (unused)
+inline void updateUI_task(void *pvParameters)
+{
+    bool forceRefresh = true; // First iteration forces a full initial refresh
+    while (true)
+    {
+        uint32_t notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_DATA_REFRESH_INTERVAL));
+        if (notified > 0)
+        {
+            forceRefresh = true;
+        }
+
+        if (lvgl_port_lock(-1))
+        {
+            updateLVGLObjects(forceRefresh);
+            lvgl_port_unlock();
+        }
+        forceRefresh = false;
+    }
+}
+
+/// @brief Notifies the updateUI_task to execute an immediate full refresh of all UI elements
+inline void triggerUIForceRefresh()
+{
+    if (updateUI_task_hdl != NULL)
+    {
+        xTaskNotifyGive(updateUI_task_hdl);
+    }
 }
