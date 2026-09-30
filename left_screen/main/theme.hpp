@@ -1,6 +1,7 @@
 #pragma once
 #include "global_vars.hpp"
 #include "lvgl_v9_port.h"
+#include "backlight_fader.hpp"
 #include <ui.h>
 #include <styles.h>
 
@@ -10,16 +11,16 @@
 
 #pragma region SPECIFIC
 
-inline void switch_theme(bool darkMode = headlightsOn, bool getMutex = false)
+inline void switch_theme(bool darkMode = headlightsOn, bool getMutex = false, uint16_t fade_duration_ms = 250)
 {
-if(getMutex)
-{
-	if(!(lvgl_port_lock(-1)))
+	if (getMutex)
 	{
-		ESP_LOGE(__func__,"Could not get port mutex.");
-		return;
+		if (!(lvgl_port_lock(-1)))
+		{
+			ESP_LOGE(__func__, "Could not get port mutex.");
+			return;
+		}
 	}
-}
 	if (darkMode)
 	{
 		add_style_screen_dark_setting(objects.main_tabview);
@@ -34,7 +35,7 @@ if(getMutex)
 #endif
 
 		display_board_st.lightMode = false;
-		display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+		set_backlight_brightness_smooth(display_board_st.darkBrightness, fade_duration_ms);
 	}
 	else
 	{
@@ -50,9 +51,9 @@ if(getMutex)
 #endif
 
 		display_board_st.lightMode = true;
-		display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+		set_backlight_brightness_smooth(display_board_st.lightBrightness, fade_duration_ms);
 	}
-	if(getMutex)
+	if (getMutex)
 		lvgl_port_unlock();
 }
 

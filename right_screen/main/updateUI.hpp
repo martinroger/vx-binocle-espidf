@@ -6,6 +6,9 @@
 #include <math.h>
 
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "lvgl_v9_port.h"
 
 #include "coefficients.h"
 
@@ -206,13 +209,16 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     // Buzzer catch
     if ((p_overTemperatureOn != overTemperatureOn))
     {
-        if (display_board_st.overTemp_buzz && overTemperatureOn)
+        if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
         {
-            display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
-        }
-        else
-        {
-            display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            if (display_board_st.overTemp_buzz && overTemperatureOn)
+            {
+                display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
+            }
+            else
+            {
+                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            }
         }
         // Don't update the overTemperatureOn so it can be used downstream
     }
@@ -405,15 +411,77 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         p_airbagOn = airbagOn;
         updatedElements++;
     }
-    if (p_headlightsOn != headlightsOn || forceRefresh) // Headlights
+    static int64_t last_headlights_change_time = 0;
+    static bool pending_headlights_target = false;
+    static bool headlights_debounce_active = false;
+
+    if (forceRefresh)
     {
+        p_headlightsOn = headlightsOn;
+        headlights_debounce_active = false;
         if (!(display_board_st.modeLocked))
         {
-            switch_theme(); // Implicitely uses the headlightsOn
+            switch_theme(headlightsOn, false, 250);
         }
-        p_headlightsOn = headlightsOn;
         updatedElements++;
+    }
+    else if (p_headlightsOn != headlightsOn)
+    {
+        int64_t now = esp_timer_get_time() / 1000; // ms
+        if (!headlights_debounce_active || pending_headlights_target != headlightsOn)
+        {
+            // First detection of change or target switched again: start debounce window
+            headlights_debounce_active = true;
+            pending_headlights_target = headlightsOn;
+            last_headlights_change_time = now;
+        }
+        else if (now - last_headlights_change_time >= 150)
+        {
+            // Stable for at least 150 ms: apply change
+            p_headlightsOn = headlightsOn;
+            headlights_debounce_active = false;
+            if (!(display_board_st.modeLocked))
+            {
+                switch_theme(headlightsOn, false, 250);
+            }
+            updatedElements++;
+        }
+    }
+    else
+    {
+        headlights_debounce_active = false;
     }
 
     return updatedElements;
+}
+
+/// @brief FreeRTOS task responsible for periodic and notified updates of LVGL objects
+/// @param pvParameters Task parameters (unused)
+inline void updateUI_task(void *pvParameters)
+{
+    bool forceRefresh = true; // First iteration forces a full initial refresh
+    while (true)
+    {
+        uint32_t notified = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(CONFIG_DATA_REFRESH_INTERVAL));
+        if (notified > 0)
+        {
+            forceRefresh = true;
+        }
+
+        if (lvgl_port_lock(-1))
+        {
+            updateLVGLObjects(forceRefresh);
+            lvgl_port_unlock();
+        }
+        forceRefresh = false;
+    }
+}
+
+/// @brief Notifies the updateUI_task to execute an immediate full refresh of all UI elements
+inline void triggerUIForceRefresh()
+{
+    if (updateUI_task_hdl != NULL)
+    {
+        xTaskNotifyGive(updateUI_task_hdl);
+    }
 }

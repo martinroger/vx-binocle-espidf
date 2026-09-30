@@ -27,4 +27,27 @@ add_compile_options(
 
 project(right_screen)
 
+# Override flash image to target ota_0
+partition_table_get_partition_info(ota_0_offset "--partition-name ota_0" "offset")
+message(STATUS "Setting app flash target to ota_0 offset: ${ota_0_offset}")
 
+# Correct target properties for esptool_py
+set_property(TARGET app-flash PROPERTY IMAGES "${ota_0_offset} ${PROJECT_BIN}")
+set_property(TARGET flash PROPERTY FLASH_FILE
+    "\"0x0\" : \"bootloader/bootloader.bin\""
+    "\"${ota_0_offset}\" : \"${PROJECT_BIN}\""
+    "\"0x8000\" : \"partition_table/partition-table.bin\""
+    "\"0xd000\" : \"ota_data_initial.bin\""
+)
+set_property(TARGET flash PROPERTY FLASH_ENTRY
+    "\"bootloader\" : { \"offset\" : \"0x0\", \"file\" : \"bootloader/bootloader.bin\", \"encrypted\" : \"false\" }"
+    "\"app\" : { \"offset\" : \"${ota_0_offset}\", \"file\" : \"${PROJECT_BIN}\", \"encrypted\" : \"false\" }"
+    "\"partition-table\" : { \"offset\" : \"0x8000\", \"file\" : \"partition_table/partition-table.bin\", \"encrypted\" : \"false\" }"
+    "\"otadata\" : { \"offset\" : \"0xd000\", \"file\" : \"ota_data_initial.bin\", \"encrypted\" : \"false\" }"
+)
+set_property(TARGET flash PROPERTY IMAGES
+    "0x0 bootloader/bootloader.bin"
+    "${ota_0_offset} ${PROJECT_BIN}"
+    "0x8000 partition_table/partition-table.bin"
+    "0xd000 ota_data_initial.bin"
+)

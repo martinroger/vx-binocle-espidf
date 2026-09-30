@@ -220,6 +220,43 @@ esp_err_t attemptRollBack()
     }
 }
 
+esp_err_t sendAnimation()
+{
+    esp_err_t ret = ESP_FAIL;
+    // Acquisition tasks are continuing in the back
+    // We just stop the sender tasks. Probably should guard against empty pointers
+    vTaskSuspend(itf_fast_metrics_PKG_hdl);
+    vTaskSuspend(exp_act_hilo_proc_task_hdl);
+
+    float speed = 0;
+    float rpm = 0;
+    float speed_delta = 50.0 * 270.0 / 2000.0;
+    float rpm_delta = 50.0 * 8000.0 / 2000.0;
+
+    while ((speed < 270) && (rpm < 8000))
+    {
+        fullTellTales();
+        sendFastMetrics(speed, rpm);
+        speed += speed_delta;
+        rpm += rpm_delta;
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    uint8_t loop_counter = 0;
+    while (loop_counter < 50)
+    {
+        fullTellTales();
+        sendFastMetrics(speed, rpm);
+        loop_counter++;
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+    vTaskResume(exp_act_hilo_proc_task_hdl);
+    vTaskResume(itf_fast_metrics_PKG_hdl);
+
+    animationDone = true;
+    return ret;
+}
+
 extern "C" void app_main(void)
 {
 #pragma region OTA pre-checks
@@ -375,7 +412,7 @@ extern "C" void app_main(void)
     }
 
     // Start TWAI
-    if (initCAN(NULL) != ESP_OK)
+    if (initCAN(&dispatchFrame) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialize TWAI daemon, marking invalid and rebooting.");
         attemptRollBack();
@@ -630,6 +667,13 @@ extern "C" void app_main(void)
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
     xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
+
+    while (!(LDB_ready && RDB_ready))
+    {
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+    if (LDB_ready && RDB_ready && !animationDone)
+        sendAnimation();
 
     while (1)
     {

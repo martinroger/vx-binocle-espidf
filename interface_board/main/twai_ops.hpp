@@ -247,7 +247,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
     uint8_t payload[BINOCAN_ITF_SLOW_METRICS_LENGTH] = {0};
     esp_err_t compute_err;
 
-    //sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
+    // sma_handle_t *fuel_level_SMA = sma_init_full(CONFIG_FUEL_SMA_SIZE, adc_raw_buffer[0]);
     float fuel_level_raw = adc_raw_buffer[0];
     sma_handle_t *lv_voltage_SMA = sma_init_full(CONFIG_LV_SMA_SIZE, adc_raw_buffer[1]);
 
@@ -309,7 +309,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
 
             // Synchronous fresh sample and SMA filter reseed
             int16_t fresh_raw = adc_sample_channel_threadsafe(0);
-            //sma_reset(fuel_level_SMA, fresh_raw);
+            // sma_reset(fuel_level_SMA, fresh_raw);
             fuel_level_raw = (float)fresh_raw;
 
             // Recompute resistance with High Caliber K-factor
@@ -328,7 +328,7 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
 
             // Synchronous fresh sample and SMA filter reseed
             int16_t fresh_raw = adc_sample_channel_threadsafe(0);
-            //sma_reset(fuel_level_SMA, fresh_raw);
+            // sma_reset(fuel_level_SMA, fresh_raw);
             fuel_level_raw = (float)fresh_raw;
 
             // Recompute resistance with Low Caliber K-factor
@@ -337,8 +337,8 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
         else
         {
             // Normal steady state: add sample to SMA and compute smoothed values
-            //sma_add(fuel_level_SMA, adc_raw_buffer[0]);
-            //fuel_level_raw = sma_get_avg(fuel_level_SMA);
+            // sma_add(fuel_level_SMA, adc_raw_buffer[0]);
+            // fuel_level_raw = sma_get_avg(fuel_level_SMA);
             fuel_level_raw += ((float)CONFIG_FUEL_EMA_ALPHA / 1000000.0) * ((float)adc_raw_buffer[0] - fuel_level_raw);
             fuel_level_R = (float)(COEFF_FUEL_CORRECTION_MULT * k_factor * fuel_level_raw / vref_raw_valid);
         }
@@ -776,6 +776,111 @@ inline esp_err_t twai_ops_init()
 #endif
 
     return ret;
+}
+
+#pragma endregion
+
+#pragma region Utilities
+
+/// @brief Utility function that sends spoofed speed/RPM/Gear position values
+/// @param speed Speed in KPH
+/// @param rpm RPM spoof value 
+/// @param gear Tabular value for gear
+/// @return ESP_OK on successful send, ESP_FAIL otherwise
+esp_err_t sendFastMetrics(float speed = 270, float rpm = 8000, uint8_t gear = GEAR_NEUTRAL)
+{
+    binocan_itf_fast_metrics_t binocan_itf_fast_metrics;
+    binocan_itf_fast_metrics_init(&binocan_itf_fast_metrics);
+    uint8_t payload[BINOCAN_ITF_FAST_METRICS_LENGTH] = {0};
+
+    binocan_itf_fast_metrics.itf_gear_position_st = gear;
+    binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
+    binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
+
+    binocan_itf_fast_metrics_pack(payload, &binocan_itf_fast_metrics, BINOCAN_ITF_FAST_METRICS_LENGTH);
+    if (twai_transmit_msg(BINOCAN_ITF_FAST_METRICS_FRAME_ID, payload, BINOCAN_ITF_FAST_METRICS_LENGTH, false, 5) != ESP_OK)
+    {
+        ESP_LOGD(__func__, "Could not transmit fast metrics message");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+/// @brief Utility function that sends a single CAN message to set all telltales on
+/// @return ESP_OK in normal operation, ESP_FAIL if sending unsuccessful
+esp_err_t fullTellTales()
+{
+    binocan_itf_active_hi_lo_t binocan_itf_active_hi_lo;
+    binocan_itf_active_hi_lo_init(&binocan_itf_active_hi_lo);
+    uint8_t payload[BINOCAN_ITF_ACTIVE_HI_LO_LENGTH] = {0};
+
+    binocan_itf_active_hi_lo.itf_ignition_ah_st = true;
+    binocan_itf_active_hi_lo.itf_hi_beams_ah_tt = true;
+    binocan_itf_active_hi_lo.itf_alternator_al_tt = false;
+    binocan_itf_active_hi_lo.itf_brake_low_al_tt = false;
+    binocan_itf_active_hi_lo.itf_parking_brake_al_tt = false;
+    binocan_itf_active_hi_lo.itf_oil_pressure_al_tt = false;
+    binocan_itf_active_hi_lo.itf_airbag_al_tt = false;
+    binocan_itf_active_hi_lo.itf_cel_al_tt = false;
+    binocan_itf_active_hi_lo.itf_right_turn_ah_tt = true;
+    binocan_itf_active_hi_lo.itf_left_turn_ah_tt = true;
+    binocan_itf_active_hi_lo.itf_abs_al_tt = false;
+    binocan_itf_active_hi_lo.itf_door_al_tt = false;
+    binocan_itf_active_hi_lo.itf_coolant_low_ah_tt = true;
+    binocan_itf_active_hi_lo.itf_button_al = true;
+    binocan_itf_active_hi_lo.itf_alarm_ah = false;
+    binocan_itf_active_hi_lo.itf_backlight_ah = false;
+    // Virtual tell tales
+    binocan_itf_active_hi_lo.itf_over_temperature_tt = true;
+    binocan_itf_active_hi_lo.itf_fuel_low_tt = true;
+    binocan_itf_active_hi_lo_pack(payload, &binocan_itf_active_hi_lo, BINOCAN_ITF_ACTIVE_HI_LO_LENGTH);
+
+    if (twai_transmit_msg(BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID, payload, BINOCAN_ITF_ACTIVE_HI_LO_LENGTH, false, 5) != ESP_OK)
+    {
+        ESP_LOGD(__func__, "Could not transmit active hi/lo message");
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+#pragma endregion
+
+#pragma region CANRX dispatcher
+
+/// @brief Dispatcher linked to the TWAI daemon. Parses received CAN frames
+/// @param rxMsg Received TWAI frame
+/// @return Error code, if relevant
+inline esp_err_t dispatchFrame(const twai_frame_t *rxMsg)
+{
+    if (LDB_ready && RDB_ready) return ESP_OK; // early exit
+    binocan_ldb_st_t LDB_state;
+    binocan_ldb_st_init(&LDB_state);
+    binocan_rdb_st_t RDB_state;
+    binocan_rdb_st_init(&RDB_state);
+    
+    if (rxMsg == nullptr)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    switch (rxMsg->header.id)
+    {
+    case BINOCAN_LDB_ST_FRAME_ID:
+        binocan_ldb_st_unpack(&LDB_state,rxMsg->buffer,rxMsg->buffer_len);
+        LDB_ready = (LDB_state.ldb_sm_st == BINOCAN_LDB_ST_LDB_SM_ST_OK_CHOICE);
+        break;
+    
+    case BINOCAN_RDB_ST_FRAME_ID:
+        binocan_rdb_st_unpack(&RDB_state,rxMsg->buffer,rxMsg->buffer_len);
+        RDB_ready = (RDB_state.rdb_sm_st == BINOCAN_RDB_ST_RDB_SM_ST_OK_CHOICE);
+        break;
+    
+    default:
+        break;
+    }
+
+    return ESP_OK;
 }
 
 #pragma endregion

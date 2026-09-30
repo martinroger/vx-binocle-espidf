@@ -7,6 +7,10 @@
 #include "esp_display_panel.hpp"
 #include "version_parser.h"
 #include "binocan.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+TaskHandle_t updateUI_task_hdl = NULL;
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -73,30 +77,30 @@ bool rollBackPossible; // Is rollback possible ?
 bool firstBoot;        // Is this the first boot after OTA ?
 
 // Used only to selectively update in LVGL
-bool screen_interlock_OK, p_screen_interlock_OK = false; // Checks opposite display status
+bool screen_interlock_OK = false, p_screen_interlock_OK = false; // Checks opposite display status
 int64_t last_interlock_ts;
 uint8_t p_internal_ST = XDB_SM_ST_DEGRADED; // Checks internal state in the LVGL elements update routine
-uint8_t itf_board_st, p_itf_board_st = XDB_SM_ST_DEGRADED;
+uint8_t itf_board_st = XDB_SM_ST_DEGRADED, p_itf_board_st = XDB_SM_ST_DEGRADED;
 bool p_CAN_RX_TimedOut = true;
 
 // Vehicle variables and previous values retainers
-bool indicatorsOn, p_indicatorsOn = true;
-bool rightTurnOn, p_rightTurnOn = true;
-bool leftTurnOn, p_leftTurnOn = true;
-bool highBeamOn, p_highBeamOn = true;
-bool lowFuelOn, p_lowFuelOn = true;
-bool overTemperatureOn, p_overTemperatureOn = true;
-bool brakesOn, p_brakesOn = true;
-bool absOn, p_absOn = true;
-bool parkingBrakeOn, p_parkingBrakeOn = true;
-bool lowCoolantOn, p_lowCoolantOn = true;
-bool batteryOn, p_batteryOn = true;
-bool lowOilOn, p_lowOilOn = true;
-bool milOn, p_milOn = true;
-bool airbagOn, p_airbagOn = true;
-bool ignitionST, p_ignitionST = false;
-bool alarmOn, p_alarmOn = true;
-bool headlightsOn, p_headlightsOn = true;
+bool indicatorsOn = true, p_indicatorsOn = true;
+bool rightTurnOn = true, p_rightTurnOn = true;
+bool leftTurnOn = true, p_leftTurnOn = true;
+bool highBeamOn = true, p_highBeamOn = true;
+bool lowFuelOn = true, p_lowFuelOn = true;
+bool overTemperatureOn = true, p_overTemperatureOn = true;
+bool brakesOn = true, p_brakesOn = true;
+bool absOn = true, p_absOn = true;
+bool parkingBrakeOn = true, p_parkingBrakeOn = true;
+bool lowCoolantOn = true, p_lowCoolantOn = true;
+bool batteryOn = true, p_batteryOn = true;
+bool lowOilOn = true, p_lowOilOn = true;
+bool milOn = true, p_milOn = true;
+bool airbagOn = true, p_airbagOn = true;
+bool ignitionST = false, p_ignitionST = false;
+bool alarmOn = true, p_alarmOn = true;
+bool headlightsOn = true, p_headlightsOn = true;
 
 // Vehicle numerical parameters
 float speed_kph, p_speed_kph = 0;

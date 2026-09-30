@@ -9,7 +9,8 @@
 #include "theme.hpp"
 #include "updateUI.hpp"
 #include "twai_ops.hpp"
-#include "start_animation.hpp"
+#include "setup_ui.hpp"
+#include "board/esp_panel_board_default_config.hpp"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -63,7 +64,7 @@ extern "C" void action_test_brightness(lv_event_t *e)
 {
     lv_obj_t *target = lv_event_get_target_obj(e);
     uint8_t testBrightness = lv_slider_get_value(target);
-    display_board_st.backLight->setBrightness(testBrightness);
+    set_backlight_brightness_instant(testBrightness);
 }
 
 /// @brief Save brightness on slider release, if the value is different from the currently saved one
@@ -113,9 +114,9 @@ extern "C" void action_save_brightness(lv_event_t *e)
         nvs_close(h);
 
         if (display_board_st.lightMode)
-            display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+            set_backlight_brightness_smooth(display_board_st.lightBrightness, 150);
         else
-            display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+            set_backlight_brightness_smooth(display_board_st.darkBrightness, 150);
     }
 }
 
@@ -421,7 +422,7 @@ extern "C" void action_decimation_update(lv_event_t *e)
  */
 extern "C" void action_enable_gears(lv_event_t *e)
 {
-    display_board_st.showGearPosition =  lv_obj_has_state(objects.gear_on,LV_STATE_CHECKED);
+    display_board_st.showGearPosition = lv_obj_has_state(objects.gear_on, LV_STATE_CHECKED);
     nvs_handle_t h;
     if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
         ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
@@ -433,7 +434,7 @@ extern "C" void action_enable_gears(lv_event_t *e)
         nvs_commit(h);
         nvs_close(h);
     }
-    p_gearPosition = gearPosition +1;
+    p_gearPosition = gearPosition + 1;
 }
 
 /// @brief Updates the overtemperature buzzer enabled status
@@ -478,10 +479,21 @@ extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
 /// @return ESP_OK if rollback scheduled, some NOT_OK error otherwise
 esp_err_t attemptRollBack()
 {
+    display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+
+    // Force an immediate display state message transmission over CAN if task is running
+    if (display_board_st_PKG_hdl != nullptr)
+    {
+        xTaskNotifyGive(display_board_st_PKG_hdl);
+        vTaskDelay(pdMS_TO_TICKS(100)); // Allow TWAI driver to push frame to the bus
+    }
+
     if (rollBackPossible)
     {
-        ESP_LOGW(__func__, "Activating rollback on next reboot.");
-        return esp_ota_mark_app_invalid_rollback();
+        ESP_LOGW(__func__, "Activating rollback and restarting.");
+        esp_err_t err = esp_ota_mark_app_invalid_rollback();
+        esp_restart();
+        return err;
     }
     else
     {
@@ -544,25 +556,32 @@ extern "C" void app_main()
     }
     else
     {
-        if (strcmp("ota_0", runningPart->label) == 0) // If running partition is ota_0
+        int8_t current_part = -1;
+        if (strcmp("ota_0", runningPart->label) == 0)
         {
             ESP_LOGI(__func__, "Running partition is ota_0");
-            nvs_set_i8(h, "lastPart", 0);
+            current_part = 0;
         }
-        else if (strcmp("ota_1", runningPart->label) == 0) // If running partition is ota_0
+        else if (strcmp("ota_1", runningPart->label) == 0)
         {
             ESP_LOGI(__func__, "Running partition is ota_1");
-            nvs_set_i8(h, "lastPart", 1);
+            current_part = 1;
         }
         else
         {
             ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
-            nvs_set_i8(h, "lastPart", -1);
+            current_part = -1;
+        }
+
+        int8_t saved_part = -2;
+        if (nvs_get_i8(h, "lastPart", &saved_part) != ESP_OK || saved_part != current_part)
+        {
+            nvs_set_i8(h, "lastPart", current_part);
         }
 
         if (nvs_get_u8(h, "mph_on", (uint8_t *)&(display_board_st.mph_selected)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve MPH status from NVS");
-        if (nvs_get_u8(h,"gear_on", (uint8_t *)&(display_board_st.showGearPosition)) != ESP_OK)
+        if (nvs_get_u8(h, "gear_on", (uint8_t *)&(display_board_st.showGearPosition)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve gear estimator display state from NVS");
 
         if (nvs_get_u8(h, "rpm_al_overr", (uint8_t *)&(display_board_st.rpm_alarm_override)) != ESP_OK)
@@ -644,6 +663,15 @@ extern "C" void app_main()
     ESP_LOGI(__func__, "Initializing board");
 
     Board *board = new Board();
+    board->configCallback(BoardConfig::STAGE_CALLBACK_POST_BACKLIGHT_BEGIN, [](void *p) -> bool {
+        auto *b = static_cast<Board *>(p);
+        if (b != nullptr && b->getBacklight() != nullptr)
+        {
+            b->getBacklight()->off();
+        }
+        return true;
+    });
+
     if (!(board->init()))
     {
         ESP_LOGW(__func__, "Could not initialize board.");
@@ -675,6 +703,9 @@ extern "C" void app_main()
             }
 #endif
         }
+        //
+        // (board->getBacklight())->off();
+
         // Board start
         if (!(board->begin()))
         {
@@ -686,17 +717,83 @@ extern "C" void app_main()
         {
             // Get pointer to the Backlight class
             display_board_st.backLight = board->getBacklight();
-            if (display_board_st.lightMode)
-            {
-                display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
-            }
-            else
-            {
-                display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
-            }
-            // Get pointer to the IO Expander class
+            backlight_fader_init();
+            set_backlight_brightness_instant(0);
+
+            // Get pointer to the IO Expander class and configure buzzer pin
             display_board_st.ioExpander = board->getIO_Expander();
-            display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
+            if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
+            {
+                display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
+                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            }
+        }
+    }
+    if (display_board_st.internal_ST == XDB_SM_ST_DEGRADED)
+    {
+        ESP_LOGE(__func__, "Board initialization failed, halting initialization sequence.");
+        return;
+    }
+
+    // LVGL Port init and link
+    if (!(lvgl_port_init(board->getLCD(), board->getTouch())))
+    {
+        ESP_LOGW(__func__, "Could not start LVGL port.");
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+        attemptRollBack();
+        return;
+    }
+
+#pragma region UI Setup
+    if (lvgl_port_lock(-1))
+    {
+        ui_init(); // Load the UI library and draw it
+        // Set up the debug screen
+        lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", app_metadata->version, app_metadata->date, app_metadata->time);
+        lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
+        lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
+
+        setup_ui();
+        lvgl_port_unlock();
+    }
+
+    if (initBlinkTimer() != ESP_OK)
+        ESP_LOGW(__func__, "Blinking timer could not be started.");
+
+    // Launch UI elements update task
+    if (xTaskCreatePinnedToCore(updateUI_task, "UI_UPDATE", 8192, NULL, 2, &updateUI_task_hdl, 1) != pdPASS)
+    {
+        ESP_LOGE(__func__, "Could not create UI update task");
+        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+        attemptRollBack();
+        return;
+    }
+#pragma endregion
+
+    ESP_LOGI(__func__, "Setup done");
+    if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
+    {
+        esp_ota_mark_app_valid_cancel_rollback();
+        ESP_LOGI(__func__, "App image is valid.");
+
+        triggerUIForceRefresh();
+        if (display_board_st.modeLocked)
+            switch_theme(!(display_board_st.lightMode), true, 400);
+        if (display_board_st.lightMode)
+        {
+            set_backlight_brightness_smooth(display_board_st.lightBrightness, 400);
+        }
+        else
+        {
+            set_backlight_brightness_smooth(display_board_st.darkBrightness, 400);
+        }
+
+        // Start message timeout watchdogs now that the UI task is running and display is illuminated
+        TO_timers_start();
+
+        // Apply initial buzzer state if active
+        if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
+        {
             if (display_board_st.overTemp_buzz && overTemperatureOn)
             {
                 display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
@@ -706,41 +803,6 @@ extern "C" void app_main()
                 display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
             }
         }
-    }
-#pragma endregion
-
-    // LVGL Port init and link
-    if (!(lvgl_port_init(board->getLCD(), board->getTouch())))
-    {
-        ESP_LOGW(__func__, "Could not start LVGL port.");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
-    }
-
-#pragma region Starting animation
-    if (lvgl_port_lock(-1))
-    {
-        ui_init(); // Load the UI library and draw it
-        if (display_board_st.modeLocked)
-            switch_theme(!(display_board_st.lightMode));
-        // Set up the debug screen
-        lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", app_metadata->version, app_metadata->date, app_metadata->time);
-        lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
-        lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
-
-        startup_anim();
-    }
-    if (initBlinkTimer() != ESP_OK)
-        ESP_LOGW(__func__, "Blinking timer could not be started.");
-
-#pragma endregion
-
-    ESP_LOGI(__func__, "Setup done");
-    if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
-    {
-        esp_ota_mark_app_valid_cancel_rollback();
-        display_board_st.internal_ST = XDB_SM_ST_OK;
-        ESP_LOGI(__func__, "App image is valid.");
 
         if (firstBoot)
         {
@@ -755,8 +817,8 @@ extern "C" void app_main()
                 {
                     lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
                     lv_label_set_text(objects.speed, "0");
-                    updateLVGLObjects(true);
                     lvgl_port_unlock();
+                    triggerUIForceRefresh();
                 }
             }
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
@@ -770,30 +832,21 @@ extern "C" void app_main()
                 {
                     lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
                     lv_label_set_text(objects.rpm, "0");
-                    updateLVGLObjects(true);
                     lvgl_port_unlock();
+                    triggerUIForceRefresh();
                 }
             }
 #endif
         }
+        // Everything is OK, inform the rest of the network
+        vTaskDelay(pdMS_TO_TICKS(500));
+        display_board_st.internal_ST = XDB_SM_ST_OK;
     }
-    vTaskResume(CAN_RX_tsk_hdl);
-    TO_timers_start();
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
     xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
 
-#pragma region Main Loop
-    while (true)
-    {
-        vTaskDelay(pdMS_TO_TICKS(CONFIG_DATA_REFRESH_INTERVAL));
-        // Attempt locking LVGL elements prior to updating them (issue with jumping frames ?)
-        if (lvgl_port_lock(-1))
-        {
-            updateLVGLObjects();
-            lvgl_port_unlock();
-        }
-    }
-#pragma endregion
+    // Initialization complete: return cleanly so the main task is deleted and its stack memory is reclaimed
+    return;
 }
