@@ -10,6 +10,7 @@
 #include "updateUI.hpp"
 #include "twai_ops.hpp"
 #include "setup_ui.hpp"
+#include "board/esp_panel_board_default_config.hpp"
 
 using namespace esp_panel::drivers;
 using namespace esp_panel::board;
@@ -644,7 +645,14 @@ extern "C" void app_main()
     // Board initialization
     ESP_LOGI(__func__, "Initializing board");
 
-    Board *board = new Board();
+    // Copy default board configuration and override backlight idle_off so it starts OFF
+    BoardConfig board_config = ESP_PANEL_BOARD_DEFAULT_CONFIG;
+    if (board_config.backlight.has_value())
+    {
+        board_config.backlight->pre_process.idle_off = 1;
+    }
+
+    Board *board = new Board(board_config);
     if (!(board->init()))
     {
         ESP_LOGW(__func__, "Could not initialize board.");
