@@ -829,7 +829,7 @@ esp_err_t fullTellTales()
     binocan_itf_active_hi_lo.itf_coolant_low_ah_tt = true;
     binocan_itf_active_hi_lo.itf_button_al = true;
     binocan_itf_active_hi_lo.itf_alarm_ah = false;
-    binocan_itf_active_hi_lo.itf_backlight_ah = true;
+    binocan_itf_active_hi_lo.itf_backlight_ah = false;
     // Virtual tell tales
     binocan_itf_active_hi_lo.itf_over_temperature_tt = true;
     binocan_itf_active_hi_lo.itf_fuel_low_tt = true;

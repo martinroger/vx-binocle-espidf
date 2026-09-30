@@ -242,7 +242,7 @@ esp_err_t sendAnimation()
         vTaskDelay(pdMS_TO_TICKS(50));
     }
     uint8_t loop_counter = 0;
-    while (loop_counter < 70)
+    while (loop_counter < 50)
     {
         fullTellTales();
         sendFastMetrics(speed, rpm);

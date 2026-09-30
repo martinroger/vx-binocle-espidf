@@ -662,14 +662,16 @@ extern "C" void app_main()
     // Board initialization
     ESP_LOGI(__func__, "Initializing board");
 
-    // Copy default board configuration and override backlight idle_off so it starts OFF
-    BoardConfig board_config = ESP_PANEL_BOARD_DEFAULT_CONFIG;
-    if (board_config.backlight.has_value())
-    {
-        board_config.backlight->pre_process.idle_off = 1;
-    }
+    Board *board = new Board();
+    board->configCallback(BoardConfig::STAGE_CALLBACK_POST_BACKLIGHT_BEGIN, [](void *p) -> bool {
+        auto *b = static_cast<Board *>(p);
+        if (b != nullptr && b->getBacklight() != nullptr)
+        {
+            b->getBacklight()->off();
+        }
+        return true;
+    });
 
-    Board *board = new Board(board_config);
     if (!(board->init()))
     {
         ESP_LOGW(__func__, "Could not initialize board.");
