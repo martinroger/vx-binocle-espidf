@@ -209,13 +209,16 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     // Buzzer catch
     if ((p_overTemperatureOn != overTemperatureOn))
     {
-        if (display_board_st.overTemp_buzz && overTemperatureOn)
+        if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
         {
-            display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
-        }
-        else
-        {
-            display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            if (display_board_st.overTemp_buzz && overTemperatureOn)
+            {
+                display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
+            }
+            else
+            {
+                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            }
         }
         // Don't update the overTemperatureOn so it can be used downstream
     }

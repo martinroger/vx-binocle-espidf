@@ -691,6 +691,14 @@ extern "C" void app_main()
             // Get pointer to the Backlight class
             display_board_st.backLight = board->getBacklight();
             display_board_st.backLight->setBrightness(0);
+
+            // Get pointer to the IO Expander class and configure buzzer pin
+            display_board_st.ioExpander = board->getIO_Expander();
+            if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
+            {
+                display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
+                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            }
         }
     }
 #pragma endregion
@@ -745,16 +753,18 @@ extern "C" void app_main()
         {
             display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
         }
-        // Get pointer to the IO Expander class
-        display_board_st.ioExpander = board->getIO_Expander();
-        display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
-        if (display_board_st.overTemp_buzz && overTemperatureOn)
+
+        // Apply initial buzzer state if active
+        if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
         {
-            display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
-        }
-        else
-        {
-            display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            if (display_board_st.overTemp_buzz && overTemperatureOn)
+            {
+                display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
+            }
+            else
+            {
+                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            }
         }
 
         if (firstBoot)

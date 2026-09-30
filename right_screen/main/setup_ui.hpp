@@ -34,6 +34,24 @@ inline void setup_ui()
 
     // Settings screen shift indicator section
     lv_obj_set_state(objects.shift_ind_sw, LV_STATE_CHECKED, display_board_st.use_shift_indicator);
+
+    // Sanity check shift thresholds (must be mid < top) and reset NVS if invalid
+    if (display_board_st.shift_mid_threshold >= display_board_st.shift_top_threshold || display_board_st.shift_mid_threshold < 1000)
+    {
+        ESP_LOGW(__func__, "Invalid shift thresholds (mid=%lu, top=%lu), resetting to defaults 5500/6500",
+                 (unsigned long)display_board_st.shift_mid_threshold, (unsigned long)display_board_st.shift_top_threshold);
+        display_board_st.shift_mid_threshold = 5500;
+        display_board_st.shift_top_threshold = 6500;
+        nvs_handle_t h;
+        if (nvs_open("storage", NVS_READWRITE, &h) == ESP_OK)
+        {
+            nvs_set_u32(h, "shft_mid", display_board_st.shift_mid_threshold);
+            nvs_set_u32(h, "shft_top", display_board_st.shift_top_threshold);
+            nvs_commit(h);
+            nvs_close(h);
+        }
+    }
+
     lv_spinbox_set_value(objects.shift_mid_spinbox, display_board_st.shift_mid_threshold);
     lv_spinbox_set_value(objects.shift_top_spinbox, display_board_st.shift_top_threshold);
     lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
@@ -79,9 +97,4 @@ inline void setup_ui()
         lv_obj_set_state(objects.mph_on, LV_STATE_CHECKED, true);
     }
 #endif
-
-    if (display_board_st.lightMode)
-        display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
-    else
-        display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
 }
