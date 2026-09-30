@@ -64,7 +64,7 @@ extern "C" void action_test_brightness(lv_event_t *e)
 {
     lv_obj_t *target = lv_event_get_target_obj(e);
     uint8_t testBrightness = lv_slider_get_value(target);
-    display_board_st.backLight->setBrightness(testBrightness);
+    set_backlight_brightness_instant(testBrightness);
 }
 
 /// @brief Save brightness on slider release, if the value is different from the currently saved one
@@ -114,9 +114,9 @@ extern "C" void action_save_brightness(lv_event_t *e)
         nvs_close(h);
 
         if (display_board_st.lightMode)
-            display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+            set_backlight_brightness_smooth(display_board_st.lightBrightness, 150);
         else
-            display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+            set_backlight_brightness_smooth(display_board_st.darkBrightness, 150);
     }
 }
 
@@ -479,10 +479,21 @@ extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
 /// @return ESP_OK if rollback scheduled, some NOT_OK error otherwise
 esp_err_t attemptRollBack()
 {
+    display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+
+    // Force an immediate display state message transmission over CAN if task is running
+    if (display_board_st_PKG_hdl != nullptr)
+    {
+        xTaskNotifyGive(display_board_st_PKG_hdl);
+        vTaskDelay(pdMS_TO_TICKS(100)); // Allow TWAI driver to push frame to the bus
+    }
+
     if (rollBackPossible)
     {
-        ESP_LOGW(__func__, "Activating rollback on next reboot.");
-        return esp_ota_mark_app_invalid_rollback();
+        ESP_LOGW(__func__, "Activating rollback and restarting.");
+        esp_err_t err = esp_ota_mark_app_invalid_rollback();
+        esp_restart();
+        return err;
     }
     else
     {
@@ -704,7 +715,8 @@ extern "C" void app_main()
         {
             // Get pointer to the Backlight class
             display_board_st.backLight = board->getBacklight();
-            display_board_st.backLight->setBrightness(0);
+            backlight_fader_init();
+            set_backlight_brightness_instant(0);
 
             // Get pointer to the IO Expander class and configure buzzer pin
             display_board_st.ioExpander = board->getIO_Expander();
@@ -715,7 +727,11 @@ extern "C" void app_main()
             }
         }
     }
-#pragma endregion
+    if (display_board_st.internal_ST == XDB_SM_ST_DEGRADED)
+    {
+        ESP_LOGE(__func__, "Board initialization failed, halting initialization sequence.");
+        return;
+    }
 
     // LVGL Port init and link
     if (!(lvgl_port_init(board->getLCD(), board->getTouch())))
@@ -723,6 +739,7 @@ extern "C" void app_main()
         ESP_LOGW(__func__, "Could not start LVGL port.");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
+        return;
     }
 
 #pragma region UI Setup
@@ -747,6 +764,7 @@ extern "C" void app_main()
         ESP_LOGE(__func__, "Could not create UI update task");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
+        return;
     }
 #pragma endregion
 
@@ -758,14 +776,14 @@ extern "C" void app_main()
 
         triggerUIForceRefresh();
         if (display_board_st.modeLocked)
-            switch_theme(!(display_board_st.lightMode), true);
+            switch_theme(!(display_board_st.lightMode), true, 400);
         if (display_board_st.lightMode)
         {
-            display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+            set_backlight_brightness_smooth(display_board_st.lightBrightness, 400);
         }
         else
         {
-            display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+            set_backlight_brightness_smooth(display_board_st.darkBrightness, 400);
         }
 
         // Start message timeout watchdogs now that the UI task is running and display is illuminated

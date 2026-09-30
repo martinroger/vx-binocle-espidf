@@ -411,14 +411,45 @@ inline int updateLVGLObjects(bool forceRefresh = false)
         p_airbagOn = airbagOn;
         updatedElements++;
     }
-    if (p_headlightsOn != headlightsOn || forceRefresh) // Headlights
+    static int64_t last_headlights_change_time = 0;
+    static bool pending_headlights_target = false;
+    static bool headlights_debounce_active = false;
+
+    if (forceRefresh)
     {
+        p_headlightsOn = headlightsOn;
+        headlights_debounce_active = false;
         if (!(display_board_st.modeLocked))
         {
-            switch_theme(); // Implicitely uses the headlightsOn
+            switch_theme(headlightsOn, false, 250);
         }
-        p_headlightsOn = headlightsOn;
         updatedElements++;
+    }
+    else if (p_headlightsOn != headlightsOn)
+    {
+        int64_t now = esp_timer_get_time() / 1000; // ms
+        if (!headlights_debounce_active || pending_headlights_target != headlightsOn)
+        {
+            // First detection of change or target switched again: start debounce window
+            headlights_debounce_active = true;
+            pending_headlights_target = headlightsOn;
+            last_headlights_change_time = now;
+        }
+        else if (now - last_headlights_change_time >= 150)
+        {
+            // Stable for at least 150 ms: apply change
+            p_headlightsOn = headlightsOn;
+            headlights_debounce_active = false;
+            if (!(display_board_st.modeLocked))
+            {
+                switch_theme(headlightsOn, false, 250);
+            }
+            updatedElements++;
+        }
+    }
+    else
+    {
+        headlights_debounce_active = false;
     }
 
     return updatedElements;
