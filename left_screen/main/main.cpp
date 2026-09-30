@@ -545,20 +545,27 @@ extern "C" void app_main()
     }
     else
     {
-        if (strcmp("ota_0", runningPart->label) == 0) // If running partition is ota_0
+        int8_t current_part = -1;
+        if (strcmp("ota_0", runningPart->label) == 0)
         {
             ESP_LOGI(__func__, "Running partition is ota_0");
-            nvs_set_i8(h, "lastPart", 0);
+            current_part = 0;
         }
-        else if (strcmp("ota_1", runningPart->label) == 0) // If running partition is ota_0
+        else if (strcmp("ota_1", runningPart->label) == 0)
         {
             ESP_LOGI(__func__, "Running partition is ota_1");
-            nvs_set_i8(h, "lastPart", 1);
+            current_part = 1;
         }
         else
         {
             ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
-            nvs_set_i8(h, "lastPart", -1);
+            current_part = -1;
+        }
+
+        int8_t saved_part = -2;
+        if (nvs_get_i8(h, "lastPart", &saved_part) != ESP_OK || saved_part != current_part)
+        {
+            nvs_set_i8(h, "lastPart", current_part);
         }
 
         if (nvs_get_u8(h, "mph_on", (uint8_t *)&(display_board_st.mph_selected)) != ESP_OK)
@@ -638,7 +645,6 @@ extern "C" void app_main()
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
     }
-    TO_timers_start();
 #pragma endregion
 
 #pragma region BOARD INIT
@@ -761,6 +767,9 @@ extern "C" void app_main()
         {
             display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
         }
+
+        // Start message timeout watchdogs now that the UI task is running and display is illuminated
+        TO_timers_start();
 
         // Apply initial buzzer state if active
         if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
