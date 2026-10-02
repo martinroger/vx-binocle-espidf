@@ -145,3 +145,37 @@ sequenceDiagram
         DSP->>CAN: UDS_RESP (0x40, 0x02 - Error Response)
     end
 ```
+
+---
+
+## 5. OTA Error Handling & Retry Recovery Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant MASTER as ITF Factory App / Flasher
+    participant CAN as TWAI / CAN Bus
+    participant DSP as Display Board (LDB / RDB)
+
+    Note over MASTER, DSP: Session 1 (Interrupted or Timed Out Transfer)
+    MASTER->>CAN: UDS_REQ First Frame (0x10)
+    CAN-->>DSP: OTAHandler begins session (OTA_started = true)
+    DSP->>DSP: esp_ota_begin() (erasing flash sectors)
+    opt Transfer Interrupted / Timeout on Sender
+        MASTER->>MASTER: Timeout waiting for Flow Control (e.g. flash erase latency)
+        MASTER->>MASTER: Abort session, resume CAN daemon
+    end
+
+    Note over MASTER, DSP: Session 2 (Operator Retries Flashing)
+    MASTER->>CAN: UDS_REQ Fresh First Frame (0x10)
+    CAN-->>DSP: OTAHandler receives new First Frame while prior session active
+    DSP->>DSP: Detect active/stale session (OTA_started == true)
+    DSP->>DSP: esp_ota_abort(ota_handle) prior session
+    DSP->>DSP: reset_ota_state() & stop_ota_timer()
+    Note over DSP: Graceful recovery: No 0x40 0xFF rejection sent!
+    DSP->>DSP: Start new OTA session with fresh image_size
+    DSP->>DSP: esp_ota_begin(next_partition, image_size)
+    DSP->>CAN: UDS_RESP Flow Control (0x30, BlockSize, ST_min)
+    CAN-->>MASTER: FC Received -> Transfer proceeds normally
+```
+

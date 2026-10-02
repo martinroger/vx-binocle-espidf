@@ -1541,6 +1541,7 @@ static esp_err_t upload_post_handler(httpd_req_t *req)
 
 // Timer expiration flag for OTA timeout
 static bool ota_timer_expired = false;
+static esp_timer_handle_t OTA_TO_timer = NULL;
 
 // Timer callback for the OTA over CAN timer
 static void ota_TO_timer_cb(void *arg)
@@ -1556,6 +1557,13 @@ static void ota_TO_timer_cb(void *arg)
 static esp_err_t flash_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s Length: %u", req->method, req->uri, req->content_len);
+
+	// Ensure timer from any previous session is not running
+	if (OTA_TO_timer != NULL && esp_timer_is_active(OTA_TO_timer))
+	{
+		esp_timer_stop(OTA_TO_timer);
+	}
+	ota_timer_expired = false;
 
 	// Declare as static to ensure persistent memory addresses for twai_transmit pointers
 	// Buffer and frame storage for OTA transport
@@ -1699,7 +1707,6 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 	int bytesRetrieved = 0;						 // Actual number of retrieved bytes waiting to be sent (max 4096)
 	uint8_t txMsgCursor = 1;					 // Current writeable position in the txMsg data buffer
 	uint32_t bufCursor = 0;						 // Current unprocessed byte in the buf
-	static esp_timer_handle_t OTA_TO_timer;		 // Response timeout timer handle
 	// Flags for the multi part transfer
 	bool daemonSuspended = false; // Indicates if the daemon tasks have been suspended
 	bool FF_sent = false;		  // Indicates if the FF has been sent
@@ -1733,6 +1740,47 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		}
 	}
 
+	auto stop_ota_timer = [&]() {
+		if (OTA_TO_timer != NULL)
+		{
+			if (esp_timer_is_active(OTA_TO_timer))
+			{
+				esp_timer_stop(OTA_TO_timer);
+			}
+			ota_timer_expired = false;
+		}
+	};
+
+	auto start_ota_timer = [&]() {
+		stop_ota_timer();
+		if (OTA_TO_timer != NULL)
+		{
+			esp_err_t err = esp_timer_start_once(OTA_TO_timer, CONFIG_OTA_RESP_TIMEOUT_MS * 1000);
+			if (err != ESP_OK)
+			{
+				ESP_LOGW(__func__, "Could not start OTA timer: %s", esp_err_to_name(err));
+			}
+			else
+			{
+				ESP_LOGD(__func__, "OTA response timer started for %u ms", CONFIG_OTA_RESP_TIMEOUT_MS);
+			}
+		}
+	};
+
+	auto cleanup_flash_session = [&](bool clear_queue = true) {
+		stop_ota_timer();
+		if (clear_queue)
+		{
+			twai_clear_rx_queue();
+		}
+		if (daemonSuspended)
+		{
+			if (CAN_RX_tsk_hdl != nullptr)
+				vTaskResume(CAN_RX_tsk_hdl);
+			daemonSuspended = false;
+		}
+	};
+
 	// Data shipping loop
 	while (sentBytes < file_size) // As long as there is data to send
 	{
@@ -1749,13 +1797,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				ESP_LOGE(__func__, "Chunk retrieval failed, error %d", bytesRetrieved);
 				free(buf);
 				drain_remaining_body(req);
+				cleanup_flash_session();
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Chunk retrieval failed.");
-				if (daemonSuspended)
-				{
-					if (CAN_RX_tsk_hdl != nullptr)
-						vTaskResume(CAN_RX_tsk_hdl);
-					daemonSuspended = false;
-				}
 				return ESP_FAIL;
 			}
 			receivedBytes += bytesRetrieved;
@@ -1784,13 +1827,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				ESP_LOGE(__func__, "Could not find valid image header in first chunk, aborting.");
 				free(buf);
 				drain_remaining_body(req);
+				cleanup_flash_session();
 				httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No valid image header in file");
-				if (daemonSuspended)
-				{
-					if (CAN_RX_tsk_hdl != nullptr)
-						vTaskResume(CAN_RX_tsk_hdl);
-					daemonSuspended = false;
-				}
 				return ESP_FAIL;
 			}
 			// Image is found, copy it for later
@@ -1836,58 +1874,29 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 				ESP_LOGE(__func__, "Could not transmit FF");
 				free(buf);
 				drain_remaining_body(req);
+				cleanup_flash_session();
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FF could not be transmitted.");
-				if (daemonSuspended)
-				{
-					if (CAN_RX_tsk_hdl != nullptr)
-						vTaskResume(CAN_RX_tsk_hdl);
-					daemonSuspended = false;
-				}
 				return ESP_FAIL;
 			}
 			FF_sent = true;
 			FC_wait = true;
 			ESP_LOGI(__func__, "First Frame transmitted, waiting for FC...");
 		}
-		// Start or restart the timer if FC_wait is true
-		if (OTA_TO_timer != NULL && FC_wait)
-		{
-			ota_timer_expired = false;
 
-			if (esp_timer_stop(OTA_TO_timer) != ESP_OK)
-			{
-				ESP_LOGD(__func__, "Could not stop OTA timer prior to restart");
-			}
-			if (esp_timer_start_once(OTA_TO_timer, CONFIG_OTA_RESP_TIMEOUT_MS * 1000) != ESP_OK)
-			{
-				ESP_LOGD(__func__, "Could not start OTA timer");
-			}
-			else
-			{
-				ESP_LOGD(__func__, "OTA response timer started for %u ms", CONFIG_OTA_RESP_TIMEOUT_MS);
-			}
+		// Start the timer if FC_wait is true
+		if (FC_wait)
+		{
+			start_ota_timer();
 		}
 
-		// Then check for FC_wait, either timeouts/errors. Hard exit if nothing is received.
-		int otherFrames = 0; // This should ideally be replaced by a timer
-		while (otherFrames < 500 && FC_wait)
+		// Check for FC_wait driven strictly by timer timeout (busload agnostic)
+		while (FC_wait && !ota_timer_expired)
 		{
-			rx_err = twai_receive_queued_frame(&rxFrame, pdMS_TO_TICKS(2000));
+			rx_err = twai_receive_queued_frame(&rxFrame, pdMS_TO_TICKS(100));
 			switch (rx_err)
 			{
-			case ESP_ERR_TIMEOUT: // Return on RX timed out
+			case ESP_ERR_TIMEOUT: // Polling slice timed out; check overall timer condition in while loop
 			{
-				ESP_LOGE(__func__, "No FC frame received within timeout");
-				free(buf);
-				drain_remaining_body(req);
-				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within 5s timeout.");
-				if (daemonSuspended)
-				{
-					if (CAN_RX_tsk_hdl != nullptr)
-						vTaskResume(CAN_RX_tsk_hdl);
-					daemonSuspended = false;
-				}
-				return ESP_FAIL;
 				break;
 			}
 			case ESP_OK: // Something valid was received, set conditions for loop exit if valid FC CTS
@@ -1911,87 +1920,39 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 						ESP_LOGE(__func__, "Received error status frame, code %0X", rxFrame.data[1]);
 						free(buf);
 						drain_remaining_body(req);
+						cleanup_flash_session();
 						snprintf(out, sizeof(out), "Error. Status frame code : 0x%0X", rxFrame.data[1]);
 						httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, out);
-						if (daemonSuspended)
-						{
-							if (CAN_RX_tsk_hdl != nullptr)
-								vTaskResume(CAN_RX_tsk_hdl);
-							daemonSuspended = false;
-						}
 						return ESP_FAIL;
 					}
 				}
-				else
-					otherFrames++;
+				// All other frame IDs and types are ignored silently under high busload
 				break;
 			}
-			default: // Return on Any other RX error
+			default: // Return on any other RX error
 			{
 				ESP_LOGE(__func__, "FC Frame RX error %s", esp_err_to_name(rx_err));
 				free(buf);
 				drain_remaining_body(req);
+				cleanup_flash_session();
 				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC frame RX error.");
-				if (daemonSuspended)
-				{
-					if (CAN_RX_tsk_hdl != nullptr)
-						vTaskResume(CAN_RX_tsk_hdl);
-					daemonSuspended = false;
-				}
 				return ESP_FAIL;
 				break;
 			}
-			}
-			// Eject if FC_wait is not true anymore
-			if (!FC_wait)
-			{
-				break;
-			}
-
-			// Eject on last loop at 500 messages
-			if (otherFrames >= 500 && FC_wait)
-			{
-				ESP_LOGE(__func__, "No FC frame received 500 frames");
-				free(buf);
-				drain_remaining_body(req);
-				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received in 500 frames.");
-				if (daemonSuspended)
-				{
-					if (CAN_RX_tsk_hdl != nullptr)
-						vTaskResume(CAN_RX_tsk_hdl);
-					daemonSuspended = false;
-				}
-				return ESP_FAIL;
-			}
-			// Eject if timer is expired while FC_wait remains true
-			if (OTA_TO_timer != NULL && ota_timer_expired && FC_wait)
-			{
-				ESP_LOGE(__func__, "No FC frame received within OTA timer expiry");
-				free(buf);
-				drain_remaining_body(req);
-				httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within timeout.");
-				if (daemonSuspended)
-				{
-					if (CAN_RX_tsk_hdl != nullptr)
-						vTaskResume(CAN_RX_tsk_hdl);
-					daemonSuspended = false;
-				}
-				return ESP_FAIL;
 			}
 		}
 
-		// Stop the timer if it is still running
-		if (OTA_TO_timer != NULL)
+		// Ensure timer is NOT running while streaming CF frames or when FC_wait is done
+		stop_ota_timer();
+
+		if (FC_wait)
 		{
-			if (esp_timer_stop(OTA_TO_timer) != ESP_OK)
-			{
-				ESP_LOGD(__func__, "Could not stop OTA timer after FC wait");
-			}
-			else
-			{
-				ESP_LOGD(__func__, "OTA response timer stopped after FC wait");
-			}
-			ota_timer_expired = false;
+			ESP_LOGE(__func__, "No FC frame received within timeout (%u ms)", CONFIG_OTA_RESP_TIMEOUT_MS);
+			free(buf);
+			drain_remaining_body(req);
+			cleanup_flash_session();
+			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "FC was not received within timeout.");
+			return ESP_FAIL;
 		}
 
 		// At this point, FF is sent, FC is not being expected, there should be a fresh chunk to process through
@@ -2019,13 +1980,8 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 					ESP_LOGE(__func__, "Could not transmit CF frame : %s", esp_err_to_name(tx_err));
 					free(buf);
 					drain_remaining_body(req);
+					cleanup_flash_session();
 					httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "CF Frame TX error.");
-					if (daemonSuspended)
-					{
-						if (CAN_RX_tsk_hdl != nullptr)
-							vTaskResume(CAN_RX_tsk_hdl);
-						daemonSuspended = false;
-					}
 					return ESP_FAIL;
 				}
 				txMsgCursor = 1; // Reset the position of the txMsg cursor
@@ -2058,14 +2014,9 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 							ESP_LOGE(__func__, "Received error status frame, code %0X", rxFrame.data[1]);
 							free(buf);
 							drain_remaining_body(req);
+							cleanup_flash_session();
 							snprintf(out, sizeof(out), "Error. Status frame code : 0x%0X", rxFrame.data[1]);
 							httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, out);
-							if (daemonSuspended)
-							{
-								if (CAN_RX_tsk_hdl != nullptr)
-									vTaskResume(CAN_RX_tsk_hdl);
-								daemonSuspended = false;
-							}
 							return ESP_FAIL;
 						}
 					}
@@ -2084,102 +2035,58 @@ static esp_err_t flash_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "Unexpected shipping loop exit");
 		free(buf);
 		drain_remaining_body(req);
+		cleanup_flash_session();
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unexpected shipping loop error.");
-		if (daemonSuspended)
-		{
-			if (CAN_RX_tsk_hdl != nullptr)
-				vTaskResume(CAN_RX_tsk_hdl);
-			daemonSuspended = false;
-		}
 		return ESP_FAIL;
 	}
 
 	ESP_LOGI(__func__, "Exited retrieval loop, waiting for a status response.");
 	uint8_t OTA_status = 0xFF;
-	int otherFrames = 0; // This should ideally be replaced by a timer
 	bool statusReceived = false;
-	// Use the timer again
-	if (OTA_TO_timer != NULL)
-	{
-		ota_timer_expired = false;
-		if (esp_timer_stop(OTA_TO_timer) != ESP_OK)
-		{
-			ESP_LOGD(__func__, "Could not stop OTA timer prior to restart for status wait");
-		}
-		if (esp_timer_start_once(OTA_TO_timer, CONFIG_OTA_RESP_TIMEOUT_MS * 1000) != ESP_OK)
-		{
-			ESP_LOGW(__func__, "Could not start OTA timer for status wait");
-		}
-		else
-		{
-			ESP_LOGI(__func__, "OTA response timer started for %u ms for status wait", CONFIG_OTA_RESP_TIMEOUT_MS);
-		}
-	}
 
-	while (otherFrames < 500 && !statusReceived)
+	// Use timer for status wait
+	start_ota_timer();
+
+	while (!statusReceived && !ota_timer_expired)
 	{
-		rx_err = twai_receive_queued_frame(&rxFrame, pdMS_TO_TICKS(5000));
+		rx_err = twai_receive_queued_frame(&rxFrame, pdMS_TO_TICKS(100));
 		switch (rx_err)
 		{
-		case ESP_ERR_TIMEOUT: // Return on RX timed out
+		case ESP_ERR_TIMEOUT: // Polling slice timed out; check overall timer condition in while loop
 		{
-			ESP_LOGW(__func__, "No Status frame received during timeout");
 			break;
 		}
-		case ESP_OK: // Something valid was received, set conditions for loop exit if valid FC CTS
+		case ESP_OK: // Something valid was received
 		{
 			if ((rxFrame.header.id == UDSRespID) && (rxFrame.data[0] == 0x40))
 			{
 				OTA_status = rxFrame.data[1];
 				statusReceived = true;
 			}
-			else
-				otherFrames++;
+			// Unrelated frames ignored silently under high busload
 			break;
 		}
-		default: // Return on Any other RX error
+		default: // Log on any other RX error
 		{
 			ESP_LOGE(__func__, "Status Frame RX error %s", esp_err_to_name(rx_err));
 			break;
 		}
 		}
-		if (statusReceived)
-		{
-			ESP_LOGI(__func__, "OTA Status frame received, status 0x%0X", OTA_status);
-			break;
-		}
-		// Eject on last loop at 500 messages if no status received
-		if (otherFrames == 500 && !statusReceived)
-		{
-			ESP_LOGW(__func__, "No status frame received 500 frames");
-			break;
-		}
-		if (OTA_TO_timer != NULL && ota_timer_expired && !statusReceived)
-		{
-			ESP_LOGW(__func__, "No status frame received within OTA timer expiry");
-			break;
-		}
-	}
-	// Stop the timer if it is still running
-	if (OTA_TO_timer != NULL)
-	{
-		if (esp_timer_stop(OTA_TO_timer) != ESP_OK)
-		{
-			ESP_LOGD(__func__, "Could not stop OTA timer after status wait");
-		}
-		else
-		{
-			ESP_LOGI(__func__, "OTA response timer stopped after status wait");
-		}
-		ota_timer_expired = false;
 	}
 
-	if (daemonSuspended)
+	// Ensure timer is stopped immediately after status wait
+	stop_ota_timer();
+
+	if (statusReceived)
 	{
-		if (CAN_RX_tsk_hdl != nullptr)
-			vTaskResume(CAN_RX_tsk_hdl);
-		daemonSuspended = false;
+		ESP_LOGI(__func__, "OTA Status frame received, status 0x%0X", OTA_status);
 	}
+	else
+	{
+		ESP_LOGW(__func__, "No status frame received within OTA timer expiry (%u ms)", CONFIG_OTA_RESP_TIMEOUT_MS);
+	}
+
+	cleanup_flash_session(false);
 	free(buf);
 	drain_remaining_body(req);
 
