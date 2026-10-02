@@ -454,6 +454,24 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         return ESP_OK;
     };
 
+    auto stop_ota_timer = [&]() {
+        if (OTA_TO_hdl && xTimerIsTimerActive(OTA_TO_hdl))
+        {
+            xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1));
+        }
+    };
+
+    auto reset_ota_state = [&]() {
+        FC_sent = false;
+        FF_received = false;
+        OTA_started = false;
+        receivedBytes = 0;
+        transferComplete = false;
+        image_size = 0;
+        blockCounter = 0x00;
+        sequenceNumber = 0x01;
+    };
+
     // External reset of the OTA, such as on timeout
     if (rxMsg == NULL)
     {
@@ -461,17 +479,11 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         if (OTA_started)
         {
             esp_ota_abort(ota_handle);
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            blockCounter = 0x00;
-            sequenceNumber = 0x01;
+            reset_ota_state();
+            send_uds_response(0x40, 0xFF);
             ESP_LOGW(__func__, "OTA was in progress, aborted.");
         }
-        send_uds_response(0x40, 0xFF);
+        stop_ota_timer();
         return ESP_ERR_TIMEOUT; // Error break
     }
 
@@ -486,34 +498,25 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         if (OTA_started)
         {
             esp_ota_abort(ota_handle);
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            blockCounter = 0x00;
-            sequenceNumber = 0x01;
+            reset_ota_state();
             ESP_LOGW(__func__, "OTA was in progress, aborted.");
         }
         send_uds_response(0x40, 0xFF);
+        stop_ota_timer();
         return ESP_ERR_INVALID_SIZE; // Error break
     }
     // Check if this is a correct first frame
     if ((rxMsg->buffer[0] & 0xF0) == 0x10)
     {
-        if (OTA_started || FF_received) // Early exit error case
+        if (OTA_started || FF_received) // Previous session was not completed, recover gracefully
         {
-            ESP_LOGE(__func__, "New FF received while OTA in progress, aborting.");
-            esp_ota_abort(ota_handle);
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            send_uds_response(0x40, 0xFF);
-            return ESP_ERR_NOT_FINISHED;
+            ESP_LOGW(__func__, "New FF received while previous OTA active. Aborting prior session and restarting...");
+            if (OTA_started)
+            {
+                esp_ota_abort(ota_handle);
+            }
+            reset_ota_state();
+            stop_ota_timer();
         }
 
         // TODO : check for escape sequence, shorter size contents
@@ -527,15 +530,9 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         if (ota_err != ESP_OK) // Break if somehow the OTA doesn't start, print error code
         {
             ESP_LOGE(__func__, "Could not start OTA : %s", esp_err_to_name(ota_err));
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            blockCounter = 0x00;
-            sequenceNumber = 0x01;
+            reset_ota_state();
             send_uds_response(0x40, 0x04);
+            stop_ota_timer();
             return ota_err;
         }
         ota_err = esp_ota_write(ota_handle, (rxMsg->buffer + 6), 2);
@@ -543,15 +540,9 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         {
             ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
             esp_ota_abort(ota_handle);
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            blockCounter = 0x00;
-            sequenceNumber = 0x01;
+            reset_ota_state();
             send_uds_response(0x40, 0x05);
+            stop_ota_timer();
             return ota_err;
         }
         receivedBytes = 2;
@@ -569,14 +560,8 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         {
             ESP_LOGE(__func__, "Could not transmit UDS response message");
             esp_ota_abort(ota_handle);
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            blockCounter = 0x00;
-            sequenceNumber = 0x01;
+            reset_ota_state();
+            stop_ota_timer();
             return ESP_ERR_NO_MEM;
         }
         else
@@ -591,16 +576,13 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         if (!OTA_started || !FF_received || !FC_sent) // Weird break case
         {
             ESP_LOGE(__func__, "Unexpected CF received");
-            esp_ota_abort(ota_handle);
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            blockCounter = 0x00;
-            sequenceNumber = 0x01;
+            if (OTA_started)
+            {
+                esp_ota_abort(ota_handle);
+            }
+            reset_ota_state();
             send_uds_response(0x40, 0xFF);
+            stop_ota_timer();
             return ESP_ERR_NOT_ALLOWED;
         }
 
@@ -609,15 +591,9 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         {
             ESP_LOGE(__func__, "Bad sequence number : %u instead of %u", rxMsg->buffer[0] & 0x0F, sequenceNumber);
             esp_ota_abort(ota_handle);
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            blockCounter = 0x00;
-            sequenceNumber = 0x01;
+            reset_ota_state();
             send_uds_response(0x40, 0x03, sequenceNumber);
+            stop_ota_timer();
             return ESP_ERR_INVALID_ARG;
         }
         sequenceNumber = ((sequenceNumber + 1) & 0x0F) == 0x00 ? 0x01 : (sequenceNumber + 1) & 0x0F;
@@ -631,15 +607,9 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
             {
                 ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
                 esp_ota_abort(ota_handle);
-                FC_sent = false;
-                FF_received = false;
-                OTA_started = false;
-                receivedBytes = 0;
-                transferComplete = false;
-                image_size = 0;
-                blockCounter = 0x00;
-                sequenceNumber = 0x01;
+                reset_ota_state();
                 send_uds_response(0x40, 0x05);
+                stop_ota_timer();
                 return ota_err;
             }
             receivedBytes += 7;
@@ -657,15 +627,9 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
             {
                 ESP_LOGE(__func__, "Could not write OTA segment : %s", esp_err_to_name(ota_err));
                 esp_ota_abort(ota_handle);
-                FC_sent = false;
-                FF_received = false;
-                OTA_started = false;
-                receivedBytes = 0;
-                transferComplete = false;
-                image_size = 0;
-                blockCounter = 0x00;
-                sequenceNumber = 0x01;
+                reset_ota_state();
                 send_uds_response(0x40, 0x05);
+                stop_ota_timer();
                 return ota_err;
             }
             receivedBytes = image_size;
@@ -675,16 +639,8 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         if (transferComplete) // Need to reset everything
         {
             ESP_LOGI(__func__, "Transfer complete");
-            FC_sent = false;
-            FF_received = false;
-            OTA_started = false;
-            receivedBytes = 0;
-            transferComplete = false;
-            image_size = 0;
-            blockCounter = 0x00;
-            sequenceNumber = 0x01;
-            if (OTA_TO_hdl && xTimerIsTimerActive(OTA_TO_hdl))
-                xTimerStop(OTA_TO_hdl, pdMS_TO_TICKS(1));
+            reset_ota_state();
+            stop_ota_timer();
             ota_err = esp_ota_end(ota_handle);
             if (ota_err != ESP_OK)
             {
@@ -717,14 +673,8 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
             {
                 ESP_LOGE(__func__, "Could not transmit UDS response message");
                 esp_ota_abort(ota_handle);
-                FC_sent = false;
-                FF_received = false;
-                OTA_started = false;
-                receivedBytes = 0;
-                transferComplete = false;
-                image_size = 0;
-                blockCounter = 0x00;
-                sequenceNumber = 0x01;
+                reset_ota_state();
+                stop_ota_timer();
                 return ESP_ERR_NO_MEM;
             }
             else
@@ -740,6 +690,7 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
     else
     {
         ESP_LOGD(__func__, "Unknown frame type received, ignoring.");
+        stop_ota_timer();
         return ESP_ERR_INVALID_RESPONSE;
     }
 }
