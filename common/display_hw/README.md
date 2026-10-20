@@ -42,4 +42,4 @@ All pins and bus speeds are macros in [`include/display_hw.h`](include/display_h
 | `DISPLAY_HW_TOUCH_USE_INTERRUPT` | y | Read the GT911 on INT edges instead of polling. |
 | `DISPLAY_HW_TOUCH_RESET_WAIT_MS` | 200 | Wait after releasing GT911 reset. |
 
-Requires ESP-IDF >= 5.5.5 (adapter requirement). See [TOO.MD](TOO.MD) for the bring-up sequence and design notes.
+Requires ESP-IDF >= 5.5.5 (adapter requirement). See [TOO.MD](TOO.MD) for the bring-up sequence and design notes, and [HOWTO.md](HOWTO.md) for a copy-paste integration guide.
