@@ -10,10 +10,8 @@
 #include "updateUI.hpp"
 #include "twai_ops.hpp"
 #include "setup_ui.hpp"
-#include "board/esp_panel_board_default_config.hpp"
-
-using namespace esp_panel::drivers;
-using namespace esp_panel::board;
+#include "display_hw.h"
+#include "display_hw_lvgl.h"
 
 #ifdef TAG
 #undef TAG
@@ -455,17 +453,17 @@ extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
     if (!display_board_st.overTemp_buzz)
     {
         // Ensure buzzer is off
-        if (display_board_st.ioExpander)
+        if (display_board_st.displayHwReady)
         {
-            display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
+            display_hw_buzzer_set(false);
         }
     }
     else if (overTemperatureOn)
     {
         // Enable buzzer if needed
-        if (display_board_st.ioExpander)
+        if (display_board_st.displayHwReady)
         {
-            display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
+            display_hw_buzzer_set(true);
         }
     }
 }
@@ -659,75 +657,28 @@ extern "C" void app_main()
 #pragma endregion
 
 #pragma region BOARD INIT
-    // Board initialization
+    // Board initialization: backlight (held off), I2C, IO expander, GT911 touch, ST7701 RGB panel
     ESP_LOGI(__func__, "Initializing board");
 
-    Board *board = new Board();
-    board->configCallback(BoardConfig::STAGE_CALLBACK_POST_BACKLIGHT_BEGIN, [](void *p) -> bool {
-        auto *b = static_cast<Board *>(p);
-        if (b != nullptr && b->getBacklight() != nullptr)
-        {
-            b->getBacklight()->off();
-        }
-        return true;
-    });
-
-    if (!(board->init()))
+    display_hw_handles_t hw = {};
+    esp_err_t hw_err = display_hw_init(display_hw_lvgl_required_fbs(), &hw);
+    if (hw_err == ESP_ERR_NOT_FOUND)
     {
-        ESP_LOGW(__func__, "Could not initialize board.");
+        // LCD is up but the touch controller did not answer: keep running, settings screen will not react
+        ESP_LOGW(__func__, "Touch controller not available.");
+    }
+    else if (hw_err != ESP_OK)
+    {
+        ESP_LOGW(__func__, "Could not initialize board: %s", esp_err_to_name(hw_err));
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
     }
-    else
+    if (hw.panel != nullptr)
     {
-        auto lcd = board->getLCD();
-        if (!(lcd->configFrameBufferNumber(LVGL_PORT_BUFFER_NUM)))
-        {
-            ESP_LOGW(__func__, "Could not set up framebuffers.");
-            display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-            attemptRollBack();
-        }
-        else
-        {
-            // Setting up the Bounce Buffer size (might not be necessary)
-#if ESP_PANEL_DRIVERS_BUS_ENABLE_RGB && CONFIG_IDF_TARGET_ESP32S3
-            auto lcd_bus = lcd->getBus();
-            if (lcd_bus->getBasicAttributes().type == ESP_PANEL_BUS_TYPE_RGB)
-            {
-                if (!(static_cast<BusRGB *>(lcd_bus)->configRGB_BounceBufferSize(lcd->getFrameWidth() * 20)))
-                {
-                    ESP_LOGW(__func__, "Could not set up bounce buffer.");
-                    display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-                    attemptRollBack();
-                }
-            }
-#endif
-        }
-        //
-        // (board->getBacklight())->off();
-
-        // Board start
-        if (!(board->begin()))
-        {
-            ESP_LOGW(__func__, "Could not begin() board.");
-            display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-            attemptRollBack();
-        }
-        else
-        {
-            // Get pointer to the Backlight class
-            display_board_st.backLight = board->getBacklight();
-            backlight_fader_init();
-            set_backlight_brightness_instant(0);
-
-            // Get pointer to the IO Expander class and configure buzzer pin
-            display_board_st.ioExpander = board->getIO_Expander();
-            if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
-            {
-                display_board_st.ioExpander->getBase()->pinMode(7, OUTPUT);
-                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
-            }
-        }
+        display_board_st.displayHwReady = true;
+        backlight_fader_init();
+        set_backlight_brightness_instant(0);
+        display_hw_buzzer_set(false);
     }
     if (display_board_st.internal_ST == XDB_SM_ST_DEGRADED)
     {
@@ -735,10 +686,18 @@ extern "C" void app_main()
         return;
     }
 
-    // LVGL Port init and link
-    if (!(lvgl_port_init(board->getLCD(), board->getTouch())))
+    // LVGL adapter init and link
+    const display_hw_lvgl_config_t lvgl_cfg = {
+        .task_stack_size = CONFIG_LVGL_TASK_STACK_SIZE,
+        .task_priority = CONFIG_LVGL_TASK_PRIORITY,
+        .task_core_id = CONFIG_LVGL_TASK_CORE_ID,
+        .tick_period_ms = CONFIG_LVGL_TICK_PERIOD_MS,
+        .task_max_delay_ms = CONFIG_LVGL_TASK_MAX_DELAY_MS,
+    };
+    esp_err_t lvgl_err = display_hw_lvgl_start(&lvgl_cfg, &hw, nullptr);
+    if (lvgl_err != ESP_OK)
     {
-        ESP_LOGW(__func__, "Could not start LVGL port.");
+        ESP_LOGW(__func__, "Could not start LVGL adapter: %s", esp_err_to_name(lvgl_err));
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
         return;
@@ -792,16 +751,9 @@ extern "C" void app_main()
         TO_timers_start();
 
         // Apply initial buzzer state if active
-        if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
+        if (display_board_st.displayHwReady)
         {
-            if (display_board_st.overTemp_buzz && overTemperatureOn)
-            {
-                display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
-            }
-            else
-            {
-                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
-            }
+            display_hw_buzzer_set(display_board_st.overTemp_buzz && overTemperatureOn);
         }
 
         if (firstBoot)

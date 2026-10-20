@@ -2,14 +2,11 @@
 dependencies:
   ## Required IDF version
   idf:
-    version: '>=4.1.0'
-  espressif/esp32_display_panel: ^1.0.4
-  lvgl/lvgl: ^9.4.0
+    version: '>=5.5.5'
+  lvgl/lvgl: "~9.5.0"
   twai_daemon:
     git: "https://github.com/martinroger/twai_daemon.git"
     version: "v0.1.0"
   binocan:
     git: "https://github.com/martinroger/binocan.git"
     version: "v0.3.0"
-  lvgl_v9_port:
-    path: "../../common/lvgl_v9_port"

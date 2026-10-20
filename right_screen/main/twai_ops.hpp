@@ -222,7 +222,7 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
                 {
                     display_board_st.darkBrightness = newBrightness;
                     if (!(display_board_st.lightMode))
-                        display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+                        display_hw_backlight_set(display_board_st.darkBrightness);
                 }
             }
         }
@@ -232,7 +232,7 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
         ESP_LOGW(__func__, "RDB dark brightness out of range: %d", binocan_rdb_st_msg.xdb_dark_brightness);
         display_board_st.darkBrightness = 100;
         if (!(display_board_st.lightMode))
-            display_board_st.backLight->setBrightness(display_board_st.darkBrightness);
+            display_hw_backlight_set(display_board_st.darkBrightness);
     }
     // Light brightness
     if (binocan_rdb_st_xdb_light_brightness_is_in_range(binocan_rdb_st_msg.xdb_light_brightness))
@@ -251,7 +251,7 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
                 {
                     display_board_st.lightBrightness = newBrightness;
                     if ((display_board_st.lightMode))
-                        display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+                        display_hw_backlight_set(display_board_st.lightBrightness);
                 }
             }
         }
@@ -261,7 +261,7 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
         ESP_LOGW(__func__, "RDB light brightness out of range: %d", binocan_rdb_st_msg.xdb_light_brightness);
         display_board_st.lightBrightness = 100;
         if ((display_board_st.lightMode))
-            display_board_st.backLight->setBrightness(display_board_st.lightBrightness);
+            display_hw_backlight_set(display_board_st.lightBrightness);
     }
     return ESP_OK;
 }

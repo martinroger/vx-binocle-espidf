@@ -8,7 +8,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "lvgl_v9_port.h"
+#include "ui_lock.hpp"
 
 #include "coefficients.h"
 
@@ -209,16 +209,9 @@ inline int updateLVGLObjects(bool forceRefresh = false)
     // Buzzer catch
     if ((p_overTemperatureOn != overTemperatureOn))
     {
-        if (display_board_st.ioExpander != nullptr && display_board_st.ioExpander->getBase() != nullptr)
+        if (display_board_st.displayHwReady)
         {
-            if (display_board_st.overTemp_buzz && overTemperatureOn)
-            {
-                display_board_st.ioExpander->getBase()->digitalWrite(7, HIGH);
-            }
-            else
-            {
-                display_board_st.ioExpander->getBase()->digitalWrite(7, LOW);
-            }
+            display_hw_buzzer_set(display_board_st.overTemp_buzz && overTemperatureOn);
         }
         // Don't update the overTemperatureOn so it can be used downstream
     }
