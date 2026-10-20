@@ -1,0 +1,27 @@
+menu "Display hardware (Waveshare 2.8C)"
+
+    config DISPLAY_HW_BOUNCE_BUFFER_LINES
+        int "RGB bounce buffer height in lines"
+        default 20
+        range 0 120
+        help
+            Two internal-RAM bounce buffers of 480 x N pixels are used to stream the PSRAM
+            framebuffer to the RGB bus. 0 disables them, which is known to make the image
+            drift with a 64 B data cache line and 80 MHz PSRAM.
+
+    config DISPLAY_HW_TOUCH_USE_INTERRUPT
+        bool "Read GT911 on its interrupt line (GPIO16)"
+        default y
+        help
+            When enabled the LVGL adapter reads the touch controller only after an INT edge.
+            Disable to poll it on every LVGL input cycle, as the previous port did.
+
+    config DISPLAY_HW_TOUCH_RESET_WAIT_MS
+        int "GT911 wait after reset release, in ms"
+        default 200
+        range 10 500
+        help
+            Time between releasing GT911 reset and releasing INT. 200 ms matches the previous
+            board definition.
+
+endmenu

@@ -9,7 +9,7 @@
 #include "freertos/timers.h"
 
 #include <ui.h>
-#include "lvgl_v9_port.h"
+#include "ui_lock.hpp"
 #include "twai_daemon.h"
 
 #include "global_vars.hpp"

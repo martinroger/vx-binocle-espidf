@@ -4,16 +4,15 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "esp_display_panel.hpp"
+#include "esp_log.h"
+#include "driver/gpio.h"
+#include "display_hw.h"
 #include "version_parser.h"
 #include "binocan.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
 TaskHandle_t updateUI_task_hdl = NULL;
-
-using namespace esp_panel::drivers;
-using namespace esp_panel::board;
 
 // ESP32 is Little Endian, UDS is BE
 template <typename T>
@@ -63,8 +62,7 @@ struct board_ST
     uint32_t shift_top_threshold = 6500; // Red SHIFT RPM threshold
     bool overTemp_buzz = false;          // Overtemperature buzzer enable
     parsed_app_meta_t *app_metadata;     // App metadata
-    Backlight *backLight;                // Pointer to backligh controller
-    IO_Expander *ioExpander;             // Pointer to IO expander controller
+    bool displayHwReady = false;         // Backlight and IO expander are initialised
     uint8_t darkBrightness = 100;        // Screen brightness in dark mode
     uint8_t lightBrightness = 100;       // Screen brightness in light mode
     bool lightMode = true;               // Light mode active indicator

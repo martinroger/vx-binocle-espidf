@@ -23,9 +23,9 @@ static void backlight_fader_timer_cb(TimerHandle_t xTimer)
     if (fader_steps_remaining <= 0 || current_fader_brightness == target_fader_brightness)
     {
         current_fader_brightness = target_fader_brightness;
-        if (display_board_st.backLight != nullptr)
+        if (display_board_st.displayHwReady)
         {
-            display_board_st.backLight->setBrightness(current_fader_brightness);
+            display_hw_backlight_set((uint8_t)current_fader_brightness);
         }
         xTimerStop(xTimer, 0);
         return;
@@ -43,9 +43,9 @@ static void backlight_fader_timer_cb(TimerHandle_t xTimer)
 
     current_fader_brightness = std::clamp(current_fader_brightness, 0, 100);
 
-    if (display_board_st.backLight != nullptr)
+    if (display_board_st.displayHwReady)
     {
-        display_board_st.backLight->setBrightness(current_fader_brightness);
+        display_hw_backlight_set((uint8_t)current_fader_brightness);
     }
 
     if (current_fader_brightness == target_fader_brightness)
@@ -91,9 +91,9 @@ inline void set_backlight_brightness_instant(uint8_t brightness)
     target_fader_brightness = brightness;
     fader_steps_remaining = 0;
     fader_step_delta = 0;
-    if (display_board_st.backLight != nullptr)
+    if (display_board_st.displayHwReady)
     {
-        display_board_st.backLight->setBrightness(brightness);
+        display_hw_backlight_set(brightness);
     }
 }
 
@@ -106,7 +106,7 @@ inline void set_backlight_brightness_smooth(uint8_t target_brightness, uint16_t 
     target_brightness = (uint8_t)std::clamp((int)target_brightness, 0, 100);
     target_fader_brightness = target_brightness;
 
-    if (display_board_st.backLight == nullptr)
+    if (!display_board_st.displayHwReady)
     {
         current_fader_brightness = target_brightness;
         return;

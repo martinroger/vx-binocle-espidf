@@ -1,6 +1,6 @@
 #pragma once
 #include "global_vars.hpp"
-#include "lvgl_v9_port.h"
+#include "ui_lock.hpp"
 #include "backlight_fader.hpp"
 #include <ui.h>
 #include <styles.h>
