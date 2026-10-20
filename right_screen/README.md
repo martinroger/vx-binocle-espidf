@@ -5,7 +5,7 @@ The **Right Display Board (RDB)** drives the secondary digital cluster display l
 
 ## Hardware Architecture
 - **Microcontroller**: ESP32-S3 (240 MHz dual-core, 8 MB Flash, 8 MB Octal PSRAM).
-- **Display Controller**: High-resolution LCD panel driven via ESP32 Display Panel (`esp32_display_panel`).
+- **Display Controller**: 480x480 ST7701 RGB panel with GT911 touch, driven by plain ESP-IDF `esp_lcd` drivers in [`common/display_hw`](../common/display_hw) and rendered through `espressif/esp_lvgl_adapter`.
 - **CAN Interface**: On-board TWAI transceiver listening to CAN broadcast messages.
 
 ## Building & Flashing

@@ -46,8 +46,7 @@ graph LR
 | **[`factory apps/right display factory app`](factory%20apps/right%20display%20factory%20app)** | ESP32-S3 | RDB display diagnostics, test pattern generation, and web-based OTA flashing. |
 | **[`bennu`](bennu)** | ESP32-S3 | Special delivery recovery payload for remote factory app & SPIFFS overwrite via OTA. |
 | **[`emulator-console`](emulator-console)** | ESP32-S3 | Vehicle simulator with serial console, ESPHome firmware, and Node-RED drivecycle replayer. |
-| **[`common/lvgl_v9_port`](common/lvgl_v9_port)** | Shared | High-performance double-buffered LVGL v9 ESP32-S3 display driver port (used by `right_screen`). |
-| **[`common/display_hw`](common/display_hw)** | Shared | Waveshare 2.8C bring-up on plain `esp_lcd` (ST7701, GT911, TCA9554, LEDC backlight) with `esp_lvgl_adapter` glue (used by `left_screen`). |
+| **[`common/display_hw`](common/display_hw)** | Shared | Waveshare 2.8C bring-up on plain `esp_lcd` (ST7701, GT911, TCA9554, LEDC backlight) with `esp_lvgl_adapter` glue (used by `left_screen` and `right_screen`). |
 | **[`docs`](docs)** | Documentation | System requirements, operational constraints, and sequence diagrams. |
 
 ---
@@ -76,10 +75,12 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `left_screen` | `espressif/esp_lcd_touch_gt911` | `1.2.1` | `~1.2.1` *(via common/display_hw)* |
 | `right_screen` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `right_screen` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
-| `right_screen` | `espressif/esp32_display_panel` | `1.0.4` | `^1.0.4` |
-| `right_screen` | `lvgl/lvgl` | `9.5.0` | `^9.4.0` |
-| `right_screen` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
-| `right_screen` | `espressif/esp32_io_expander` | `1.1.1` | `1.*` *(transitive)* |
+| `right_screen` | `lvgl/lvgl` | `9.5.0` | `~9.5.0` |
+| `right_screen` | `espressif/esp_lvgl_adapter` | `0.7.3` | `~0.7.3` *(via common/display_hw)* |
+| `right_screen` | `espressif/esp_lcd_st7701` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
+| `right_screen` | `espressif/esp_lcd_panel_io_additions` | `1.0.1~1` | `~1.0.1` *(via common/display_hw)* |
+| `right_screen` | `espressif/esp_io_expander_tca9554` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
+| `right_screen` | `espressif/esp_lcd_touch_gt911` | `1.2.1` | `~1.2.1` *(via common/display_hw)* |
 | `factory apps/ITF factory app` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `factory apps/ITF factory app` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
 | `factory apps/ITF factory app` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |

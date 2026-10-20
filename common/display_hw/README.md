@@ -2,7 +2,7 @@
 
 Hardware bring-up for the Waveshare ESP32-S3-Touch-LCD-2.8C display board, on plain ESP-IDF `esp_lcd` drivers, plus the LVGL glue through [`espressif/esp_lvgl_adapter`](https://components.espressif.com/components/espressif/esp_lvgl_adapter).
 
-Used by [`left_screen`](../../left_screen). `right_screen` still uses ESP32_Display_Panel and [`common/lvgl_v9_port`](../lvgl_v9_port).
+Used by [`left_screen`](../../left_screen) and [`right_screen`](../../right_screen).
 
 ## Using it in an app
 

@@ -6,7 +6,7 @@
 
 ```mermaid
 graph TD
-    APP[left_screen app_main] -->|display_hw_init| HW[display_hw]
+    APP[left_screen / right_screen app_main] -->|display_hw_init| HW[display_hw]
     APP -->|display_hw_lvgl_start| GLUE[display_hw_lvgl]
     HW --> BL[LEDC backlight GPIO6]
     HW --> I2C[I2C0 master bus]
