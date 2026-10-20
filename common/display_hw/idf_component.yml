@@ -1,0 +1,20 @@
+## IDF Component Manager Manifest File
+description: Waveshare ESP32-S3-Touch-LCD-2.8C bring-up (ST7701 RGB, GT911, TCA9554, LEDC backlight) with esp_lvgl_adapter glue
+dependencies:
+  idf:
+    version: ">=5.5.5"
+  lvgl/lvgl:
+    version: "~9.5.0"
+    public: true
+  espressif/esp_lvgl_adapter:
+    version: "~0.7.3"
+  espressif/esp_lcd_st7701:
+    version: "~2.0.3"
+  espressif/esp_lcd_panel_io_additions:
+    version: "~1.0.1"
+  espressif/esp_io_expander_tca9554:
+    version: "~2.0.3"
+    public: true
+  espressif/esp_lcd_touch_gt911:
+    version: "~1.2.1"
+    public: true

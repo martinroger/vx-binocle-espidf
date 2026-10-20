@@ -24,6 +24,7 @@
 - **FreeRTOS Task Core Pinning**:
   - **Core 0**: Protocol daemons, TWAI/CAN bus transmission/reception, ADC sampling loops, and Wi-Fi/HTTP network stacks.
   - **Core 1**: LVGL rendering pipeline, UI animation loops, and display buffer flushing.
+- **Display Stack (LDB)**: `left_screen` uses [`common/display_hw`](../common/display_hw) on plain `esp_lcd` drivers with `espressif/esp_lvgl_adapter`, which requires ESP-IDF >= 5.5.5. Its I2C peripherals (TCA9554, GT911) use the `i2c_master` driver only; the legacy `driver/i2c.h` driver must not be linked into `left_screen`. RGB bounce buffers stay enabled (64 B data cache line with 80 MHz PSRAM).
 - **Task Stack Allocations**: Minimum 4096 bytes allocated to FreeRTOS tasks interacting with C standard library, floating-point math, or logging.
 - **TWAI Modern Driver Architecture & Bus-Off Recovery**:
   - The modernized `esp_driver_twai` operates on a zero-copy pointer model; all asynchronous transmissions must utilize persistent descriptor slots (`s_tx_slots` pool managed by `twai_daemon`) with ISR recycling via `on_tx_done` to prevent stack dangling pointer corruptions.

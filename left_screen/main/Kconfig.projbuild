@@ -50,4 +50,32 @@ menu "Display Application"
         int "Milliseconds for fast blink interval"
         default 100
         range 100 300
+    menu "LVGL task"
+        config LVGL_TASK_CORE_ID
+            int "Core the LVGL task is pinned to (-1 for no affinity)"
+            default 1
+            range -1 1
+            help
+                Keep LVGL on core 1 so the CAN tasks on core 0 are not delayed by rendering.
+
+        config LVGL_TASK_PRIORITY
+            int "LVGL task priority"
+            default 2
+            range 1 24
+
+        config LVGL_TASK_STACK_SIZE
+            int "LVGL task stack size in bytes"
+            default 12288
+            range 4096 65536
+
+        config LVGL_TICK_PERIOD_MS
+            int "LVGL tick period in ms"
+            default 2
+            range 1 10
+
+        config LVGL_TASK_MAX_DELAY_MS
+            int "Maximum delay between two LVGL timer runs, in ms"
+            default 500
+            range 5 1000
+    endmenu
 endmenu

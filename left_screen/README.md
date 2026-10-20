@@ -5,8 +5,8 @@ The **Left Display Board (LDB)** drives the primary digital instrument cluster s
 
 ## Hardware Architecture
 - **Microcontroller**: ESP32-S3 (240 MHz dual-core, 8 MB Flash, 8 MB Octal PSRAM).
-- **Display Controller**: High-resolution LCD panel driven via ESP32 Display Panel (`esp32_display_panel`).
-- **Audio Buzzer**: Hardware PWM buzzer on GPIO 4 for over-temperature and critical fault audio alarms.
+- **Display Controller**: 480x480 ST7701 RGB panel with GT911 touch, driven by plain ESP-IDF `esp_lcd` drivers in [`common/display_hw`](../common/display_hw) and rendered through `espressif/esp_lvgl_adapter`.
+- **Audio Buzzer**: Buzzer on TCA9554 IO expander pin 7, switched on and off for over-temperature alarms.
 - **CAN Interface**: On-board TWAI transceiver listening to `ITF_values`, `ITF_status`, and `ITF_debug`.
 
 ## Building & Flashing
