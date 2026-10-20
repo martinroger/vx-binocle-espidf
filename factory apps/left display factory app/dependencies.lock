@@ -1,0 +1,41 @@
+dependencies:
+  espressif/mdns:
+    component_hash: b5b30022c46302eab89c1d2e3b6fb5918a627563a7462f0ee284b22b9a934967
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.14.0
+  idf:
+    source:
+      type: idf
+    version: 5.5.5
+  twai_daemon:
+    component_hash: dd54182a5957fcdf2e330c0bbe85bbdd5f309bdc3816dfbd6dd06383fe16e973
+    dependencies:
+    - name: idf
+      version: '>=5.5.0'
+    source:
+      git: https://github.com/martinroger/twai_daemon.git
+      path: .
+      type: git
+    targets:
+    - esp32
+    - esp32s2
+    - esp32s3
+    - esp32c3
+    - esp32c5
+    - esp32c6
+    - esp32h2
+    - esp32p4
+    version: 588c470339edb609f989f38a4e468037cb0a62e6
+direct_dependencies:
+- espressif/mdns
+- idf
+- twai_daemon
+manifest_hash: 1af5325597b84ca031904c2974a6f0866f2013f593ad4a5052ae58d560a48586
+target: esp32s3
+version: 2.0.0
