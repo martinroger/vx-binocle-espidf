@@ -69,11 +69,11 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `left_screen` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `left_screen` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
 | `left_screen` | `lvgl/lvgl` | `9.5.0` | `~9.5.0` |
-| `left_screen` | `espressif/esp_lvgl_adapter` | *(pending first build)* | `~0.7.3` *(via common/display_hw)* |
-| `left_screen` | `espressif/esp_lcd_st7701` | *(pending first build)* | `~2.0.3` *(via common/display_hw)* |
-| `left_screen` | `espressif/esp_lcd_panel_io_additions` | *(pending first build)* | `~1.0.1` *(via common/display_hw)* |
-| `left_screen` | `espressif/esp_io_expander_tca9554` | *(pending first build)* | `~2.0.3` *(via common/display_hw)* |
-| `left_screen` | `espressif/esp_lcd_touch_gt911` | *(pending first build)* | `~1.2.1` *(via common/display_hw)* |
+| `left_screen` | `espressif/esp_lvgl_adapter` | `0.7.3` | `~0.7.3` *(via common/display_hw)* |
+| `left_screen` | `espressif/esp_lcd_st7701` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
+| `left_screen` | `espressif/esp_lcd_panel_io_additions` | `1.0.1~1` | `~1.0.1` *(via common/display_hw)* |
+| `left_screen` | `espressif/esp_io_expander_tca9554` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
+| `left_screen` | `espressif/esp_lcd_touch_gt911` | `1.2.1` | `~1.2.1` *(via common/display_hw)* |
 | `right_screen` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `right_screen` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
 | `right_screen` | `espressif/esp32_display_panel` | `1.0.4` | `^1.0.4` |
