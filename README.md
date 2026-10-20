@@ -65,22 +65,46 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `interface_board` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
 | `interface_board` | `esp-idf-lib/esp_idf_lib_helpers` | `1.4.0` | `*` *(transitive)* |
 | `interface_board` | `esp-idf-lib/i2cdev` | `2.1.2` | `*` *(transitive)* |
-| `left_screen` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
+| `left_screen` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `left_screen` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
 | `left_screen` | `lvgl/lvgl` | `9.5.0` | `~9.5.0` |
-| `left_screen` | `espressif/esp_lvgl_adapter` | `0.7.3` | `~0.7.3` *(via common/display_hw)* |
-| `left_screen` | `espressif/esp_lcd_st7701` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
-| `left_screen` | `espressif/esp_lcd_panel_io_additions` | `1.0.1~1` | `~1.0.1` *(via common/display_hw)* |
 | `left_screen` | `espressif/esp_io_expander_tca9554` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
+| `left_screen` | `espressif/esp_lcd_panel_io_additions` | `1.0.1~1` | `~1.0.1` *(via common/display_hw)* |
+| `left_screen` | `espressif/esp_lcd_st7701` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
 | `left_screen` | `espressif/esp_lcd_touch_gt911` | `1.2.1` | `~1.2.1` *(via common/display_hw)* |
-| `right_screen` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
+| `left_screen` | `espressif/esp_lvgl_adapter` | `0.7.3` | `~0.7.3` *(via common/display_hw)* |
+| `left_screen` | `espressif/button` | `4.2.2` | `4.*` *(transitive)* |
+| `left_screen` | `espressif/cmake_utilities` | `0.5.3` | `*` / `0.*` *(transitive)* |
+| `left_screen` | `espressif/esp_io_expander` | `1.2.1` | `^1` / `^1.2.0` *(transitive)* |
+| `left_screen` | `espressif/esp_lcd_touch` | `1.2.1` | `1.*` / `^1.2.0` *(transitive)* |
+| `left_screen` | `espressif/esp_lv_decoder` | `0.4.3` | `0.*` *(transitive)* |
+| `left_screen` | `espressif/esp_lv_fs` | `1.0.1` | `1.*` *(transitive)* |
+| `left_screen` | `espressif/esp_mmap_assets` | `2.0.1` | `>=1.2` *(transitive)* |
+| `left_screen` | `espressif/esp_new_jpeg` | `1.0.2` | `1.*` *(transitive)* |
+| `left_screen` | `espressif/freetype` | `2.14.3~1` | `2.*` *(transitive)* |
+| `left_screen` | `espressif/knob` | `1.1.0` | `1.*` *(transitive)* |
+| `left_screen` | `espressif/libpng` | `1.6.58~2` | `1.*` *(transitive)* |
+| `left_screen` | `espressif/zlib` | `1.3.2~1` | `^1.2.13` *(transitive)* |
+| `right_screen` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `right_screen` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
 | `right_screen` | `lvgl/lvgl` | `9.5.0` | `~9.5.0` |
-| `right_screen` | `espressif/esp_lvgl_adapter` | `0.7.3` | `~0.7.3` *(via common/display_hw)* |
-| `right_screen` | `espressif/esp_lcd_st7701` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
-| `right_screen` | `espressif/esp_lcd_panel_io_additions` | `1.0.1~1` | `~1.0.1` *(via common/display_hw)* |
 | `right_screen` | `espressif/esp_io_expander_tca9554` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
+| `right_screen` | `espressif/esp_lcd_panel_io_additions` | `1.0.1~1` | `~1.0.1` *(via common/display_hw)* |
+| `right_screen` | `espressif/esp_lcd_st7701` | `2.0.3` | `~2.0.3` *(via common/display_hw)* |
 | `right_screen` | `espressif/esp_lcd_touch_gt911` | `1.2.1` | `~1.2.1` *(via common/display_hw)* |
+| `right_screen` | `espressif/esp_lvgl_adapter` | `0.7.3` | `~0.7.3` *(via common/display_hw)* |
+| `right_screen` | `espressif/button` | `4.2.2` | `4.*` *(transitive)* |
+| `right_screen` | `espressif/cmake_utilities` | `0.5.3` | `*` / `0.*` *(transitive)* |
+| `right_screen` | `espressif/esp_io_expander` | `1.2.1` | `^1` / `^1.2.0` *(transitive)* |
+| `right_screen` | `espressif/esp_lcd_touch` | `1.2.1` | `1.*` / `^1.2.0` *(transitive)* |
+| `right_screen` | `espressif/esp_lv_decoder` | `0.4.3` | `0.*` *(transitive)* |
+| `right_screen` | `espressif/esp_lv_fs` | `1.0.1` | `1.*` *(transitive)* |
+| `right_screen` | `espressif/esp_mmap_assets` | `2.0.1` | `>=1.2` *(transitive)* |
+| `right_screen` | `espressif/esp_new_jpeg` | `1.0.2` | `1.*` *(transitive)* |
+| `right_screen` | `espressif/freetype` | `2.14.3~1` | `2.*` *(transitive)* |
+| `right_screen` | `espressif/knob` | `1.1.0` | `1.*` *(transitive)* |
+| `right_screen` | `espressif/libpng` | `1.6.58~2` | `1.*` *(transitive)* |
+| `right_screen` | `espressif/zlib` | `1.3.2~1` | `^1.2.13` *(transitive)* |
 | `factory apps/ITF factory app` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `factory apps/ITF factory app` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
 | `factory apps/ITF factory app` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
