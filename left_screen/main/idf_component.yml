@@ -10,5 +10,3 @@ dependencies:
   binocan:
     git: "https://github.com/martinroger/binocan.git"
     version: "v0.3.0"
-  display_hw:
-    path: "../../common/display_hw"

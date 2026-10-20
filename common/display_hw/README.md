@@ -4,6 +4,16 @@ Hardware bring-up for the Waveshare ESP32-S3-Touch-LCD-2.8C display board, on pl
 
 Used by [`left_screen`](../../left_screen). `right_screen` still uses ESP32_Display_Panel and [`common/lvgl_v9_port`](../lvgl_v9_port).
 
+## Using it in an app
+
+Add the directory to `EXTRA_COMPONENT_DIRS` in the app's top-level `CMakeLists.txt`, before `include($ENV{IDF_PATH}/tools/cmake/project.cmake)`, and list `display_hw` in `REQUIRES` of the component that uses it:
+
+```cmake
+set(EXTRA_COMPONENT_DIRS ${CMAKE_CURRENT_LIST_DIR}/../common/display_hw)
+```
+
+Do not add it as a `path:` dependency in `idf_component.yml`: the component manager writes local path dependencies to `dependencies.lock` as absolute paths. The registry dependencies in this component's own [`idf_component.yml`](idf_component.yml) are still resolved and locked.
+
 ## Hardware
 
 | Function | Part | Connection |
