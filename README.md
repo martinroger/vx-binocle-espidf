@@ -61,6 +61,7 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `emulator-console` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
 | `interface_board` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `interface_board` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
+| `interface_board` | `vx-gear-estimator` | `0.1.0` (`0d135d9`) | `main` *(git: martinroger/vx-gear-estimator)* |
 | `interface_board` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
 | `interface_board` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
 | `interface_board` | `esp-idf-lib/esp_idf_lib_helpers` | `1.4.0` | `*` *(transitive)* |

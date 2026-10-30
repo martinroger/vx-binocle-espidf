@@ -7,7 +7,7 @@
 #include "version_parser.h"        // For parsed app metadata struct
 #include "odometer.h"              // For odometer and trip variables
 #include "mcpwm_capture_helpers.h" // For pwm_info_t struct and capture handles
-#include "gear_estimator_params.h" // For gear estimator
+#include "gear_estimator.h"         // For gear estimator
 
 struct board_ST
 {
@@ -51,5 +51,5 @@ TaskHandle_t acquire_mcpwm_hdl = NULL; // Task handle for MCPWM acquisition & ge
 #pragma endregion
 
 #pragma region Gear estimator
-gear_bayesian_state_t gear_estimator; // Bayesian gear estimator state
+gear_state_t gear_estimator; // Bayesian gear estimator state
 #pragma endregion

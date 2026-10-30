@@ -19,7 +19,8 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 
-#include "gear_estimator_params.h"
+#include "gear_estimator.h"
+#include "gear_params_nvs.h"
 #include "mcpwm_capture_helpers.h"
 #include "global_vars.hpp"
 
@@ -37,7 +38,7 @@
  * @brief Periodic FreeRTOS worker task for computing MCPWM frequencies and running gear estimation.
  *
  * Runs deterministically every 25 ms using vTaskDelayUntil(), updates duty cycle and frequency
- * for coolant, RPM, and speed capture channels, and feeds these into gear_bayesian_update().
+ * for coolant, RPM, and speed capture channels, and feeds these into gear_estimator_update().
  *
  * @param[in] pvParameters Unused FreeRTOS task parameter (Default: NULL).
  *
@@ -55,23 +56,33 @@ inline void acquire_mcpwm(void *pvParameters)
         compute_freq_dut(&pwm_cap_coolant);
         compute_freq_dut(&pwm_cap_rpm);
         compute_freq_dut(&pwm_cap_speed);
-        gear_bayesian_update(&gear_estimator, pwm_cap_speed.frequency, pwm_cap_rpm.frequency, MCPWM_PROCESSOR_SAMPLE_DT_S);
+        gear_estimator_update(&gear_estimator, pwm_cap_speed.frequency, pwm_cap_rpm.frequency, MCPWM_PROCESSOR_SAMPLE_DT_S);
     }
 }
 
 /**
  * @brief Initialize the Bayesian gear estimator and launch the MCPWM acquisition background task.
  *
+ * The estimator parameters are loaded from NVS (namespace "vx_gear"). When no valid copy is stored, the tuned
+ * defaults compiled into the vx-gear-estimator component are used and written back.
+ *
  * @return esp_err_t ESP_OK on successful task creation, ESP_FAIL if xTaskCreatePinnedToCore() fails.
  *
  * @note Thread Safety: Must be called during system initialization before starting telemetry packaging tasks.
- * @note Side Effects: Allocates FreeRTOS task with 4096 bytes stack pinned to CONFIG_CAN_CORE_AFFINITY.
+ * @note Side Effects: May write the default gear parameters to NVS. Allocates FreeRTOS task with 4096 bytes stack pinned to CONFIG_CAN_CORE_AFFINITY.
  */
 inline esp_err_t mcpwm_processor_init(void)
 {
     esp_err_t ret = ESP_OK;
 
-    gear_bayesian_init(&gear_estimator);
+    gear_params_t gear_params;
+    gear_params_source_t gear_params_src;
+    esp_err_t gear_err = gear_params_nvs_load(&gear_params, &gear_params_src); // gear_params is valid even on error
+    if (gear_err != ESP_OK)
+        ESP_LOGW(__func__, "Gear parameters not persisted (%s), using tuned defaults", esp_err_to_name(gear_err));
+    else
+        ESP_LOGI(__func__, "Gear parameters loaded from %s", (gear_params_src == GEAR_PARAMS_FROM_NVS) ? "NVS" : "tuned defaults");
+    gear_estimator_init(&gear_estimator, &gear_params);
 
     if (xTaskCreatePinnedToCore(acquire_mcpwm, "PWM PROC", 4096, NULL, 4, &acquire_mcpwm_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
