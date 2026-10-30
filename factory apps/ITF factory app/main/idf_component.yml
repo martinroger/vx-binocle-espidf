@@ -23,3 +23,7 @@ dependencies:
   binocan:
     git: "https://github.com/martinroger/binocan.git"
     version: "v0.3.0"
+
+  vx-gear-estimator:
+    git: "https://github.com/martinroger/vx-gear-estimator.git"
+    version: "main"

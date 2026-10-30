@@ -1,6 +1,6 @@
 # Gear Estimator Parameters in the ITF Factory App (Proposal)
 
-Status: decisions agreed, not implemented yet. Once implementation starts, this plan moves into `docs/IMPLEMENTATION_PLAN.MD`.
+Status: implemented on `update-gear-estimator` (control builds only, not yet validated on hardware). Endpoints and UI are documented in the factory app [TOO.MD](../factory%20apps/ITF%20factory%20app/TOO.MD).
 
 ## Objective
 
@@ -132,8 +132,8 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    P0["Phase 0: ITF app on vx-gear-estimator<br/>(update-gear-estimator, done)"] --> P1["Phase 1: factory app REST + cJSON field table"]
-    P1 --> P2["Phase 2: Gear Estimator sub-tab UI"]
+    P0["Phase 0: ITF app on vx-gear-estimator<br/>(update-gear-estimator, done)"] --> P1["Phase 1: factory app REST + cJSON field table (done)"]
+    P1 --> P2["Phase 2: Gear Estimator sub-tab UI (done)"]
     P2 --> M[main]
 ```
 

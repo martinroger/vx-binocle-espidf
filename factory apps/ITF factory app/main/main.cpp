@@ -63,6 +63,7 @@ T swap_endian(T u)
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
 #include "runtime_stats.hpp"
 #endif
+#include "gear_params_web.hpp"
 
 #pragma region Global variables
 // Should be extended to more ?
@@ -2532,7 +2533,7 @@ static esp_err_t nvs_wipe_post_handler(httpd_req_t *req)
 static httpd_handle_t start_webserver(void)
 {
 	httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-	config.max_uri_handlers = 24;
+	config.max_uri_handlers = 28;
 	config.stack_size = 8192;
 	httpd_handle_t server = NULL;
 	if (httpd_start(&server, &config) != ESP_OK)
@@ -2574,6 +2575,7 @@ static httpd_handle_t start_webserver(void)
 	httpd_register_uri_handler(server, &nvs_list_uri);
 	httpd_uri_t nvs_wipe_uri = {.uri = "/nvs/wipe", .method = HTTP_POST, .handler = nvs_wipe_post_handler};
 	httpd_register_uri_handler(server, &nvs_wipe_uri);
+	gear_params_web_register(server);
 
 	// Register WebSocket endpoint /ws
 	httpd_uri_t ws_uri = {

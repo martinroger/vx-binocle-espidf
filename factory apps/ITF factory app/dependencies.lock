@@ -144,6 +144,16 @@ dependencies:
     - esp32h2
     - esp32p4
     version: 588c470339edb609f989f38a4e468037cb0a62e6
+  vx-gear-estimator:
+    component_hash: 8493495fe184f6ba49660c2a87ad79873b0840dc48effd206a797a529442c94e
+    dependencies:
+    - name: idf
+      version: '>=5.5.5'
+    source:
+      git: https://github.com/martinroger/vx-gear-estimator.git
+      path: .
+      type: git
+    version: 0d135d905e718d89d3d88abb13543b847fa7e7dd
 direct_dependencies:
 - binocan
 - esp-idf-lib/ads111x
@@ -151,6 +161,7 @@ direct_dependencies:
 - espressif/mdns
 - idf
 - twai_daemon
-manifest_hash: c90818c98275b952e25f4f361fa2bcb0e2a7f90ec022dbeb3d42271ed2873acf
+- vx-gear-estimator
+manifest_hash: 180500f59bd5288e1537816372b52863c9cab359bcfc071d3f400df0bf814f46
 target: esp32s3
 version: 2.0.0

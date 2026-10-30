@@ -108,6 +108,7 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `right_screen` | `espressif/zlib` | `1.3.2~1` | `^1.2.13` *(transitive)* |
 | `factory apps/ITF factory app` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `factory apps/ITF factory app` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
+| `factory apps/ITF factory app` | `vx-gear-estimator` | `0.1.0` (`0d135d9`) | `main` *(git: martinroger/vx-gear-estimator)* |
 | `factory apps/ITF factory app` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
 | `factory apps/ITF factory app` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
 | `factory apps/ITF factory app` | `espressif/mdns` | `1.13.1` | `*` |
