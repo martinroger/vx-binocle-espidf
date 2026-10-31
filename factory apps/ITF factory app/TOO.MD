@@ -30,7 +30,15 @@ graph TD
 | `overtemp_th` | `u16` | `106` | Coolant overtemperature threshold (°C). |
 | `lastPart` | `i8` | `-1` | Previously active boot partition index. |
 
-### 2.2 Odometer Namespace Keys (`nvs_odo` partition, `storage` namespace)
+### 2.2 Gear Estimator Namespace (`vx_gear`)
+
+| NVS Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `params` | blob | tuned defaults of `vx-gear-estimator` | Versioned, CRC-checked `gear_params_t`. Read and written only through the [`vx-gear-estimator`](https://github.com/martinroger/vx-gear-estimator) API (`gear_params_nvs_load/save/erase`), never by hand. The interface board loads it at boot. |
+
+Both apps must resolve the same `vx-gear-estimator` commit (see each `dependencies.lock`): a blob written by another `gear_params_t` layout is discarded and replaced by the tuned defaults.
+
+### 2.3 Odometer Namespace Keys (`nvs_odo` partition, `storage` namespace)
 
 | NVS Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
@@ -62,17 +70,60 @@ graph TD
     - `new_overtemp_threshold` / `overtemp_threshold` / `overtemp_th`: `0` to `250` (°C)
   - **Response**: HTTP 200 on successful commit, HTTP 400 on invalid or malformed parameters.
 
-### 3.2 Odometer & Trip Management
+### 3.2 Gear Estimator Parameters ([`gear_params_web.hpp`](main/gear_params_web.hpp))
+
+- **`GET /api/gear`**: `gear_params_nvs_load()`, so when nothing valid is stored the tuned defaults are written first.
+  - **Response (`application/json`)**:
+    ```json
+    {
+      "source": "nvs",
+      "params": { "ratio_mean": [1.016, 1.814, 2.724, 3.761, 4.54], "ratio_var": [...], "min_speed_hz": 18, "gate_mode": 1, "...": "..." },
+      "fields": [ { "name": "ratio_mean", "group": "Ratio model", "count": 5, "kind": "float", "min": 0.1, "max": 20, "unit": "speed Hz / RPM Hz" }, "..." ]
+    }
+    ```
+  - `source`: `nvs`, `default` (nothing usable was stored, tuned defaults now written) or `default_unsaved` (NVS write failed, see `nvs_error`).
+  - `fields` is the field table of the factory app (names, UI groups, ranges copied from `gear_params_valid()`); the web form is generated from it.
+- **`GET /api/gear/defaults`**: `{"params":{...}}` from `gear_params_default_tuned()`. Nothing is stored.
+- **`POST /api/gear`**: JSON body `{"params":{...}}`. Fields missing from the body keep their stored value. Each field is range-checked against the table, then the whole block goes through `gear_params_valid()` (which also requires `ratio_mean` to increase from gear 1 to 5) before `gear_params_nvs_save()`.
+  - **Response**: HTTP 200 `OK`; HTTP 400 with a message on bad JSON, out-of-range or rejected block (nothing stored); HTTP 500 on NVS error.
+- **`POST /api/gear/erase`**: `gear_params_nvs_erase()`. The next load (interface board boot or `GET /api/gear`) re-initialises the blob from the tuned defaults.
+
+```mermaid
+sequenceDiagram
+    participant UI as Browser (Gear Estimator sub-tab)
+    participant FA as HTTP server
+    participant C as vx-gear-estimator API
+    participant NVS as nvs / vx_gear / params
+    UI->>FA: GET /api/gear
+    FA->>C: gear_params_nvs_load()
+    C->>NVS: read blob (CRC, layout version)
+    alt missing, damaged or other layout
+        C->>NVS: write tuned defaults
+    end
+    FA-->>UI: source, params, fields
+    UI->>FA: POST /api/gear {params}
+    FA->>FA: per-field range check
+    FA->>C: gear_params_valid()
+    alt rejected
+        FA-->>UI: 400 + message (nothing stored)
+    else valid
+        FA->>C: gear_params_nvs_save()
+        C->>NVS: write blob
+        FA-->>UI: 200 OK
+    end
+```
+
+### 3.3 Odometer & Trip Management
 
 - **`GET /odometer`**: Returns `{"odometer_m": <u32>, "trip_m": <u32>}`.
 - **`POST /set_trip_odo`**: Updates `new_odo` and/or `new_trip` in `nvs_odo`.
 
-### 3.3 NVS Dynamic Inspection & Wipe
+### 3.4 NVS Dynamic Inspection & Wipe
 
 - **`GET /nvs/list`**: Scans and enumerates all NVS partitions, namespaces, keys, and values dynamically at runtime as JSON.
 - **`POST /nvs/wipe`**: Safely erases all NVS partitions (`nvs`, `nvs_odo`) and re-initializes them cleanly without forcing an immediate MCU restart.
 
-### 3.4 WebSocket Telemetry & OTA Progress Engine (`/ws`)
+### 3.5 WebSocket Telemetry & OTA Progress Engine (`/ws`)
 
 - **Telemetry JSON Packet Schema** (broadcast periodically at `CONFIG_FACTORY_WS_REFRESH_RATE_HZ` default 5 Hz):
   ```json
@@ -146,7 +197,9 @@ graph TD
 ## 4. UI Architecture & Navigation
 
 The Factory App interface uses a responsive 4-tab layout built on top of [SimpleCSS](https://simplecss.org/):
-1. **Setup & Calibration**: Real-time NVS calibration parameters (`fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`) and live odometer/trip adjustment.
+1. **Setup & Calibration**, with two sub-tabs:
+   - **General**: Real-time NVS calibration parameters (`fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`) and live odometer/trip adjustment.
+   - **Gear Estimator**: Form generated from the `fields` table of `GET /api/gear`, one card per group (Ratio model, Gating, Filter, Transitions, Clutch drop), with the stored source, *Save to NVS*, *Reload*, *Load tuned defaults* (fills the form only) and *Erase stored copy*. The form is loaded the first time the sub-tab is opened.
 2. **IO & Bus Debug**:
    - **Telltales**: 15 telltale status pills updated via TCA9555 expander (including Button, Backlight, and Low Coolant).
    - **ADS1115 ADC Raw Volts & Physical Interpreted Values**: 4 progress meters calibrated to 0–4096 mV (`max="4096"`), displaying un-filtered instant readings alongside fuel sender resistance ($\Omega$), percentage (%), automatic caliber state, and battery voltage (V).

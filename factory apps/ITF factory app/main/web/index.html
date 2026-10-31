@@ -109,6 +109,35 @@
             border-color: var(--accent);
         }
 
+        /* Setup sub-tabs */
+        .subtab-nav {
+            display: flex;
+            gap: 0.4rem;
+            margin-bottom: 1rem;
+        }
+
+        .subtab-nav .tab-btn {
+            font-size: 0.9rem;
+            padding: 0.4rem 0.9rem;
+        }
+
+        .gear-table input,
+        .gear-table select {
+            width: 100%;
+            margin: 0;
+        }
+
+        .gear-table td, .gear-table th {
+            padding: 0.3rem 0.5rem;
+        }
+
+        .gear-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
         /* Card Layouts */
         .card-grid {
             display: grid;
@@ -293,6 +322,11 @@
 
         <!-- TAB 1: SETUP & CALIBRATION -->
         <section id="tab-setup">
+            <nav class="subtab-nav">
+                <button id="btn-subtab-general" class="tab-btn active" onclick="switchSetupSubTab('general')">General</button>
+                <button id="btn-subtab-gear" class="tab-btn" onclick="switchSetupSubTab('gear')">Gear Estimator</button>
+            </nav>
+            <div id="subtab-general">
             <div class="card-grid">
                 <!-- Odometer & Trip Card -->
                 <div class="card">
@@ -341,6 +375,20 @@
                         <button type="button" onclick="updateCalParam('new_overtemp_threshold')">Save</button>
                     </div>
                 </div>
+            </div>
+            </div>
+
+            <!-- SUB-TAB: GEAR ESTIMATOR -->
+            <div id="subtab-gear" style="display:none;">
+                <div class="gear-actions">
+                    <span>Source: <mark id="gear_source">-</mark></span>
+                    <button type="button" onclick="saveGearParams()">Save to NVS</button>
+                    <button type="button" onclick="refreshGearParams()">Reload</button>
+                    <button type="button" onclick="loadGearDefaults()">Load tuned defaults</button>
+                    <button type="button" onclick="eraseGearParams()">Erase stored copy</button>
+                </div>
+                <small>Stored in NVS (namespace <code>vx_gear</code>). The interface board applies it on its next boot. "Load tuned defaults" only fills the form.</small>
+                <div id="gear_groups" class="card-grid" style="margin-top: 1rem;"></div>
             </div>
         </section>
 
@@ -588,6 +636,153 @@
                     }
                 }
             });
+        }
+
+        // Setup sub-tab switching
+        function switchSetupSubTab(subId) {
+            ['general', 'gear'].forEach(t => {
+                document.getElementById('subtab-' + t).style.display = (t === subId) ? 'block' : 'none';
+                document.getElementById('btn-subtab-' + t).classList.toggle('active', t === subId);
+            });
+            if (subId === 'gear' && gearFields.length === 0) refreshGearParams();
+        }
+
+        // Gear estimator parameters (field table served by GET /api/gear)
+        var gearFields = [];
+        var GEAR_SOURCES = { nvs: 'NVS', default: 'tuned defaults (now stored)', default_unsaved: 'tuned defaults (NVS write failed)' };
+
+        function gearInput(f, idx) {
+            var input = document.createElement('input');
+            input.type = 'number';
+            input.step = 'any';
+            input.min = f.min;
+            input.max = f.max;
+            input.id = 'gear_' + f.name + (idx === undefined ? '' : '_' + idx);
+            return input;
+        }
+
+        function buildGearForm() {
+            var host = document.getElementById('gear_groups');
+            host.innerHTML = '';
+            var groups = {};
+            gearFields.forEach(f => {
+                if (!groups[f.group]) {
+                    var card = document.createElement('div');
+                    card.className = 'card';
+                    card.innerHTML = '<h3>' + escapeHtml(f.group) + '</h3>';
+                    var table = document.createElement('table');
+                    table.className = 'gear-table';
+                    card.appendChild(table);
+                    host.appendChild(card);
+                    groups[f.group] = table;
+                }
+                var table = groups[f.group];
+                var hint = escapeHtml(f.min + ' .. ' + f.max + (f.unit ? ' ' + f.unit : ''));
+                if (f.count > 1) {
+                    var head = table.insertRow();
+                    head.innerHTML = '<th colspan="2">' + escapeHtml(f.name) + ' <small>(' + hint + ')</small></th>';
+                    for (var k = 0; k < f.count; k++) {
+                        var row = table.insertRow();
+                        row.insertCell().innerText = 'Gear ' + (k + 1);
+                        row.insertCell().appendChild(gearInput(f, k));
+                    }
+                } else if (f.kind === 'gate_mode') {
+                    var row = table.insertRow();
+                    row.insertCell().innerHTML = escapeHtml(f.name);
+                    var sel = document.createElement('select');
+                    sel.id = 'gear_' + f.name;
+                    sel.innerHTML = '<option value="0">Neutral when either cutoff fails</option>'
+                        + '<option value="1">Uncertain when moving with RPM below cutoff</option>';
+                    row.insertCell().appendChild(sel);
+                } else {
+                    var row = table.insertRow();
+                    row.insertCell().innerHTML = escapeHtml(f.name) + '<br><small>' + hint + '</small>';
+                    row.insertCell().appendChild(gearInput(f));
+                }
+            });
+        }
+
+        function fillGearForm(params) {
+            gearFields.forEach(f => {
+                var v = params[f.name];
+                if (v === undefined) return;
+                if (f.count > 1) {
+                    for (var k = 0; k < f.count; k++) document.getElementById('gear_' + f.name + '_' + k).value = Number(v[k].toPrecision(6));
+                } else {
+                    document.getElementById('gear_' + f.name).value = (f.kind === 'gate_mode') ? String(v) : Number(v.toPrecision(6));
+                }
+            });
+        }
+
+        function readGearForm() {
+            var params = {};
+            for (var f of gearFields) {
+                var ids = (f.count > 1) ? [...Array(f.count).keys()].map(k => 'gear_' + f.name + '_' + k) : ['gear_' + f.name];
+                var vals = [];
+                for (var id of ids) {
+                    var el = document.getElementById(id);
+                    var num = Number(el.value);
+                    if (el.value === '' || isNaN(num) || num < f.min || num > f.max) {
+                        el.focus();
+                        throw new Error(f.name + ' must be a number in ' + f.min + ' .. ' + f.max);
+                    }
+                    vals.push(num);
+                }
+                params[f.name] = (f.count > 1) ? vals : vals[0];
+            }
+            if (params.ratio_mean) {
+                for (var k = 1; k < params.ratio_mean.length; k++) {
+                    if (params.ratio_mean[k] <= params.ratio_mean[k - 1]) throw new Error('ratio_mean must increase from gear 1 to 5');
+                }
+            }
+            return params;
+        }
+
+        function refreshGearParams() {
+            fetch('/api/gear').then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            }).then(j => {
+                gearFields = j.fields || [];
+                buildGearForm();
+                fillGearForm(j.params || {});
+                document.getElementById('gear_source').innerText = (GEAR_SOURCES[j.source] || j.source) + (j.nvs_error ? ' - ' + j.nvs_error : '');
+            }).catch(e => alert('Error loading gear parameters: ' + e.message));
+        }
+
+        function loadGearDefaults() {
+            fetch('/api/gear/defaults').then(r => r.json()).then(j => {
+                fillGearForm(j.params || {});
+                document.getElementById('gear_source').innerText = 'tuned defaults loaded in the form, not saved';
+            }).catch(e => alert('Error loading tuned defaults: ' + e.message));
+        }
+
+        function saveGearParams() {
+            var params;
+            try {
+                params = readGearForm();
+            } catch (e) {
+                alert(e.message);
+                return;
+            }
+            fetch('/api/gear', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ params: params }) })
+                .then(async r => {
+                    if (!r.ok) throw new Error(await r.text());
+                    refreshGearParams();
+                })
+                .catch(e => alert('Gear parameters not saved: ' + e.message));
+        }
+
+        function eraseGearParams() {
+            if (!confirm('Erase the stored gear parameters? The interface board will fall back to its compiled-in tuned defaults.')) return;
+            fetch('/api/gear/erase', { method: 'POST' })
+                .then(async r => {
+                    if (!r.ok) throw new Error(await r.text());
+                    gearFields = [];
+                    document.getElementById('gear_groups').innerHTML = '';
+                    document.getElementById('gear_source').innerText = 'erased (nothing stored)';
+                })
+                .catch(e => alert('Error erasing gear parameters: ' + e.message));
         }
 
         // WebSocket Telemetry & OTA Progress Engine

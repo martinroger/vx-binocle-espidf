@@ -5,6 +5,7 @@ The **ITF Factory App** provides a dedicated provisioning, calibration, and main
 
 ## Key Capabilities
 - **Wi-Fi AP & mDNS**: Broadcasts `interface-board.local` (`ITF-XXXXXX` AP) for instant browser access.
+- **Gear Estimator Parameters**: Sub-tab of Setup & Calibration to edit, validate and store the `vx-gear-estimator` parameters (`vx_gear` NVS namespace) used by the interface board.
 - **NVS Provisioning & Calibration**: Auto-populates default constants if uninitialized; manages odometer/trip values, coolant overtemperature warning thresholds, low fuel threshold (`lo_fuel_thr`), fuel full resistance baseline (`fuel_full_r`), and fuel self-learning toggle (`fuel_learn_en`).
 - **NVS Dynamic Inspection & Wipe**: Scans and displays all partitioned NVS keys/namespaces dynamically; provides safe full NVS storage wipe.
 - **Controlled Power-Down**: Gracefully turns off the 5V boost regulator prior to rebooting into the main application.

@@ -61,6 +61,7 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `emulator-console` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
 | `interface_board` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `interface_board` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
+| `interface_board` | `vx-gear-estimator` | `0.1.0` (`0d135d9`) | `main` *(git: martinroger/vx-gear-estimator)* |
 | `interface_board` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
 | `interface_board` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
 | `interface_board` | `esp-idf-lib/esp_idf_lib_helpers` | `1.4.0` | `*` *(transitive)* |
@@ -107,6 +108,7 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `right_screen` | `espressif/zlib` | `1.3.2~1` | `^1.2.13` *(transitive)* |
 | `factory apps/ITF factory app` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `factory apps/ITF factory app` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
+| `factory apps/ITF factory app` | `vx-gear-estimator` | `0.1.0` (`0d135d9`) | `main` *(git: martinroger/vx-gear-estimator)* |
 | `factory apps/ITF factory app` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
 | `factory apps/ITF factory app` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
 | `factory apps/ITF factory app` | `espressif/mdns` | `1.13.1` | `*` |
@@ -116,6 +118,10 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `factory apps/right display factory app` | `espressif/mdns` | `1.9.1` | `*` |
 
 ---
+
+### Private dependencies in CI
+
+`vx-gear-estimator` is a private repository. The [release workflow](.github/workflows/release.yml) reads it with a fine-grained personal access token stored as the repository secret `VX_GEAR_ESTIMATOR_TOKEN` (read-only `Contents` access to `martinroger/vx-gear-estimator` only). The token is rewritten into the clone URL inside the ESP-IDF container, and `GIT_TERMINAL_PROMPT=0` makes a missing or expired token fail the build immediately. Build jobs time out after 30 minutes.
 
 ## 📐 Architecture & Operational Documentation
 

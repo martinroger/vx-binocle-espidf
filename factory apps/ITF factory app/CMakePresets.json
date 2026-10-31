@@ -13,7 +13,25 @@
       "binaryDir": "${sourceDir}/build/default",
       "cacheVariables": {
         "SDKCONFIG": "${sourceDir}/build/default/sdkconfig",
-        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults"
+        "SDKCONFIG_DEFAULTS": "${sourceDir}/sdkconfig.defaults",
+        "IDF_TARGET": "esp32s3"
+      },
+      "vendor": {
+        "espressif/vscode-esp-idf": {
+          "schemaVersion": 1,
+          "settings": [
+            {
+              "type": "openOCD",
+              "value": {
+                "debugLevel": 2,
+                "configs": [
+                  "board/esp32s3-builtin.cfg"
+                ],
+                "args": []
+              }
+            }
+          ]
+        }
       }
     },
     {
