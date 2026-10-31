@@ -119,6 +119,10 @@ The table below summarizes external component dependencies managed via `idf_comp
 
 ---
 
+### Private dependencies in CI
+
+`vx-gear-estimator` is a private repository. The [release workflow](.github/workflows/release.yml) reads it with a fine-grained personal access token stored as the repository secret `VX_GEAR_ESTIMATOR_TOKEN` (read-only `Contents` access to `martinroger/vx-gear-estimator` only). The token is rewritten into the clone URL inside the ESP-IDF container, and `GIT_TERMINAL_PROMPT=0` makes a missing or expired token fail the build immediately. Build jobs time out after 30 minutes.
+
 ## 📐 Architecture & Operational Documentation
 
 For technical specifications, platform constraints, and interaction flows, refer to:
