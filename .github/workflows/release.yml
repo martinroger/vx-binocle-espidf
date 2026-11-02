@@ -177,16 +177,12 @@ jobs:
           APP_DEST="export_bins/${PREFIX}_app.bin"
           cp "${{ matrix.project_path }}/build/${{ matrix.app_bin }}" "$APP_DEST"
           APP_SIZE=$(du -sh "$APP_DEST" | cut -f1)
-          APP_MD5=$(md5sum "$APP_DEST" | awk '{ print $1 }')
           
           echo "| $PREFIX | $VERSION | $APP_SIZE |" > "summary_data/${PREFIX}.txt"
-          echo "$APP_MD5  ${PREFIX}_app.bin" >> "export_bins/checksums.md5"
           
           if [ ! -z "${{ matrix.extra_bin }}" ]; then
             EXTRA_DEST="export_bins/${PREFIX}_storage.bin"
             cp "${{ matrix.project_path }}/build/${{ matrix.extra_bin }}" "$EXTRA_DEST"
-            EXTRA_MD5=$(md5sum "$EXTRA_DEST" | awk '{ print $1 }')
-            echo "$EXTRA_MD5  ${PREFIX}_storage.bin" >> "export_bins/checksums.md5"
           fi
 
       - name: Stage Bennu Payloads
@@ -218,10 +214,8 @@ jobs:
           BENNU_DEST="export_bins/${BENNU_NAME}"
           cp "bennu/build/bennu.bin" "$BENNU_DEST"
           BENNU_SIZE=$(du -sh "$BENNU_DEST" | cut -f1)
-          BENNU_MD5=$(md5sum "$BENNU_DEST" | awk '{ print $1 }')
 
           echo "| ${PREFIX}_delivery | $VERSION | $BENNU_SIZE |" >> "summary_data/${PREFIX}.txt"
-          echo "$BENNU_MD5  ${BENNU_NAME}" >> "export_bins/checksums.md5"
 
       - name: Upload Artifacts
         if: steps.check.outputs.run_build == 'true'
@@ -284,11 +278,17 @@ jobs:
           # Find all binaries in subdirectories and move them to root
           find . -mindepth 2 -name "*.bin" -exec mv -t . {} +
           
-          # Consolidate MD5 files
-          if [ -n "$(find . -name 'checksums.md5')" ]; then
-             find . -name 'checksums.md5' -exec cat {} + | sort -u > consolidated_checksums.md5
+          # Checksum every binary here. Each build job used to upload its own
+          # checksums.md5, and merge-multiple kept only the last one downloaded.
+          shopt -s nullglob
+          bins=(*.bin)
+          if [ ${#bins[@]} -eq 0 ]; then
+            echo "No binaries to release."
+            exit 1
           fi
-          
+          md5sum "${bins[@]}" | sort -k2 > consolidated_checksums.md5
+          cat consolidated_checksums.md5
+
           # Debug: Show exactly what is in the root now
           ls -F
 
