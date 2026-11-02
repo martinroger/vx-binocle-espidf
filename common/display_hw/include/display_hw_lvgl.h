@@ -60,6 +60,22 @@ esp_err_t display_hw_lvgl_start(const display_hw_lvgl_config_t *cfg, const displ
                                 lv_display_t **ret_disp);
 
 /**
+ * @brief Redraw the whole active screen and wait until that frame is on the panel.
+ *
+ * Use it at boot, after building the UI and before turning the backlight on, so the backlight
+ * never shows an empty or half-drawn frame.
+ *
+ * @param[in] timeout_ms Timeout in ms, negative waits forever.
+ *
+ * @return true once the frame is on the panel, false on timeout or if display_hw_lvgl_start()
+ *         has not run.
+ *
+ * @note Call from a task other than the LVGL task, without holding the LVGL lock: the LVGL task
+ *       must be able to run to draw the frame.
+ */
+bool display_hw_lvgl_wait_frame(int timeout_ms);
+
+/**
  * @brief Take the LVGL lock (recursive).
  *
  * @param[in] timeout_ms Timeout in ms, negative waits forever.
