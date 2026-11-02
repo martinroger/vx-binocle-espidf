@@ -163,6 +163,14 @@ menu "ITF Factory configuration"
         config MCPWM_CAP_TIMER_RESOLUTION
             int "Resolution in Hz applied to the capture timer"
             default 100000
+
+        config R39_BLEND_END_KPH
+            int "ECE R39 mode: end of the low-speed blend band (km/h)"
+            range 1 30
+            default 10
+            help
+                Must match the interface board setting of the same name. Used for the
+                preview and the live readout of the ECE R39 compliant speed.
     endmenu
 
     menu "Display control"

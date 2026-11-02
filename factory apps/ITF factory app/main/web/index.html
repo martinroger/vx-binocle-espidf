@@ -131,11 +131,32 @@
             padding: 0.3rem 0.5rem;
         }
 
-        .gear-actions {
+        .subtab-actions {
             display: flex;
             flex-wrap: wrap;
             gap: 0.5rem;
             align-items: center;
+        }
+
+        /* ECE R39 form */
+        .r39-table td, .r39-table th {
+            padding: 0.3rem 0.5rem;
+            text-align: right;
+        }
+
+        .r39-table th:first-child, .r39-table td:first-child {
+            text-align: left;
+        }
+
+        input.field-invalid {
+            border-color: var(--pill-off);
+            outline-color: var(--pill-off);
+        }
+
+        .form-error {
+            color: var(--pill-off);
+            font-weight: 600;
+            min-height: 1.2em;
         }
 
         /* Card Layouts */
@@ -325,6 +346,7 @@
             <nav class="subtab-nav">
                 <button id="btn-subtab-general" class="tab-btn active" onclick="switchSetupSubTab('general')">General</button>
                 <button id="btn-subtab-gear" class="tab-btn" onclick="switchSetupSubTab('gear')">Gear Estimator</button>
+                <button id="btn-subtab-r39" class="tab-btn" onclick="switchSetupSubTab('r39')">Speed (ECE R39)</button>
             </nav>
             <div id="subtab-general">
             <div class="card-grid">
@@ -380,7 +402,7 @@
 
             <!-- SUB-TAB: GEAR ESTIMATOR -->
             <div id="subtab-gear" style="display:none;">
-                <div class="gear-actions">
+                <div class="subtab-actions">
                     <span>Source: <mark id="gear_source">-</mark></span>
                     <button type="button" onclick="saveGearParams()">Save to NVS</button>
                     <button type="button" onclick="refreshGearParams()">Reload</button>
@@ -389,6 +411,49 @@
                 </div>
                 <small>Stored in NVS (namespace <code>vx_gear</code>). The interface board applies it on its next boot. "Load tuned defaults" only fills the form.</small>
                 <div id="gear_groups" class="card-grid" style="margin-top: 1rem;"></div>
+            </div>
+
+            <!-- SUB-TAB: SPEED (ECE R39) -->
+            <div id="subtab-r39" style="display:none;">
+                <div class="subtab-actions">
+                    <span>Source: <mark id="r39_source">-</mark></span>
+                    <button type="button" id="r39_save" onclick="saveR39()">Save to NVS</button>
+                    <button type="button" onclick="refreshR39()">Reload</button>
+                    <button type="button" onclick="loadR39Defaults()">Load defaults</button>
+                </div>
+                <small>Stored in NVS (namespace <code>storage</code>). The interface board applies it on its next boot. "Load defaults" only fills the form.</small>
+                <div class="card-grid" style="margin-top: 1rem;">
+                    <div class="card">
+                        <h3>Settings</h3>
+                        <div class="form-row">
+                            <label style="width: 100%;">
+                                <input id="r39_enabled" type="checkbox">
+                                <strong>Compliance mode enabled</strong>
+                            </label>
+                        </div>
+                        <hr>
+                        <div class="form-row">
+                            <label style="width: 100%;" for="r39_a_pct">Speed correction A (%): <mark id="r39_a_hint">A = -</mark></label>
+                            <input id="r39_a_pct" type="number" inputmode="decimal" min="0" max="10" step="0.01" required>
+                        </div>
+                        <small>0 to 10 %, at most 2 decimals. +4 % gives A = 1.0400.</small>
+                        <hr>
+                        <div class="form-row">
+                            <label style="width: 100%;" for="r39_b_kph">Offset B (km/h):</label>
+                            <input id="r39_b_kph" type="number" inputmode="decimal" min="0" max="4" step="0.01" required>
+                        </div>
+                        <small>0 to 4 km/h, at most 2 decimals. Faded in from 0 km/h up to <span id="r39_blend">-</span> km/h, so a stopped car reads 0.</small>
+                        <p id="r39_error" class="form-error"></p>
+                    </div>
+                    <div class="card">
+                        <h3>Preview</h3>
+                        <small>Speed the interface board sends with the saved A and B, mode on. Computed by the factory app with the interface board formula; refreshed on Reload and Save.</small>
+                        <table class="r39-table">
+                            <thead><tr><th>True km/h</th><th>Sent km/h</th><th>Over-read</th><th>R39 max</th></tr></thead>
+                            <tbody id="r39_preview"><tr><td colspan="4">-</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -490,7 +555,8 @@
                         <div style="background:var(--bg); border:1px solid var(--border); padding:0.5rem; border-radius:4px;">
                             <small>Speed</small><br>
                             <strong id="val-pwm-speed" style="font-size:1.1rem; color:var(--accent);">- Hz</strong><br>
-                            <small id="val-speed-phys" style="font-weight:600; color:var(--text);">- km/h</small>
+                            <small id="val-speed-phys" style="font-weight:600; color:var(--text);">- km/h</small><br>
+                            <small id="val-speed-r39" style="font-weight:600; color:var(--text-light);">sent = raw</small>
                         </div>
                     </div>
                 </div>
@@ -640,12 +706,114 @@
 
         // Setup sub-tab switching
         function switchSetupSubTab(subId) {
-            ['general', 'gear'].forEach(t => {
+            ['general', 'gear', 'r39'].forEach(t => {
                 document.getElementById('subtab-' + t).style.display = (t === subId) ? 'block' : 'none';
                 document.getElementById('btn-subtab-' + t).classList.toggle('active', t === subId);
             });
             if (subId === 'gear' && gearFields.length === 0) refreshGearParams();
+            if (subId === 'r39' && !r39State) refreshR39();
         }
+
+        // ECE R39 speed compliance (GET/POST /api/r39)
+        var r39State = null; // last reply: limits, defaults, blend_end_kph
+        var R39_SOURCES = { nvs: 'NVS', default: 'defaults (not stored yet)' };
+
+        // Parses a user field into hundredths, or returns an error message. Never clamps.
+        function r39Hundredths(el, label, maxHundredths, unit) {
+            var txt = el.value.trim();
+            // type=number gives '' for anything the browser cannot parse; badInput catches e.g. "4abc" or "-"
+            if (el.validity && el.validity.badInput) return { err: label + ' is not a number' };
+            if (txt === '') return { err: label + ' is required' };
+            if (!/^\d+(\.\d{0,2})?$|^\.\d{1,2}$/.test(txt)) {
+                if (/^-/.test(txt)) return { err: label + ' cannot be negative' };
+                if (/[eE]/.test(txt)) return { err: label + ': write the value without an exponent' };
+                if (/\.\d{3,}$/.test(txt)) return { err: label + ': at most 2 decimals' };
+                return { err: label + ' is not a number' };
+            }
+            var v = Number(txt);
+            if (!isFinite(v)) return { err: label + ' is not a number' };
+            var h = Math.round(v * 100);
+            if (Math.abs(v * 100 - h) > 1e-6) return { err: label + ': at most 2 decimals' };
+            if (h < 0) return { err: label + ' cannot be negative' };
+            if (h > maxHundredths) return { err: label + ' must be at most ' + (maxHundredths / 100) + ' ' + unit };
+            return { h: h };
+        }
+
+        // Validates the form; marks fields, shows the first error, enables Save only when valid.
+        function validateR39Form() {
+            var aEl = document.getElementById('r39_a_pct');
+            var bEl = document.getElementById('r39_b_kph');
+            var a = r39Hundredths(aEl, 'Speed correction A', 1000, '%');
+            var b = r39Hundredths(bEl, 'Offset B', 400, 'km/h');
+            [[aEl, a], [bEl, b]].forEach(p => {
+                p[0].setCustomValidity(p[1].err || '');
+                p[0].classList.toggle('field-invalid', !!p[1].err);
+            });
+            var err = a.err || b.err || '';
+            document.getElementById('r39_error').innerText = err;
+            document.getElementById('r39_save').disabled = !!err;
+            document.getElementById('r39_a_hint').innerText = a.err ? 'A = -' : 'A = ' + (1 + a.h / 10000).toFixed(4);
+            return err ? null : { a_bp: a.h, b_ckph: b.h };
+        }
+
+        function renderR39Preview(preview) {
+            var tb = document.getElementById('r39_preview');
+            if (!preview || !preview.length) { tb.innerHTML = '<tr><td colspan="4">-</td></tr>'; return; }
+            tb.innerHTML = preview.map(p => '<tr><td>' + p.v.toFixed(0) + '</td><td>' + p.out.toFixed(2) + '</td><td>'
+                + (p.out - p.v).toFixed(2) + '</td><td>' + (p.v + 0.1 * p.v + 4).toFixed(1) + '</td></tr>').join('');
+        }
+
+        function fillR39Form(j) {
+            document.getElementById('r39_enabled').checked = !!j.enabled;
+            document.getElementById('r39_a_pct').value = Number(j.a_pct).toFixed(2);
+            document.getElementById('r39_b_kph').value = Number(j.b_kph).toFixed(2);
+            validateR39Form();
+        }
+
+        function applyR39Reply(j) {
+            r39State = j;
+            document.getElementById('r39_blend').innerText = j.blend_end_kph;
+            fillR39Form(j);
+            renderR39Preview(j.preview);
+            document.getElementById('r39_source').innerText = R39_SOURCES[j.source] || j.source;
+        }
+
+        function refreshR39() {
+            fetch('/api/r39').then(r => {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
+            }).then(applyR39Reply)
+              .catch(e => { document.getElementById('r39_error').innerText = 'Error loading ECE R39 settings: ' + e.message; });
+        }
+
+        function loadR39Defaults() {
+            if (!r39State) { refreshR39(); return; }
+            fillR39Form(r39State.defaults);
+            renderR39Preview(null);
+            document.getElementById('r39_source').innerText = 'defaults loaded in the form, not saved';
+        }
+
+        function saveR39() {
+            var v = validateR39Form();
+            if (!v) return;
+            var body = {
+                enabled: document.getElementById('r39_enabled').checked,
+                a_pct: v.a_bp / 100,
+                b_kph: v.b_ckph / 100
+            };
+            fetch('/api/r39', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+                .then(async r => {
+                    if (!r.ok) throw new Error(await r.text());
+                    return r.json();
+                })
+                .then(applyR39Reply)
+                .catch(e => { document.getElementById('r39_error').innerText = 'Not saved: ' + e.message; });
+        }
+
+        ['r39_a_pct', 'r39_b_kph'].forEach(id => {
+            var el = document.getElementById(id);
+            el.addEventListener('input', () => { validateR39Form(); renderR39Preview(null); });
+        });
 
         // Gear estimator parameters (field table served by GET /api/gear)
         var gearFields = [];
@@ -922,6 +1090,16 @@
                 }
                 if (msg.mcpwm.speed_kph !== undefined) {
                     document.getElementById('val-speed-phys').innerText = msg.mcpwm.speed_kph.toFixed(1) + ' km/h';
+                }
+                if (msg.mcpwm.r39_en !== undefined) {
+                    var r39el = document.getElementById('val-speed-r39');
+                    if (msg.mcpwm.r39_en && msg.mcpwm.speed_r39_kph !== undefined) {
+                        r39el.innerText = 'sent ' + msg.mcpwm.speed_r39_kph.toFixed(1) + ' km/h (R39)';
+                        r39el.style.color = 'var(--text)';
+                    } else {
+                        r39el.innerText = 'sent = raw';
+                        r39el.style.color = 'var(--text-light)';
+                    }
                 }
             }
 

@@ -29,6 +29,11 @@ graph TD
 | `lo_fuel_thr` | `u16` | `20` | Low fuel warning threshold percentage (0–100%). |
 | `overtemp_th` | `u16` | `106` | Coolant overtemperature threshold (°C). |
 | `lastPart` | `i8` | `-1` | Previously active boot partition index. |
+| `r39_en` | `u8` | `0` | ECE R39 speed compliance mode on (`1`) or off (`0`). |
+| `r39_a_bp` | `u16` | `400` | Speed correction A in basis points added to 1 (0–1000, i.e. 0 to +10 %). `400` gives A = 1.04. |
+| `r39_b_ckph` | `i16` | `200` | Speed offset B in 0.01 km/h (0–400, i.e. 0 to 4 km/h). |
+
+The `r39_*` keys, their limits and the speed formula are shared with the interface board through [`common/r39_compliance.hpp`](../../common/r39_compliance.hpp). The interface board writes the defaults for missing or out-of-range keys at boot; the factory app only writes them on Save.
 
 ### 2.2 Gear Estimator Namespace (`vx_gear`)
 
@@ -113,17 +118,23 @@ sequenceDiagram
     end
 ```
 
-### 3.3 Odometer & Trip Management
+### 3.3 ECE R39 Speed Compliance ([`r39_web.hpp`](main/r39_web.hpp))
+
+- **`GET /api/r39`**: `{"source":"nvs"|"default","enabled":false,"a_pct":4,"a_bp":400,"b_kph":2,"b_ckph":200,"blend_end_kph":10,"limits":{...},"defaults":{...},"preview":[{"v":0,"out":0},...]}`. Missing or out-of-range keys are reported with their defaults (`source: default`); nothing is written. `preview` is the speed sent with the stored A and B, mode forced on, at 0, 2, 5, 10, 20, 40, 80, 120 and 160 km/h.
+- **`POST /api/r39`**: JSON body `{"enabled":bool,"a_pct":number,"b_kph":number}`, any field optional (missing fields keep their stored value). `a_pct` must be 0 to 10 and `b_kph` 0 to 4, both with at most 2 decimals; otherwise 400 with a message naming the field and nothing is stored. Stores `r39_en`, `r39_a_bp`, `r39_b_ckph`, commits, and replies with the GET body.
+- The blend band end is the factory app's `CONFIG_R39_BLEND_END_KPH`, which must match the interface board's.
+
+### 3.4 Odometer & Trip Management
 
 - **`GET /odometer`**: Returns `{"odometer_m": <u32>, "trip_m": <u32>}`.
 - **`POST /set_trip_odo`**: Updates `new_odo` and/or `new_trip` in `nvs_odo`.
 
-### 3.4 NVS Dynamic Inspection & Wipe
+### 3.5 NVS Dynamic Inspection & Wipe
 
 - **`GET /nvs/list`**: Scans and enumerates all NVS partitions, namespaces, keys, and values dynamically at runtime as JSON.
 - **`POST /nvs/wipe`**: Safely erases all NVS partitions (`nvs`, `nvs_odo`) and re-initializes them cleanly without forcing an immediate MCU restart.
 
-### 3.5 WebSocket Telemetry & OTA Progress Engine (`/ws`)
+### 3.6 WebSocket Telemetry & OTA Progress Engine (`/ws`)
 
 - **Telemetry JSON Packet Schema** (broadcast periodically at `CONFIG_FACTORY_WS_REFRESH_RATE_HZ` default 5 Hz):
   ```json
@@ -164,7 +175,9 @@ sequenceDiagram
       "rpm_hz": 830.0,
       "rpm_val": 24900,
       "speed_hz": 60.5,
-      "speed_kph": 14.8
+      "speed_kph": 14.8,
+      "speed_r39_kph": 15.7,
+      "r39_en": true
     },
     "can_nodes": {
       "ldb": {
@@ -197,13 +210,14 @@ sequenceDiagram
 ## 4. UI Architecture & Navigation
 
 The Factory App interface uses a responsive 4-tab layout built on top of [SimpleCSS](https://simplecss.org/):
-1. **Setup & Calibration**, with two sub-tabs:
+1. **Setup & Calibration**, with three sub-tabs:
    - **General**: Real-time NVS calibration parameters (`fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`) and live odometer/trip adjustment.
    - **Gear Estimator**: Form generated from the `fields` table of `GET /api/gear`, one card per group (Ratio model, Gating, Filter, Transitions, Clutch drop), with the stored source, *Save to NVS*, *Reload*, *Load tuned defaults* (fills the form only) and *Erase stored copy*. The form is loaded the first time the sub-tab is opened.
+   - **Speed (ECE R39)**: Compliance mode checkbox, speed correction A in percent (0 to 10 %) and offset B in km/h (0 to 4 km/h), with the source badge, *Save to NVS*, *Reload*, *Load defaults* (fills the form only) and a preview table (true speed, sent speed, over-read, R39 maximum). Both number fields are checked on every keystroke: empty, non-numeric, negative, exponent, out-of-range or more than 2 decimals is refused with the reason under the fields, the field is outlined, and *Save to NVS* stays disabled. Values are never clamped silently.
 2. **IO & Bus Debug**:
    - **Telltales**: 15 telltale status pills updated via TCA9555 expander (including Button, Backlight, and Low Coolant).
    - **ADS1115 ADC Raw Volts & Physical Interpreted Values**: 4 progress meters calibrated to 0–4096 mV (`max="4096"`), displaying un-filtered instant readings alongside fuel sender resistance ($\Omega$), percentage (%), automatic caliber state, and battery voltage (V).
-   - **MCPWM Capture Signals & Interpreted Metrics**: Live indicators for Coolant (Duty Cycle % & °C), RPM (Hz & RPM), and Speed (Hz & km/h).
+   - **MCPWM Capture Signals & Interpreted Metrics**: Live indicators for Coolant (Duty Cycle % & °C), RPM (Hz & RPM), and Speed (Hz & km/h, plus the speed the interface board would send with the stored ECE R39 settings, or `sent = raw` when the mode is off).
    - **xDB software versions**: Status cards displaying online/offline heartbeats and multiplexed firmware version strings (tag + short SHA commit + dirty indicator, e.g. `v1.4.0-a1b2c3d[-dirty]`, or fallback `v-.-.-`) for Left Display Board (LDB) and Right Display Board (RDB).
 3. **OTA & Partitions**:
    - Active boot partition information (`ota_0`, `ota_1`, or `factory`).
