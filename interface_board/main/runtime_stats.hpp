@@ -5,7 +5,7 @@
 
 TaskHandle_t print_runtime_stats_Hdl;
 
-inline void print_system_stats(void *pvParameters)
+inline void printSystemStats(void *pvParameters)
 {
     // 2KB is usually enough for ~20-25 tasks.
     // If you have a massive app, increase this.

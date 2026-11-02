@@ -11,7 +11,7 @@
 
 #pragma region SPECIFIC
 
-inline void switch_theme(bool darkMode = headlightsOn, bool getMutex = false, uint16_t fade_duration_ms = 250)
+inline void switchTheme(bool darkMode = headlightsOn, bool getMutex = false, uint16_t fade_duration_ms = 250)
 {
 	if (getMutex)
 	{
@@ -34,8 +34,8 @@ inline void switch_theme(bool darkMode = headlightsOn, bool getMutex = false, ui
 		add_style_arc_white_parts(objects.rpm_arc);
 #endif
 
-		display_board_st.lightMode = false;
-		set_backlight_brightness_smooth(display_board_st.darkBrightness, fade_duration_ms);
+		displayBoard.themeLight = false;
+		setBacklightSmooth(displayBoard.blDarkPct, fade_duration_ms);
 	}
 	else
 	{
@@ -50,8 +50,8 @@ inline void switch_theme(bool darkMode = headlightsOn, bool getMutex = false, ui
 		remove_style_arc_white_parts(objects.rpm_arc);
 #endif
 
-		display_board_st.lightMode = true;
-		set_backlight_brightness_smooth(display_board_st.lightBrightness, fade_duration_ms);
+		displayBoard.themeLight = true;
+		setBacklightSmooth(displayBoard.blLightPct, fade_duration_ms);
 	}
 	if (getMutex)
 		lvgl_port_unlock();

@@ -85,10 +85,10 @@ struct board_ST
 
 } interface_board_st;
 
-bool fuel_learn_en = true;
-uint16_t fuel_full_r = 250;
-uint16_t fuel_low_level_threshold_pc = 20;
-uint16_t coolant_overtemp_threshold_degC = 106;
+bool fuelLearnEnabled = true;
+uint16_t fuelFullOhm = 250;
+uint16_t fuelLowPct = 20;
+uint16_t coolantHotDegC = 106;
 
 #pragma region MCPWM and Sensor Globals
 // Capture PWM info buffers
@@ -547,7 +547,7 @@ static void adc_processing_task(void *pvParameters)
 		if (fuel_r < 0.0f) fuel_r = 0.0f;
 		if (fuel_r > 4095.0f) fuel_r = 4095.0f;
 
-		float fuel_pc = (fuel_full_r > 0) ? (100.0f * fuel_r / (float)fuel_full_r) : 0.0f;
+		float fuel_pc = (fuelFullOhm > 0) ? (100.0f * fuel_r / (float)fuelFullOhm) : 0.0f;
 		if (fuel_pc > 100.0f) fuel_pc = 100.0f;
 		if (fuel_pc < 0.0f) fuel_pc = 0.0f;
 
@@ -1095,29 +1095,29 @@ static esp_err_t calibration_get_handler(httpd_req_t *req)
 		ESP_LOGW(__func__, "Could not find %s in nvs, using default: 1", vx::nvs::fuel::LEARN_EN);
 		learn_en_u8 = 1;
 	}
-	fuel_learn_en = (learn_en_u8 != 0);
+	fuelLearnEnabled = (learn_en_u8 != 0);
 
-	if (nvs_get_u16(h, vx::nvs::fuel::FULL_OHM, &fuel_full_r) == ESP_ERR_NVS_NOT_FOUND)
+	if (nvs_get_u16(h, vx::nvs::fuel::FULL_OHM, &fuelFullOhm) == ESP_ERR_NVS_NOT_FOUND)
 	{
 		ESP_LOGW(__func__, "Could not find %s in nvs, using default: 250", vx::nvs::fuel::FULL_OHM);
-		fuel_full_r = 250;
+		fuelFullOhm = 250;
 	}
-	if (nvs_get_u16(h, vx::nvs::fuel::LOW_PCT, &fuel_low_level_threshold_pc) == ESP_ERR_NVS_NOT_FOUND)
+	if (nvs_get_u16(h, vx::nvs::fuel::LOW_PCT, &fuelLowPct) == ESP_ERR_NVS_NOT_FOUND)
 	{
 		ESP_LOGW(__func__, "Could not find %s in nvs, using default: 20", vx::nvs::fuel::LOW_PCT);
-		fuel_low_level_threshold_pc = 20;
+		fuelLowPct = 20;
 	}
 	nvs_close(h);
-	coolant_overtemp_threshold_degC = 106;
+	coolantHotDegC = 106;
 	if (nvs_open(vx::nvs::coolant::NS, NVS_READONLY, &h) == ESP_OK)
 	{
-		if (nvs_get_u16(h, vx::nvs::coolant::HOT_DEGC, &coolant_overtemp_threshold_degC) != ESP_OK)
-			coolant_overtemp_threshold_degC = 106;
+		if (nvs_get_u16(h, vx::nvs::coolant::HOT_DEGC, &coolantHotDegC) != ESP_OK)
+			coolantHotDegC = 106;
 		nvs_close(h);
 	}
 	char out[256];
 	snprintf(out, sizeof(out), "{\"fuel_learn_en\":%u,\"fuel_full_r\":%u,\"low_fuel_threshold\":%u,\"overtemp_threshold\":%u}",
-	         fuel_learn_en ? 1 : 0, fuel_full_r, fuel_low_level_threshold_pc, coolant_overtemp_threshold_degC);
+	         fuelLearnEnabled ? 1 : 0, fuelFullOhm, fuelLowPct, coolantHotDegC);
 	ESP_LOGI(__func__, "Returning calibration JSON payload: %s", out);
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, out);
@@ -1187,7 +1187,7 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 			en = (atol(learn_ptr) != 0) ? 1 : 0;
 		}
 		nvs_set_u8(h, vx::nvs::fuel::LEARN_EN, en);
-		fuel_learn_en = (en != 0);
+		fuelLearnEnabled = (en != 0);
 		ESP_LOGI(__func__, "NVS key 'learn_en' set to %u (%s)", en, en ? "ENABLED" : "DISABLED");
 		updated = true;
 	}
@@ -1207,7 +1207,7 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 			if (val < 150) val = 150;
 			if (val > 350) val = 350;
 			nvs_set_u16(h, vx::nvs::fuel::FULL_OHM, (uint16_t)val);
-			fuel_full_r = (uint16_t)val;
+			fuelFullOhm = (uint16_t)val;
 			ESP_LOGI(__func__, "NVS key 'full_ohm' set to %u Ohm", (uint16_t)val);
 			updated = true;
 		}
@@ -1228,7 +1228,7 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 			if (val < 0) val = -val;
 			if (val > 100) val = 100;
 			nvs_set_u16(h, vx::nvs::fuel::LOW_PCT, (uint16_t)val);
-			fuel_low_level_threshold_pc = (uint16_t)val;
+			fuelLowPct = (uint16_t)val;
 			ESP_LOGI(__func__, "NVS key 'low_pct' set to %u %%", (uint16_t)val);
 			updated = true;
 		}
@@ -1248,7 +1248,7 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 			if (val < 0) val = -val;
 			if (val > 250) val = 250;
 			nvs_set_u16(hc, vx::nvs::coolant::HOT_DEGC, (uint16_t)val);
-			coolant_overtemp_threshold_degC = (uint16_t)val;
+			coolantHotDegC = (uint16_t)val;
 			ESP_LOGI(__func__, "NVS key 'hot_degc' set to %u °C", (uint16_t)val);
 			updated = true;
 		}

@@ -20,10 +20,10 @@ TimerHandle_t OTA_TO_hdl;            // OTA message timeout timer handle
 
 /// @brief Callback for alternate display status timeout
 /// @param xTimer
-inline void alt_display_st_TO_cb(TimerHandle_t xTimer)
+inline void onAltDisplayStTimeout(TimerHandle_t xTimer)
 {
     // Only set the screen interlock as NOK
-    screen_interlock_OK = false;
+    interlockOk = false;
     // Assumes this is a one-shot timer so it's stopped.
 }
 
@@ -35,7 +35,7 @@ inline void alt_display_st_TO_cb(TimerHandle_t xTimer)
 #define UDS_FRAME_UNPACK binocan_rdb_uds_req_unpack(&binocan_rdb_uds_req_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL
 #define ALT_DISPLAY_ST_FRAME_ID BINOCAN_LDB_ST_FRAME_ID
 
-inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onAltDisplaySt(const twai_frame_t *rxMsg)
 {
     static binocan_ldb_st_t binocan_ldb_st_msg;
     if (binocan_ldb_st_unpack(&binocan_ldb_st_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
@@ -46,19 +46,19 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
     // General state message check
     if (binocan_ldb_st_ldb_sm_st_is_in_range(binocan_ldb_st_msg.ldb_sm_st))
     {
-        screen_interlock_OK = ((uint8_t)binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
+        interlockOk = ((uint8_t)binocan_ldb_st_ldb_sm_st_decode(binocan_ldb_st_msg.ldb_sm_st) == XDB_SM_ST_OK);
     }
     else
     {
         ESP_LOGW(__func__, "LDB SM Status signal out of range: %d", binocan_ldb_st_msg.ldb_sm_st);
-        screen_interlock_OK = false; // Default value
+        interlockOk = false; // Default value
     }
     return ESP_OK;
 }
 
 /// @brief Packaging handler that send the board state over CAN
 /// @param pvParameters
-inline void display_board_st_PKG(void *pvParameters)
+inline void packDisplayBoardSt(void *pvParameters)
 {
     binocan_rdb_st_t binocan_rdb_st;
     binocan_rdb_st_init(&binocan_rdb_st);
@@ -67,11 +67,11 @@ inline void display_board_st_PKG(void *pvParameters)
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_RDB_ST_CYCLE_TIME_MS));
-        binocan_rdb_st.rdb_sm_st = binocan_rdb_st_rdb_sm_st_encode(display_board_st.internal_ST);
-        binocan_rdb_st.xdb_dark_brightness = binocan_rdb_st_xdb_dark_brightness_encode(display_board_st.darkBrightness);
-        binocan_rdb_st.xdb_light_brightness = binocan_rdb_st_xdb_light_brightness_encode(display_board_st.lightBrightness);
-        binocan_rdb_st.xdb_light_mode = binocan_rdb_st_xdb_light_mode_encode(display_board_st.lightMode);
-        binocan_rdb_st.xdb_mode_lock = binocan_rdb_st_xdb_mode_lock_encode(display_board_st.modeLocked);
+        binocan_rdb_st.rdb_sm_st = binocan_rdb_st_rdb_sm_st_encode(displayBoard.smState);
+        binocan_rdb_st.xdb_dark_brightness = binocan_rdb_st_xdb_dark_brightness_encode(displayBoard.blDarkPct);
+        binocan_rdb_st.xdb_light_brightness = binocan_rdb_st_xdb_light_brightness_encode(displayBoard.blLightPct);
+        binocan_rdb_st.xdb_light_mode = binocan_rdb_st_xdb_light_mode_encode(displayBoard.themeLight);
+        binocan_rdb_st.xdb_mode_lock = binocan_rdb_st_xdb_mode_lock_encode(displayBoard.themeLocked);
         binocan_rdb_st_pack(payload, &binocan_rdb_st, BINOCAN_RDB_ST_LENGTH);
         if (twai_transmit_msg(BINOCAN_RDB_ST_FRAME_ID, payload, BINOCAN_RDB_ST_LENGTH, false, 5) != ESP_OK)
         {
@@ -80,7 +80,7 @@ inline void display_board_st_PKG(void *pvParameters)
     }
 }
 
-inline void display_board_version_PKG(void *pvParameters)
+inline void packDisplayBoardVersion(void *pvParameters)
 {
     uint8_t message_mux = 0;
     binocan_rdb_board_version_t binocan_rdb_board_version;
@@ -88,20 +88,20 @@ inline void display_board_version_PKG(void *pvParameters)
     uint8_t payload[BINOCAN_RDB_BOARD_VERSION_LENGTH] = {0};
     uint32_t cycle_time_ms = BINOCAN_RDB_BOARD_VERSION_CYCLE_TIME_MS;
 
-    binocan_rdb_board_version.rdb_version_major = binocan_rdb_board_version_rdb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]) - 48);
-    binocan_rdb_board_version.rdb_version_minor = binocan_rdb_board_version_rdb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]) - 48);
-    binocan_rdb_board_version.rdb_version_patch = binocan_rdb_board_version_rdb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]) - 48);
-    binocan_rdb_board_version.rdb_version_dirty = binocan_rdb_board_version_rdb_version_dirty_encode((uint8_t)display_board_st.app_metadata->is_dirty);
+    binocan_rdb_board_version.rdb_version_major = binocan_rdb_board_version_rdb_version_major_encode((uint8_t)(displayBoard.appMeta->base_version[0]) - 48);
+    binocan_rdb_board_version.rdb_version_minor = binocan_rdb_board_version_rdb_version_minor_encode((uint8_t)(displayBoard.appMeta->base_version[2]) - 48);
+    binocan_rdb_board_version.rdb_version_patch = binocan_rdb_board_version_rdb_version_patch_encode((uint8_t)(displayBoard.appMeta->base_version[4]) - 48);
+    binocan_rdb_board_version.rdb_version_dirty = binocan_rdb_board_version_rdb_version_dirty_encode((uint8_t)displayBoard.appMeta->is_dirty);
     // Build a 64-bit value from up to 8 bytes of commitID and pass to the encode helper.
-    if (display_board_st.app_metadata && display_board_st.app_metadata->commitID)
+    if (displayBoard.appMeta && displayBoard.appMeta->commitID)
     {
         uint64_t commit_val = 0;
-        size_t src_len = display_board_st.app_metadata->commit_len;
+        size_t src_len = displayBoard.appMeta->commit_len;
         if (src_len > 8)
             src_len = 8;
         for (size_t i = 0; i < src_len; ++i)
         {
-            commit_val = (commit_val << 8) | (uint8_t)display_board_st.app_metadata->commitID[src_len - i - 1];
+            commit_val = (commit_val << 8) | (uint8_t)displayBoard.appMeta->commitID[src_len - i - 1];
         }
         binocan_rdb_board_version.rdb_version_commit = binocan_rdb_board_version_rdb_version_commit_encode(commit_val);
     }
@@ -130,7 +130,7 @@ inline void display_board_version_PKG(void *pvParameters)
 #define UDS_FRAME_UNPACK binocan_ldb_uds_req_unpack(&binocan_ldb_uds_req_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL
 #define ALT_DISPLAY_ST_FRAME_ID BINOCAN_RDB_ST_FRAME_ID
 
-inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onAltDisplaySt(const twai_frame_t *rxMsg)
 {
     static binocan_rdb_st_t binocan_rdb_st_msg;
     if (binocan_rdb_st_unpack(&binocan_rdb_st_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
@@ -140,30 +140,30 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
     }
     if (binocan_rdb_st_rdb_sm_st_is_in_range(binocan_rdb_st_msg.rdb_sm_st))
     {
-        screen_interlock_OK = ((uint8_t)binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
+        interlockOk = ((uint8_t)binocan_rdb_st_rdb_sm_st_decode(binocan_rdb_st_msg.rdb_sm_st) == XDB_SM_ST_OK);
     }
     else
     {
         ESP_LOGW(__func__, "RDB SM Status signal out of range: %d", binocan_rdb_st_msg.rdb_sm_st);
-        screen_interlock_OK = false; // Default value
+        interlockOk = false; // Default value
     }
     // Light mode indicator
     if (binocan_rdb_st_xdb_light_mode_is_in_range(binocan_rdb_st_msg.xdb_light_mode))
     {
-        if ((display_board_st.lightMode != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode))) // somehow they are different, after init phase
+        if ((displayBoard.themeLight != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode))) // somehow they are different, after init phase
         {
 
-            display_board_st.lightMode = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode);
-            switch_theme(!(display_board_st.lightMode), true);
+            displayBoard.themeLight = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_light_mode);
+            switchTheme(!(displayBoard.themeLight), true);
 
-            if (display_board_st.modeLocked) // Write light mode if mode lock is engaged
+            if (displayBoard.themeLocked) // Write light mode if mode lock is engaged
             {
                 nvs_handle_t h;
                 if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
                     ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
                 else
                 {
-                    if (nvs_set_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+                    if (nvs_set_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t)(displayBoard.themeLight)) != ESP_OK)
                         ESP_LOGW(__func__, "Could not set light mode in NVS");
                     nvs_commit(h);
                     nvs_close(h);
@@ -178,7 +178,7 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
     // Mode lock
     if (binocan_rdb_st_xdb_mode_lock_is_in_range(binocan_rdb_st_msg.xdb_mode_lock))
     {
-        if (display_board_st.modeLocked != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock)) // Mode lock is different
+        if (displayBoard.themeLocked != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock)) // Mode lock is different
         {
             nvs_handle_t h;
             if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
@@ -189,10 +189,10 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
                     ESP_LOGW(__func__, "Could not set theme lock in NVS");
                 else
                 {
-                    display_board_st.modeLocked = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock); // Update mode lock system variable
-                    if (display_board_st.modeLocked)                                                                            // Write light mode if mode lock is engaged
+                    displayBoard.themeLocked = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock); // Update mode lock system variable
+                    if (displayBoard.themeLocked)                                                                            // Write light mode if mode lock is engaged
                     {
-                        if (nvs_set_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+                        if (nvs_set_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t)(displayBoard.themeLight)) != ESP_OK)
                             ESP_LOGW(__func__, "Could not set light mode in NVS");
                     }
                 }
@@ -209,7 +209,7 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
     if (binocan_rdb_st_xdb_dark_brightness_is_in_range(binocan_rdb_st_msg.xdb_dark_brightness))
     {
         uint8_t newBrightness = binocan_rdb_st_xdb_dark_brightness_decode(binocan_rdb_st_msg.xdb_dark_brightness);
-        if (newBrightness != display_board_st.darkBrightness)
+        if (newBrightness != displayBoard.blDarkPct)
         {
             nvs_handle_t h;
             if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
@@ -220,9 +220,9 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
                     ESP_LOGW(__func__, "Could not set dark brightness value in NVS");
                 else
                 {
-                    display_board_st.darkBrightness = newBrightness;
-                    if (!(display_board_st.lightMode))
-                        display_hw_backlight_set(display_board_st.darkBrightness);
+                    displayBoard.blDarkPct = newBrightness;
+                    if (!(displayBoard.themeLight))
+                        display_hw_backlight_set(displayBoard.blDarkPct);
                 }
             }
         }
@@ -230,15 +230,15 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
     else
     {
         ESP_LOGW(__func__, "RDB dark brightness out of range: %d", binocan_rdb_st_msg.xdb_dark_brightness);
-        display_board_st.darkBrightness = 100;
-        if (!(display_board_st.lightMode))
-            display_hw_backlight_set(display_board_st.darkBrightness);
+        displayBoard.blDarkPct = 100;
+        if (!(displayBoard.themeLight))
+            display_hw_backlight_set(displayBoard.blDarkPct);
     }
     // Light brightness
     if (binocan_rdb_st_xdb_light_brightness_is_in_range(binocan_rdb_st_msg.xdb_light_brightness))
     {
         uint8_t newBrightness = binocan_rdb_st_xdb_light_brightness_decode(binocan_rdb_st_msg.xdb_light_brightness);
-        if (newBrightness != display_board_st.lightBrightness)
+        if (newBrightness != displayBoard.blLightPct)
         {
             nvs_handle_t h;
             if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
@@ -249,9 +249,9 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
                     ESP_LOGW(__func__, "Could not set light brightness value in NVS");
                 else
                 {
-                    display_board_st.lightBrightness = newBrightness;
-                    if ((display_board_st.lightMode))
-                        display_hw_backlight_set(display_board_st.lightBrightness);
+                    displayBoard.blLightPct = newBrightness;
+                    if ((displayBoard.themeLight))
+                        display_hw_backlight_set(displayBoard.blLightPct);
                 }
             }
         }
@@ -259,16 +259,16 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
     else
     {
         ESP_LOGW(__func__, "RDB light brightness out of range: %d", binocan_rdb_st_msg.xdb_light_brightness);
-        display_board_st.lightBrightness = 100;
-        if ((display_board_st.lightMode))
-            display_hw_backlight_set(display_board_st.lightBrightness);
+        displayBoard.blLightPct = 100;
+        if ((displayBoard.themeLight))
+            display_hw_backlight_set(displayBoard.blLightPct);
     }
     return ESP_OK;
 }
 
 /// @brief Packaging handler that send the board state over CAN
 /// @param pvParameters
-inline void display_board_st_PKG(void *pvParameters)
+inline void packDisplayBoardSt(void *pvParameters)
 {
     binocan_ldb_st_t binocan_ldb_st;
     binocan_ldb_st_init(&binocan_ldb_st);
@@ -277,11 +277,11 @@ inline void display_board_st_PKG(void *pvParameters)
     while (true)
     {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(BINOCAN_LDB_ST_CYCLE_TIME_MS));
-        binocan_ldb_st.ldb_sm_st = binocan_ldb_st_ldb_sm_st_encode(display_board_st.internal_ST);
-        binocan_ldb_st.xdb_dark_brightness = binocan_ldb_st_xdb_dark_brightness_encode(display_board_st.darkBrightness);
-        binocan_ldb_st.xdb_light_brightness = binocan_ldb_st_xdb_light_brightness_encode(display_board_st.lightBrightness);
-        binocan_ldb_st.xdb_light_mode = binocan_ldb_st_xdb_light_mode_encode(display_board_st.lightMode);
-        binocan_ldb_st.xdb_mode_lock = binocan_ldb_st_xdb_mode_lock_encode(display_board_st.modeLocked);
+        binocan_ldb_st.ldb_sm_st = binocan_ldb_st_ldb_sm_st_encode(displayBoard.smState);
+        binocan_ldb_st.xdb_dark_brightness = binocan_ldb_st_xdb_dark_brightness_encode(displayBoard.blDarkPct);
+        binocan_ldb_st.xdb_light_brightness = binocan_ldb_st_xdb_light_brightness_encode(displayBoard.blLightPct);
+        binocan_ldb_st.xdb_light_mode = binocan_ldb_st_xdb_light_mode_encode(displayBoard.themeLight);
+        binocan_ldb_st.xdb_mode_lock = binocan_ldb_st_xdb_mode_lock_encode(displayBoard.themeLocked);
         binocan_ldb_st_pack(payload, &binocan_ldb_st, BINOCAN_LDB_ST_LENGTH);
         if (twai_transmit_msg(BINOCAN_LDB_ST_FRAME_ID, payload, BINOCAN_LDB_ST_LENGTH, false, 5) != ESP_OK)
         {
@@ -290,7 +290,7 @@ inline void display_board_st_PKG(void *pvParameters)
     }
 }
 
-inline void display_board_version_PKG(void *pvParameters)
+inline void packDisplayBoardVersion(void *pvParameters)
 {
     uint8_t message_mux = 0;
     binocan_ldb_board_version_t binocan_ldb_board_version;
@@ -298,20 +298,20 @@ inline void display_board_version_PKG(void *pvParameters)
     uint8_t payload[BINOCAN_LDB_BOARD_VERSION_LENGTH] = {0};
     uint32_t cycle_time_ms = BINOCAN_LDB_BOARD_VERSION_CYCLE_TIME_MS;
 
-    binocan_ldb_board_version.ldb_version_major = binocan_ldb_board_version_ldb_version_major_encode((uint8_t)(display_board_st.app_metadata->base_version[0]) - 48);
-    binocan_ldb_board_version.ldb_version_minor = binocan_ldb_board_version_ldb_version_minor_encode((uint8_t)(display_board_st.app_metadata->base_version[2]) - 48);
-    binocan_ldb_board_version.ldb_version_patch = binocan_ldb_board_version_ldb_version_patch_encode((uint8_t)(display_board_st.app_metadata->base_version[4]) - 48);
-    binocan_ldb_board_version.ldb_version_dirty = binocan_ldb_board_version_ldb_version_dirty_encode((uint8_t)display_board_st.app_metadata->is_dirty);
+    binocan_ldb_board_version.ldb_version_major = binocan_ldb_board_version_ldb_version_major_encode((uint8_t)(displayBoard.appMeta->base_version[0]) - 48);
+    binocan_ldb_board_version.ldb_version_minor = binocan_ldb_board_version_ldb_version_minor_encode((uint8_t)(displayBoard.appMeta->base_version[2]) - 48);
+    binocan_ldb_board_version.ldb_version_patch = binocan_ldb_board_version_ldb_version_patch_encode((uint8_t)(displayBoard.appMeta->base_version[4]) - 48);
+    binocan_ldb_board_version.ldb_version_dirty = binocan_ldb_board_version_ldb_version_dirty_encode((uint8_t)displayBoard.appMeta->is_dirty);
     // Build a 64-bit value from up to 8 bytes of commitID and pass to the encode helper.
-    if (display_board_st.app_metadata && display_board_st.app_metadata->commitID)
+    if (displayBoard.appMeta && displayBoard.appMeta->commitID)
     {
         uint64_t commit_val = 0;
-        size_t src_len = display_board_st.app_metadata->commit_len;
+        size_t src_len = displayBoard.appMeta->commit_len;
         if (src_len > 8)
             src_len = 8;
         for (size_t i = 0; i < src_len; ++i)
         {
-            commit_val = (commit_val << 8) | (uint8_t)display_board_st.app_metadata->commitID[src_len - i - 1];
+            commit_val = (commit_val << 8) | (uint8_t)displayBoard.appMeta->commitID[src_len - i - 1];
         }
         binocan_ldb_board_version.ldb_version_commit = binocan_ldb_board_version_ldb_version_commit_encode(commit_val);
     }
@@ -344,15 +344,15 @@ TaskHandle_t display_board_version_PKG_hdl;
 
 // Timeout callbacks
 // Bit ugly ...
-esp_err_t OTAHandler(const twai_frame_t *rxMsg);
+esp_err_t handleOta(const twai_frame_t *rxMsg);
 
-inline void OTA_TO_cb(TimerHandle_t xTimer)
+inline void onOtaTimeout(TimerHandle_t xTimer)
 {
     ESP_LOGW(__func__, "OTA Timeout");
-    OTAHandler(NULL);
+    handleOta(NULL);
 }
 
-inline void itf_active_hi_lo_TO_cb(TimerHandle_t xTimer)
+inline void onItfActiveHiLoTimeout(TimerHandle_t xTimer)
 {
     absOn = true;
     airbagOn = true;
@@ -370,57 +370,57 @@ inline void itf_active_hi_lo_TO_cb(TimerHandle_t xTimer)
     rightTurnOn = true;
     alarmOn = true;
     headlightsOn = true;
-    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
+    itfState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
 }
 
-inline void itf_slow_metrics_TO_cb(TimerHandle_t xTimer)
+inline void onItfSlowMetricsTimeout(TimerHandle_t xTimer)
 {
-    coolant_degC = UINT8_MAX;
-    fuelLevel_pc = 0;
-    lvVoltage_v = 0;
+    coolantDegC = UINT8_MAX;
+    fuelLevelPct = 0;
+    supplyV = 0;
     batteryOn = true;
     overTemperatureOn = true;
     lowFuelOn = true;
-    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+    itfState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
 }
 
-inline void itf_fast_metrics_TO_cb(TimerHandle_t xTimer)
+inline void onItfFastMetricsTimeout(TimerHandle_t xTimer)
 {
     rpm = 0;
-    speed_kph = 0;
-    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
+    speedKph = 0;
+    itfState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
 }
 
-inline void itf_odometer_TO_cb(TimerHandle_t xTimer)
+inline void onItfOdometerTimeout(TimerHandle_t xTimer)
 {
-    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+    itfState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
 }
 
-inline void ext_oil_metrics_TO_cb(TimerHandle_t xTimer)
-{
-    // Do nothing
-}
-
-inline void ext_chargecooling_metrics_TO_cb(TimerHandle_t xTimer)
+inline void onExtOilMetricsTimeout(TimerHandle_t xTimer)
 {
     // Do nothing
 }
 
-inline void itf_board_st_TO_cb(TimerHandle_t xTimer)
+inline void onExtChargecoolingMetricsTimeout(TimerHandle_t xTimer)
 {
-    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
+    // Do nothing
 }
 
-inline void itf_board_version_TO_cb(TimerHandle_t xTimer)
+inline void onItfBoardStTimeout(TimerHandle_t xTimer)
 {
-    itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+    itfState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE;
+}
+
+inline void onItfBoardVersionTimeout(TimerHandle_t xTimer)
+{
+    itfState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
 }
 
 // Actual TWAI message handlers
 
 // Actual TWAI message handlers
 
-inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
+inline esp_err_t handleOta(const twai_frame_t *rxMsg)
 {
     // Variables reserved for the UDS side of business
     static uint8_t ST_min = CONFIG_OTA_SEPARATION_TIME_MS;
@@ -520,7 +520,7 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
         }
 
         // TODO : check for escape sequence, shorter size contents
-        image_size = swap_endian<uint32_t>(*(uint32_t *)(rxMsg->buffer + 2));
+        image_size = swapEndian<uint32_t>(*(uint32_t *)(rxMsg->buffer + 2));
         receivedBytes = 0;
         sequenceNumber = 0x01;
         blockCounter = 0x00;
@@ -614,9 +614,9 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
             }
             receivedBytes += 7;
 
-            odometer_km = image_size - receivedBytes;
-            trip_km = 100.0 * (float)(receivedBytes) / (float)(image_size);
-            fuelLevel_pc = trip_km;
+            odometerKm = image_size - receivedBytes;
+            tripKm = 100.0 * (float)(receivedBytes) / (float)(image_size);
+            fuelLevelPct = tripKm;
             if (image_size == receivedBytes)
                 transferComplete = true;
         }
@@ -695,7 +695,7 @@ inline esp_err_t OTAHandler(const twai_frame_t *rxMsg)
     }
 }
 
-inline esp_err_t itf_active_hi_lo_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onItfActiveHiLo(const twai_frame_t *rxMsg)
 {
     static binocan_itf_active_hi_lo_t binocan_itf_active_hi_lo_msg;
     if (binocan_itf_active_hi_lo_unpack(&binocan_itf_active_hi_lo_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
@@ -831,12 +831,12 @@ inline esp_err_t itf_active_hi_lo_Handler(const twai_frame_t *rxMsg)
 
     if (binocan_itf_active_hi_lo_itf_ignition_ah_st_is_in_range(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st))
     {
-        ignitionST = (binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_HI_CHOICE);
+        ignitionOn = (binocan_itf_active_hi_lo_itf_ignition_ah_st_decode(binocan_itf_active_hi_lo_msg.itf_ignition_ah_st) == BINOCAN_ITF_ACTIVE_HI_LO_ITF_IGNITION_AH_ST_HI_CHOICE);
     }
     else
     {
         ESP_LOGW(__func__, "Ignition Status signal out of range: %d", binocan_itf_active_hi_lo_msg.itf_ignition_ah_st);
-        ignitionST = false; // Default value
+        ignitionOn = false; // Default value
     }
     if (binocan_itf_active_hi_lo_itf_alarm_ah_is_in_range(binocan_itf_active_hi_lo_msg.itf_alarm_ah))
     {
@@ -859,11 +859,11 @@ inline esp_err_t itf_active_hi_lo_Handler(const twai_frame_t *rxMsg)
 
     ESP_LOGD(__func__, "Telltales: ABS %d, Airbag %d, CEL %d, High Beams %d, Low Brake Fluid %d, Low Coolant %d, Low Fuel %d, Low Oil Pressure %d, Battery/Alternator %d, Over Temperature %d, Parking Brake %d, Indicators %d, Ignition %d, Alarm %d, Headlights %d",
              absOn, airbagOn, milOn, highBeamOn, brakesOn, lowCoolantOn, lowFuelOn, lowOilOn, batteryOn,
-             overTemperatureOn, parkingBrakeOn, indicatorsOn, ignitionST, alarmOn, headlightsOn);
+             overTemperatureOn, parkingBrakeOn, indicatorsOn, ignitionOn, alarmOn, headlightsOn);
     return ESP_OK;
 }
 
-inline esp_err_t itf_slow_metrics_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onItfSlowMetrics(const twai_frame_t *rxMsg)
 {
     static binocan_itf_slow_metrics_t binocan_itf_slow_metrics_msg;
     if (binocan_itf_slow_metrics_unpack(&binocan_itf_slow_metrics_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
@@ -873,29 +873,29 @@ inline esp_err_t itf_slow_metrics_Handler(const twai_frame_t *rxMsg)
     }
     if (binocan_itf_slow_metrics_itf_coolant_temp_is_in_range(binocan_itf_slow_metrics_msg.itf_coolant_temp))
     {
-        coolant_degC = (uint8_t)round(binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp));
+        coolantDegC = (uint8_t)round(binocan_itf_slow_metrics_itf_coolant_temp_decode(binocan_itf_slow_metrics_msg.itf_coolant_temp));
     }
     else
     {
         ESP_LOGW(__func__, "Coolant temperature signal out of range: %d", binocan_itf_slow_metrics_msg.itf_coolant_temp);
-        coolant_degC = 255;       // Default value
+        coolantDegC = 255;       // Default value
         overTemperatureOn = true; // Set over temperature on if coolant is out of range
     }
 
     if (binocan_itf_slow_metrics_itf_fuel_level_pc_is_in_range(binocan_itf_slow_metrics_msg.itf_fuel_level_pc))
     {
-        fuelLevel_pc = (uint8_t)round(binocan_itf_slow_metrics_itf_fuel_level_pc_decode(binocan_itf_slow_metrics_msg.itf_fuel_level_pc));
+        fuelLevelPct = (uint8_t)round(binocan_itf_slow_metrics_itf_fuel_level_pc_decode(binocan_itf_slow_metrics_msg.itf_fuel_level_pc));
     }
     else
     {
         ESP_LOGW(__func__, "Fuel level signal out of range: %d", binocan_itf_slow_metrics_msg.itf_fuel_level_pc);
-        fuelLevel_pc = 0; // Default value
+        fuelLevelPct = 0; // Default value
         lowFuelOn = true; // Set low fuel on if fuel level is out of range
     }
 
     if (binocan_itf_slow_metrics_itf_lv_voltage_v_is_in_range(binocan_itf_slow_metrics_msg.itf_lv_voltage_v))
     {
-        lvVoltage_v = (float)binocan_itf_slow_metrics_itf_lv_voltage_v_decode(binocan_itf_slow_metrics_msg.itf_lv_voltage_v);
+        supplyV = (float)binocan_itf_slow_metrics_itf_lv_voltage_v_decode(binocan_itf_slow_metrics_msg.itf_lv_voltage_v);
     }
     else
     {
@@ -904,11 +904,11 @@ inline esp_err_t itf_slow_metrics_Handler(const twai_frame_t *rxMsg)
     }
 
     ESP_LOGD(__func__, "Slow Metrics: Coolant %d, Fuel Level %d, LV Voltage %.2f",
-             coolant_degC, fuelLevel_pc, lvVoltage_v);
+             coolantDegC, fuelLevelPct, supplyV);
     return ESP_OK;
 }
 
-inline esp_err_t itf_fast_metrics_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onItfFastMetrics(const twai_frame_t *rxMsg)
 {
     static binocan_itf_fast_metrics_t binocan_itf_fast_metrics_msg;
 
@@ -929,12 +929,12 @@ inline esp_err_t itf_fast_metrics_Handler(const twai_frame_t *rxMsg)
 
     if (binocan_itf_fast_metrics_itf_speed_kph_is_in_range(binocan_itf_fast_metrics_msg.itf_speed_kph))
     {
-        speed_kph = (float)binocan_itf_fast_metrics_itf_speed_kph_decode(binocan_itf_fast_metrics_msg.itf_speed_kph);
+        speedKph = (float)binocan_itf_fast_metrics_itf_speed_kph_decode(binocan_itf_fast_metrics_msg.itf_speed_kph);
     }
     else
     {
         ESP_LOGW(__func__, "Speed signal out of range: %d", binocan_itf_fast_metrics_msg.itf_speed_kph);
-        speed_kph = 0; // Default value
+        speedKph = 0; // Default value
     }
 
     if (binocan_itf_fast_metrics_itf_gear_position_st_is_in_range(binocan_itf_fast_metrics_msg.itf_gear_position_st))
@@ -947,11 +947,11 @@ inline esp_err_t itf_fast_metrics_Handler(const twai_frame_t *rxMsg)
         gearPosition = BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_UNCERTAIN_CHOICE;
     }
 
-    ESP_LOGD(__func__, "Vehicle Metrics: RPM %lu, Speed %.2f, Gear %u", rpm, speed_kph, gearPosition);
+    ESP_LOGD(__func__, "Vehicle Metrics: RPM %lu, Speed %.2f, Gear %u", rpm, speedKph, gearPosition);
     return ESP_OK;
 }
 
-inline esp_err_t itf_odometer_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onItfOdometer(const twai_frame_t *rxMsg)
 {
     static binocan_itf_odometer_t binocan_itf_odometer_msg;
 
@@ -963,29 +963,29 @@ inline esp_err_t itf_odometer_Handler(const twai_frame_t *rxMsg)
 
     if (binocan_itf_odometer_itf_odometer_km_is_in_range(binocan_itf_odometer_msg.itf_odometer_km) && binocan_itf_odometer_itf_odo_rem_m_is_in_range(binocan_itf_odometer_msg.itf_odo_rem_m))
     {
-        odometer_km = binocan_itf_odometer_itf_odometer_km_decode(binocan_itf_odometer_msg.itf_odometer_km) + binocan_itf_odometer_itf_odo_rem_m_decode(binocan_itf_odometer_msg.itf_odo_rem_m) / 1000.0;
+        odometerKm = binocan_itf_odometer_itf_odometer_km_decode(binocan_itf_odometer_msg.itf_odometer_km) + binocan_itf_odometer_itf_odo_rem_m_decode(binocan_itf_odometer_msg.itf_odo_rem_m) / 1000.0;
     }
     else
     {
         ESP_LOGW(__func__, "Odometer could not be decoded : %d + %d /1000", binocan_itf_odometer_itf_odometer_km_decode(binocan_itf_odometer_msg.itf_odometer_km), binocan_itf_odometer_itf_odo_rem_m_decode(binocan_itf_odometer_msg.itf_odo_rem_m));
-        odometer_km = 0;
+        odometerKm = 0;
     }
 
     if (binocan_itf_odometer_itf_trip_km_is_in_range(binocan_itf_odometer_msg.itf_trip_km) && binocan_itf_odometer_itf_trip_rem_m_is_in_range(binocan_itf_odometer_msg.itf_trip_rem_m))
     {
-        trip_km = binocan_itf_odometer_itf_trip_km_decode(binocan_itf_odometer_msg.itf_trip_km) + binocan_itf_odometer_itf_trip_rem_m_decode(binocan_itf_odometer_msg.itf_trip_rem_m) / 1000.0;
+        tripKm = binocan_itf_odometer_itf_trip_km_decode(binocan_itf_odometer_msg.itf_trip_km) + binocan_itf_odometer_itf_trip_rem_m_decode(binocan_itf_odometer_msg.itf_trip_rem_m) / 1000.0;
     }
     else
     {
         ESP_LOGW(__func__, "Trip could not be decoded : %d + %d /1000", binocan_itf_odometer_itf_trip_km_decode(binocan_itf_odometer_msg.itf_trip_km), binocan_itf_odometer_itf_trip_rem_m_decode(binocan_itf_odometer_msg.itf_trip_rem_m));
-        trip_km = 0;
+        tripKm = 0;
     }
 
-    ESP_LOGD(__func__, "Odometer : %0.1f km Trip: %0.1f", odometer_km, trip_km);
+    ESP_LOGD(__func__, "Odometer : %0.1f km Trip: %0.1f", odometerKm, tripKm);
     return ESP_OK;
 }
 
-inline esp_err_t ext_oil_metrics_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onExtOilMetrics(const twai_frame_t *rxMsg)
 {
     static binocan_ext_oil_metrics_t binocan_ext_oil_metrics_msg;
     if (binocan_ext_oil_metrics_unpack(&binocan_ext_oil_metrics_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
@@ -996,7 +996,7 @@ inline esp_err_t ext_oil_metrics_Handler(const twai_frame_t *rxMsg)
     return ESP_OK;
 }
 
-inline esp_err_t ext_chargecooling_metrics_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onExtChargecoolingMetrics(const twai_frame_t *rxMsg)
 {
     static binocan_ext_chargecooling_metrics_t binocan_ext_chargecooling_metrics_msg;
     if (binocan_ext_chargecooling_metrics_unpack(&binocan_ext_chargecooling_metrics_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
@@ -1007,7 +1007,7 @@ inline esp_err_t ext_chargecooling_metrics_Handler(const twai_frame_t *rxMsg)
     return ESP_OK;
 }
 
-inline esp_err_t itf_board_st_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onItfBoardSt(const twai_frame_t *rxMsg)
 {
     static binocan_itf_board_st_t binocan_itf_board_st_msg;
     if (binocan_itf_board_st_unpack(&binocan_itf_board_st_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
@@ -1018,17 +1018,17 @@ inline esp_err_t itf_board_st_Handler(const twai_frame_t *rxMsg)
 
     if (binocan_itf_board_st_itf_sm_st_is_in_range(binocan_itf_board_st_msg.itf_sm_st))
     {
-        itf_board_st = (uint8_t)binocan_itf_board_st_itf_sm_st_decode(binocan_itf_board_st_msg.itf_sm_st);
+        itfState = (uint8_t)binocan_itf_board_st_itf_sm_st_decode(binocan_itf_board_st_msg.itf_sm_st);
     }
     else
     {
         ESP_LOGW(__func__, "ITF SM Status signal out of range: %d", binocan_itf_board_st_msg.itf_sm_st);
-        itf_board_st = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE; // Default value
+        itfState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_FAULT_CHOICE; // Default value
     }
     return ESP_OK;
 }
 
-inline esp_err_t itf_board_version_Handler(const twai_frame_t *rxMsg)
+inline esp_err_t onItfBoardVersion(const twai_frame_t *rxMsg)
 {
     static binocan_itf_board_version_t binocan_itf_board_version_msg;
     if (binocan_itf_board_version_unpack(&binocan_itf_board_version_msg, rxMsg->buffer, rxMsg->header.dlc) == EINVAL)
@@ -1055,23 +1055,23 @@ struct twai_route_entry_t {
 };
 
 static twai_route_entry_t rx_routes[] = {
-    { BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID,          itf_active_hi_lo_Handler,          5 * BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS,          itf_active_hi_lo_TO_cb,          NULL, "act_hi_lo" },
-    { BINOCAN_ITF_SLOW_METRICS_FRAME_ID,          itf_slow_metrics_Handler,          5 * BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS,          itf_slow_metrics_TO_cb,          NULL, "slow_m" },
-    { BINOCAN_ITF_FAST_METRICS_FRAME_ID,          itf_fast_metrics_Handler,          5 * BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS,          itf_fast_metrics_TO_cb,          NULL, "fast_m" },
-    { BINOCAN_ITF_ODOMETER_FRAME_ID,              itf_odometer_Handler,              5 * BINOCAN_ITF_ODOMETER_CYCLE_TIME_MS,              itf_odometer_TO_cb,              NULL, "odom" },
-    { BINOCAN_EXT_OIL_METRICS_FRAME_ID,          ext_oil_metrics_Handler,          5 * BINOCAN_EXT_OIL_METRICS_CYCLE_TIME_MS,          ext_oil_metrics_TO_cb,          NULL, "oil_m" },
-    { BINOCAN_EXT_CHARGECOOLING_METRICS_FRAME_ID, ext_chargecooling_metrics_Handler, 5 * BINOCAN_EXT_CHARGECOOLING_METRICS_CYCLE_TIME_MS, ext_chargecooling_metrics_TO_cb, NULL, "chg_m" },
-    { BINOCAN_ITF_BOARD_ST_FRAME_ID,              itf_board_st_Handler,              5 * BINOCAN_ITF_BOARD_ST_CYCLE_TIME_MS,              itf_board_st_TO_cb,              NULL, "ibs" },
-    { BINOCAN_ITF_BOARD_VERSION_FRAME_ID,         itf_board_version_Handler,         5 * BINOCAN_ITF_BOARD_VERSION_CYCLE_TIME_MS,         itf_board_version_TO_cb,         NULL, "ibv" },
-    { ALT_DISPLAY_ST_FRAME_ID,                    alt_display_st_Handler,            5000,                                                alt_display_st_TO_cb,            NULL, "alt_st" },
-    { UDS_REQ_FRAME_ID,                           OTAHandler,                        5000,                                                OTA_TO_cb,                        NULL, "OTA" },
+    { BINOCAN_ITF_ACTIVE_HI_LO_FRAME_ID,          onItfActiveHiLo,          5 * BINOCAN_ITF_ACTIVE_HI_LO_CYCLE_TIME_MS,          onItfActiveHiLoTimeout,          NULL, "act_hi_lo" },
+    { BINOCAN_ITF_SLOW_METRICS_FRAME_ID,          onItfSlowMetrics,          5 * BINOCAN_ITF_SLOW_METRICS_CYCLE_TIME_MS,          onItfSlowMetricsTimeout,          NULL, "slow_m" },
+    { BINOCAN_ITF_FAST_METRICS_FRAME_ID,          onItfFastMetrics,          5 * BINOCAN_ITF_FAST_METRICS_CYCLE_TIME_MS,          onItfFastMetricsTimeout,          NULL, "fast_m" },
+    { BINOCAN_ITF_ODOMETER_FRAME_ID,              onItfOdometer,              5 * BINOCAN_ITF_ODOMETER_CYCLE_TIME_MS,              onItfOdometerTimeout,              NULL, "odom" },
+    { BINOCAN_EXT_OIL_METRICS_FRAME_ID,          onExtOilMetrics,          5 * BINOCAN_EXT_OIL_METRICS_CYCLE_TIME_MS,          onExtOilMetricsTimeout,          NULL, "oil_m" },
+    { BINOCAN_EXT_CHARGECOOLING_METRICS_FRAME_ID, onExtChargecoolingMetrics, 5 * BINOCAN_EXT_CHARGECOOLING_METRICS_CYCLE_TIME_MS, onExtChargecoolingMetricsTimeout, NULL, "chg_m" },
+    { BINOCAN_ITF_BOARD_ST_FRAME_ID,              onItfBoardSt,              5 * BINOCAN_ITF_BOARD_ST_CYCLE_TIME_MS,              onItfBoardStTimeout,              NULL, "ibs" },
+    { BINOCAN_ITF_BOARD_VERSION_FRAME_ID,         onItfBoardVersion,         5 * BINOCAN_ITF_BOARD_VERSION_CYCLE_TIME_MS,         onItfBoardVersionTimeout,         NULL, "ibv" },
+    { ALT_DISPLAY_ST_FRAME_ID,                    onAltDisplaySt,            5000,                                                onAltDisplayStTimeout,            NULL, "alt_st" },
+    { UDS_REQ_FRAME_ID,                           handleOta,                        5000,                                                onOtaTimeout,                        NULL, "OTA" },
 };
 
 static const size_t NUM_RX_ROUTES = sizeof(rx_routes) / sizeof(rx_routes[0]);
 
 /// @brief Initializer for all the timeout timers
 /// @return ESP_OK if all timers created successfully, ESP_FAIL otherwise
-inline esp_err_t TO_timers_init()
+inline esp_err_t initTimeoutTimers()
 {
     esp_err_t ret = ESP_OK;
     for (size_t i = 0; i < NUM_RX_ROUTES; ++i)
@@ -1106,7 +1106,7 @@ inline esp_err_t TO_timers_init()
 
 /// @brief Starts the timeout timers
 /// @return ESP_OK if all timers started successfully, ESP_FAIL otherwise
-inline esp_err_t TO_timers_start()
+inline esp_err_t startTimeoutTimers()
 {
     esp_err_t ret = ESP_OK;
     for (size_t i = 0; i < NUM_RX_ROUTES; ++i)
@@ -1124,7 +1124,7 @@ inline esp_err_t TO_timers_start()
 
 /// @brief Stops the timeout timers
 /// @return ESP_OK if all timers stopped successfully, ESP_FAIL otherwise
-inline esp_err_t TO_timers_stop()
+inline esp_err_t stopTimeoutTimers()
 {
     esp_err_t ret = ESP_OK;
     for (size_t i = 0; i < NUM_RX_ROUTES; ++i)

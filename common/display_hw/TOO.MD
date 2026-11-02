@@ -37,7 +37,7 @@ sequenceDiagram
     HW->>HW: i2c_new_master_bus(I2C0)
     alt I2C or LEDC error
         HW-->>APP: error (resources released)
-        APP->>APP: XDB_SM_ST_DEGRADED, attemptRollBack()
+        APP->>APP: XDB_SM_ST_DEGRADED, attemptRollback()
     end
     HW->>EXP: new_i2c_tca9554 (reset: all inputs, out=0xFF)
     HW->>EXP: clear P7 in output reg, then P1/P7 to output
@@ -51,14 +51,14 @@ sequenceDiagram
     HW->>LCD: reset, init (vendor table, sleep-out 120 ms, display on)
     alt LCD error
         HW-->>APP: error (touch, expander, I2C released)
-        APP->>APP: XDB_SM_ST_DEGRADED, attemptRollBack()
+        APP->>APP: XDB_SM_ST_DEGRADED, attemptRollback()
     end
     HW-->>APP: ESP_OK, or ESP_ERR_NOT_FOUND if touch missing
     APP->>ADP: display_hw_lvgl_start(task cfg)
     ADP->>ADP: init, register display (DOUBLE_DIRECT), register touch, start task
     alt adapter error
         ADP-->>APP: error
-        APP->>APP: XDB_SM_ST_DEGRADED, attemptRollBack()
+        APP->>APP: XDB_SM_ST_DEGRADED, attemptRollback()
     end
     APP->>APP: ui_init, mark app valid, backlight fade-in
 ```
