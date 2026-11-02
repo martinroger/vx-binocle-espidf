@@ -16,3 +16,7 @@ export_bins/
 
 # Bennu embedded payloads
 bennu/components/payload/*.bin
+
+# CI caches (ccache and component manager downloads)
+.ccache/
+.idf-component-cache/

@@ -1,14 +1,20 @@
 name: Build and attach to release
 on:
-  push:
-    tags:
-      - 'v*'
+  # Publishing a release creates its tag when missing, so a tag push trigger
+  # would only start a second, duplicate run for the same release.
   pull_request:
     branches:
       - main
   release:
     types: [published]
   workflow_dispatch:
+
+# One run per ref at a time. A second run for the same release tag queues
+# instead of racing the first to upload assets; a newer push to a pull
+# request replaces the run it supersedes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   changes:
@@ -49,6 +55,17 @@ jobs:
     runs-on: ubuntu-latest
     # A dependency fetch that waits for credentials must not hold the runner for 6 hours.
     timeout-minutes: 30
+    env:
+      # Docker arguments shared by every ESP-IDF build step. The workspace is
+      # mounted at /app/<repository> inside the container, so ccache and the
+      # component manager cache live in the workspace where actions/cache can
+      # save and restore them.
+      IDF_DOCKER_ARGS: >-
+        -e GIT_TERMINAL_PROMPT=0
+        -e IDF_CCACHE_ENABLE=1
+        -e CCACHE_DIR=/app/${{ github.repository }}/.ccache
+        -e CCACHE_MAXSIZE=400M
+        -e IDF_COMPONENT_CACHE_PATH=/app/${{ github.repository }}/.idf-component-cache
     strategy:
       fail-fast: false
       matrix:
@@ -94,12 +111,10 @@ jobs:
         shell: bash
         run: |
           EVENT_NAME="${{ github.event_name }}"
-          REF="${{ github.ref }}"
           CHANGED="${{ needs.changes.outputs[matrix.change_key] }}"
           
           if [[ "$EVENT_NAME" == "release" || \
                 "$EVENT_NAME" == "workflow_dispatch" || \
-                "$REF" == refs/tags/* || \
                 "$CHANGED" == "true" ]]; then
             echo "run_build=true" >> $GITHUB_OUTPUT
           else
@@ -113,16 +128,27 @@ jobs:
           submodules: 'recursive'
           fetch-depth: 0
 
-      - name: Cache Build Folder
+      # Compiler cache. ccache is content addressed, so an older cache is always
+      # safe to restore; the run id suffix makes every run save a fresh copy.
+      - name: Cache ccache
         if: steps.check.outputs.run_build == 'true'
         uses: actions/cache@v6
         with:
-          path: |
-            ${{ matrix.project_path }}/build
-            ~/.ccache
-          key: ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-${{ hashFiles(format('{0}/CMakeLists.txt', matrix.project_path), format('{0}/main/CMakeLists.txt', matrix.project_path), 'bennu/CMakeLists.txt', 'bennu/main/CMakeLists.txt', 'bennu/components/payload/CMakeLists.txt') }}
+          path: .ccache
+          key: ccache-${{ runner.os }}-${{ matrix.target }}-idf-v5.5.5-${{ matrix.change_key }}-${{ hashFiles(format('{0}/sdkconfig.defaults', matrix.project_path), format('{0}/dependencies.lock', matrix.project_path), 'bennu/sdkconfig.defaults') }}-${{ github.run_id }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.target }}-${{ matrix.project_path }}-
+            ccache-${{ runner.os }}-${{ matrix.target }}-idf-v5.5.5-${{ matrix.change_key }}-${{ hashFiles(format('{0}/sdkconfig.defaults', matrix.project_path), format('{0}/dependencies.lock', matrix.project_path), 'bennu/sdkconfig.defaults') }}-
+            ccache-${{ runner.os }}-${{ matrix.target }}-idf-v5.5.5-${{ matrix.change_key }}-
+
+      # Component manager download cache (registry archives and git mirrors).
+      - name: Cache Managed Components
+        if: steps.check.outputs.run_build == 'true'
+        uses: actions/cache@v6
+        with:
+          path: .idf-component-cache
+          key: idf-components-${{ runner.os }}-${{ matrix.change_key }}-${{ hashFiles(format('{0}/dependencies.lock', matrix.project_path), format('{0}/main/idf_component.yml', matrix.project_path), 'bennu/main/idf_component.yml') }}
+          restore-keys: |
+            idf-components-${{ runner.os }}-${{ matrix.change_key }}-
 
       - name: Build ESP-IDF Project
         if: steps.check.outputs.run_build == 'true'
@@ -135,10 +161,11 @@ jobs:
           esp_idf_version: v5.5.5
           target: ${{ matrix.target }}
           path: ${{ matrix.project_path }}
-          extra_docker_args: -e GIT_TERMINAL_PROMPT=0 -e VX_GEAR_ESTIMATOR_TOKEN
+          extra_docker_args: ${{ env.IDF_DOCKER_ARGS }} -e VX_GEAR_ESTIMATOR_TOKEN
           command: >-
             git config --global url."https://x-access-token:${VX_GEAR_ESTIMATOR_TOKEN}@github.com/martinroger/vx-gear-estimator".insteadOf "https://github.com/martinroger/vx-gear-estimator" &&
-            idf.py build
+            idf.py build &&
+            (ccache -s || true)
 
       - name: Collect Data and Rename
         if: steps.check.outputs.run_build == 'true'
@@ -178,6 +205,8 @@ jobs:
           esp_idf_version: v5.5.5
           target: ${{ matrix.target }}
           path: 'bennu'
+          extra_docker_args: ${{ env.IDF_DOCKER_ARGS }}
+          command: idf.py build && (ccache -s || true)
 
       - name: Collect Bennu Delivery Binary
         if: steps.check.outputs.run_build == 'true' && matrix.bennu_target != ''
