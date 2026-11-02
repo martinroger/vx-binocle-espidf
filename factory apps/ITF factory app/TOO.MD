@@ -20,20 +20,24 @@ graph TD
 
 ## 2. NVS Calibration Schema & Provisioning Flow
 
-### 2.1 Storage Namespace Keys (`storage`)
+### 2.1 Settings Namespaces (default `nvs` partition)
 
-| NVS Key | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `fuel_learn_en` | `u8` | `1` | Enable (`1`) or disable (`0`) dynamic self-learning of full-tank resistance baseline. |
-| `fuel_full_r` | `u16` | `250` | Calibrated/learned sender resistance at 100% full tank ($\Omega$). |
-| `lo_fuel_thr` | `u16` | `20` | Low fuel warning threshold percentage (0–100%). |
-| `overtemp_th` | `u16` | `106` | Coolant overtemperature threshold (°C). |
-| `lastPart` | `i8` | `-1` | Previously active boot partition index. |
-| `r39_en` | `u8` | `0` | ECE R39 speed compliance mode on (`1`) or off (`0`). |
-| `r39_a_bp` | `u16` | `400` | Speed correction A in basis points added to 1 (0–1000, i.e. 0 to +10 %). `400` gives A = 1.04. |
-| `r39_b_ckph` | `i16` | `200` | Speed offset B in 0.01 km/h (0–400, i.e. 0 to 4 km/h). |
+All names are declared in [`common/nvs_keys.hpp`](../../common/nvs_keys.hpp).
 
-The `r39_*` keys, their limits and the speed formula are shared with the interface board through [`common/r39_compliance.hpp`](../../common/r39_compliance.hpp). The interface board writes the defaults for missing or out-of-range keys at boot; the factory app only writes them on Save.
+| Namespace | NVS Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `vx_fuel` | `learn_en` | `u8` | `1` | Enable (`1`) or disable (`0`) dynamic self-learning of full-tank resistance baseline. |
+| `vx_fuel` | `full_ohm` | `u16` | `250` | Calibrated/learned sender resistance at 100% full tank ($\Omega$). |
+| `vx_fuel` | `low_pct` | `u16` | `20` | Low fuel warning threshold percentage (0–100%). |
+| `vx_coolant` | `hot_degc` | `u16` | `106` | Coolant overtemperature threshold (°C). |
+| `vx_sys` | `boot_slot` | `i8` | `-1` | Previously active boot partition index (-1 factory, 0 `ota_0`, 1 `ota_1`). |
+| `vx_r39` | `en` | `u8` | `0` | ECE R39 speed compliance mode on (`1`) or off (`0`). |
+| `vx_r39` | `a_bp` | `u16` | `400` | Speed correction A in basis points added to 1 (0–1000, i.e. 0 to +10 %). `400` gives A = 1.04. |
+| `vx_r39` | `b_ckph` | `i16` | `200` | Speed offset B in 0.01 km/h (0–400, i.e. 0 to 4 km/h). |
+
+The R39 limits and the speed formula are shared with the interface board through [`common/r39_compliance.hpp`](../../common/r39_compliance.hpp). The interface board writes the defaults for missing or out-of-range keys at boot; the factory app only writes them on Save.
+
+**Legacy layout.** Older firmware kept these settings in namespace `storage` as `fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`, `lastPart`, `r39_en`, `r39_a_bp` and `r39_b_ckph`. At boot both the interface board and this app copy any value still under its old name to the new one (only when the new one is empty) and leave the old entry in place, so an older image still finds it. The boot slot is also still written as `storage`/`lastPart` for older factory apps.
 
 ### 2.2 Gear Estimator Namespace (`vx_gear`)
 
@@ -232,7 +236,7 @@ The Factory App interface uses a responsive 4-tab layout built on top of [Simple
 ## 5. Provisioning & Safety Sequencing Flow
 
 1. **Boot Initialization**:
-   - Initializes NVS (`storage` in default partition and `storage` in `nvs_odo` partition).
+   - Initializes NVS (settings namespaces in the default partition, after copying legacy keys, and `storage` in the `nvs_odo` partition).
    - Verifies existence of required keys (`fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`, `lastPart`, `odometer_m`, `trip_m`). Missing keys are initialized with defaults.
    - Initializes I2C bus, TCA9555 IO expander (with optional IRQ on `CONFIG_EXP_INT_PIN`), ADS1115 ADC, and MCPWM capture channels.
    - Starts TWAI CAN driver with `dispatch_can_frame` callback for LDB/RDB version and heartbeat monitoring.

@@ -5,10 +5,10 @@
  * Shared by the interface board app (applies the transform in the fast metrics packaging task) and the ITF factory
  * app (edits the stored values and previews the curve), so both use the same keys, limits and formula.
  *
- * Stored values (default "nvs" partition, namespace "storage"):
- * - KEY_EN     (u8)  : 1 when the compliance mode is on.
- * - KEY_A_BP   (u16) : percentage added by A, in basis points (0.01 %). A = 1 + a_bp / 10000.
- * - KEY_B_CKPH (i16) : offset B in 0.01 km/h.
+ * Stored values (default "nvs" partition, namespace vx::nvs::r39::NS, keys in nvs_keys.hpp):
+ * - EN     (u8)  : 1 when the compliance mode is on.
+ * - A_BP   (u16) : percentage added by A, in basis points (0.01 %). A = 1 + a_bp / 10000.
+ * - B_CKPH (i16) : offset B in 0.01 km/h.
  *
  * Output when enabled, with v the true speed in km/h:
  *   s = clamp(v / blend_end_kph, 0, 1), w = s^2 (3 - 2 s)   (smoothstep)
@@ -27,13 +27,6 @@
 
 namespace r39
 {
-    /** NVS key of the enable flag (u8). */
-    inline constexpr const char *KEY_EN = "r39_en";
-    /** NVS key of A, as basis points added to 1 (u16). */
-    inline constexpr const char *KEY_A_BP = "r39_a_bp";
-    /** NVS key of B, in 0.01 km/h (i16). */
-    inline constexpr const char *KEY_B_CKPH = "r39_b_ckph";
-
     inline constexpr bool DEFAULT_EN = false;
     inline constexpr uint16_t DEFAULT_A_BP = 400;  /**< +4.00 % */
     inline constexpr int16_t DEFAULT_B_CKPH = 200; /**< 2.00 km/h */

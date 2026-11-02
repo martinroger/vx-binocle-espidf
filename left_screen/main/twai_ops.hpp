@@ -159,11 +159,11 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
             if (display_board_st.modeLocked) // Write light mode if mode lock is engaged
             {
                 nvs_handle_t h;
-                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+                if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+                    ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
                 else
                 {
-                    if (nvs_set_u8(h, "light_th", (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+                    if (nvs_set_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t)(display_board_st.lightMode)) != ESP_OK)
                         ESP_LOGW(__func__, "Could not set light mode in NVS");
                     nvs_commit(h);
                     nvs_close(h);
@@ -181,18 +181,18 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
         if (display_board_st.modeLocked != (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock)) // Mode lock is different
         {
             nvs_handle_t h;
-            if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-                ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+            if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
             else
             {
-                if (nvs_set_u8(h, "th_locked", (uint8_t)(binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock))) != ESP_OK) // Write mode lock to NVS
+                if (nvs_set_u8(h, vx::nvs::disp::THEME_LOCKED, (uint8_t)(binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock))) != ESP_OK) // Write mode lock to NVS
                     ESP_LOGW(__func__, "Could not set theme lock in NVS");
                 else
                 {
                     display_board_st.modeLocked = (bool)binocan_rdb_st_xdb_light_mode_decode(binocan_rdb_st_msg.xdb_mode_lock); // Update mode lock system variable
                     if (display_board_st.modeLocked)                                                                            // Write light mode if mode lock is engaged
                     {
-                        if (nvs_set_u8(h, "light_th", (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+                        if (nvs_set_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t)(display_board_st.lightMode)) != ESP_OK)
                             ESP_LOGW(__func__, "Could not set light mode in NVS");
                     }
                 }
@@ -212,11 +212,11 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
         if (newBrightness != display_board_st.darkBrightness)
         {
             nvs_handle_t h;
-            if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-                ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+            if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
             else
             {
-                if (nvs_set_u8(h, "dark_bg", newBrightness) != ESP_OK)
+                if (nvs_set_u8(h, vx::nvs::disp::BL_DARK_PCT, newBrightness) != ESP_OK)
                     ESP_LOGW(__func__, "Could not set dark brightness value in NVS");
                 else
                 {
@@ -241,11 +241,11 @@ inline esp_err_t alt_display_st_Handler(const twai_frame_t *rxMsg)
         if (newBrightness != display_board_st.lightBrightness)
         {
             nvs_handle_t h;
-            if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-                ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+            if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+                ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
             else
             {
-                if (nvs_set_u8(h, "light_bg", newBrightness) != ESP_OK)
+                if (nvs_set_u8(h, vx::nvs::disp::BL_LIGHT_PCT, newBrightness) != ESP_OK)
                     ESP_LOGW(__func__, "Could not set light brightness value in NVS");
                 else
                 {

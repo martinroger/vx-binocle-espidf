@@ -7,6 +7,7 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "coefficients.h"
+#include "nvs_settings.hpp"
 
 #include "esp_partition.h"
 #include "esp_ota_ops.h"
@@ -202,51 +203,68 @@ esp_err_t disable_5V_AUX(void)
 }
 #pragma endregion
 
-#pragma region ECE R39 settings
-/// @brief Reads one ECE R39 key, writing the default when it is missing or out of range.
-/// @tparam T Stored integer type
-/// @param h Open handle on the "storage" namespace
-/// @param key NVS key
-/// @param[in,out] value Default on entry, stored value on return
-/// @param valid Range check of the stored value
-/// @param get nvs_get_* function for T
-/// @param set nvs_set_* function for T
-/// @return ESP_OK, or the error of the failed write or commit
-template <typename T>
-static esp_err_t r39_self_init_key(nvs_handle_t h, const char *key, T &value, bool (*valid)(T),
-                                   esp_err_t (*get)(nvs_handle_t, const char *, T *), esp_err_t (*set)(nvs_handle_t, const char *, T))
+#pragma region Calibration settings
+/// @brief Opens one settings namespace read-write, runs @p load on it and closes it.
+/// @return ESP_OK, or the first NVS error
+static esp_err_t with_namespace(const char *ns, esp_err_t (*load)(nvs_handle_t))
 {
-    const T def = value;
-    esp_err_t err = get(h, key, &value);
-    if (err == ESP_OK && valid(value))
-        return ESP_OK;
-    if (err == ESP_OK)
-        ESP_LOGW(TAG, "NVS: %s = %ld out of range, resetting to %ld", key, (long)value, (long)def);
-    else
-        ESP_LOGW(TAG, "NVS: %s not found (%s), initialising to %ld", key, esp_err_to_name(err), (long)def);
-    value = def;
-    err = set(h, key, value);
-    if (err == ESP_OK)
-        err = nvs_commit(h);
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(ns, NVS_READWRITE, &h);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not open NVS namespace %s: %s", ns, esp_err_to_name(err));
+        return err;
+    }
+    err = load(h);
+    nvs_close(h);
+    return err;
+}
+
+/// @brief Loads the fuel sender calibration, self-initialising missing keys.
+static esp_err_t load_fuel_settings(nvs_handle_t h)
+{
+    namespace k = vx::nvs::fuel;
+    uint8_t learnEn = fuel_learn_en ? 1 : 0;
+    esp_err_t ret = vx::nvs::loadOrInit<uint8_t>(h, k::LEARN_EN, learnEn, [](uint8_t v) { return v <= 1; });
+    fuel_learn_en = (learnEn != 0);
+    ESP_LOGI(TAG, "Fuel self-learning enabled: %s", fuel_learn_en ? "YES" : "NO");
+
+    esp_err_t err = vx::nvs::loadOrInit<uint16_t>(h, k::FULL_OHM, fuel_full_r);
+    if (ret == ESP_OK)
+        ret = err;
+    ESP_LOGI(TAG, "Fuel full resistance: %u Ohm", fuel_full_r);
+
+    err = vx::nvs::loadOrInit<uint16_t>(h, k::LOW_PCT, fuel_low_level_threshold_pc);
+    if (ret == ESP_OK)
+        ret = err;
+    ESP_LOGI(TAG, "Low fuel threshold : %u pc", fuel_low_level_threshold_pc);
+    return ret;
+}
+
+/// @brief Loads the coolant overtemperature threshold, self-initialising it when missing.
+static esp_err_t load_coolant_settings(nvs_handle_t h)
+{
+    esp_err_t err = vx::nvs::loadOrInit<uint16_t>(h, vx::nvs::coolant::HOT_DEGC, coolant_overtemp_threshold_degC);
+    ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", coolant_overtemp_threshold_degC);
     return err;
 }
 
 /// @brief Loads the ECE R39 compliance settings into r39_params, self-initialising missing or out-of-range keys.
-/// @param h Open read-write handle on the "storage" namespace
 /// @return ESP_OK, or the first NVS write error (r39_params then holds the defaults for the failed keys)
 static esp_err_t load_r39_params(nvs_handle_t h)
 {
+    namespace k = vx::nvs::r39;
     r39::RawParams raw = r39::defaults();
     esp_err_t ret = ESP_OK;
     esp_err_t err;
 
-    err = r39_self_init_key<uint8_t>(h, r39::KEY_EN, raw.en, [](uint8_t v) { return v <= 1; }, nvs_get_u8, nvs_set_u8);
+    err = vx::nvs::loadOrInit<uint8_t>(h, k::EN, raw.en, [](uint8_t v) { return v <= 1; });
     if (err != ESP_OK && ret == ESP_OK)
         ret = err;
-    err = r39_self_init_key<uint16_t>(h, r39::KEY_A_BP, raw.a_bp, [](uint16_t v) { return v <= r39::A_BP_MAX; }, nvs_get_u16, nvs_set_u16);
+    err = vx::nvs::loadOrInit<uint16_t>(h, k::A_BP, raw.a_bp, [](uint16_t v) { return v <= r39::A_BP_MAX; });
     if (err != ESP_OK && ret == ESP_OK)
         ret = err;
-    err = r39_self_init_key<int16_t>(h, r39::KEY_B_CKPH, raw.b_ckph, [](int16_t v) { return v >= r39::B_CKPH_MIN && v <= r39::B_CKPH_MAX; }, nvs_get_i16, nvs_set_i16);
+    err = vx::nvs::loadOrInit<int16_t>(h, k::B_CKPH, raw.b_ckph, [](int16_t v) { return v >= r39::B_CKPH_MIN && v <= r39::B_CKPH_MAX; });
     if (err != ESP_OK && ret == ESP_OK)
         ret = err;
 
@@ -255,6 +273,20 @@ static esp_err_t load_r39_params(nvs_handle_t h)
         ESP_LOGI(TAG, "ECE R39 mode: ON, A = %.4f (+%.2f %%), B = %.2f km/h, blend to %d km/h", r39_params.a, raw.a_pct(), r39_params.b_kph, CONFIG_R39_BLEND_END_KPH);
     else
         ESP_LOGI(TAG, "ECE R39 mode: OFF (stored A = +%.2f %%, B = %.2f km/h)", raw.a_pct(), raw.b_kph());
+    return ret;
+}
+
+/// @brief Loads every calibration setting of the default NVS partition (fuel, coolant, ECE R39).
+/// @return ESP_OK, or the first error; every setting is still loaded or defaulted
+static esp_err_t load_calibration()
+{
+    esp_err_t ret = with_namespace(vx::nvs::fuel::NS, load_fuel_settings);
+    esp_err_t err = with_namespace(vx::nvs::coolant::NS, load_coolant_settings);
+    if (ret == ESP_OK)
+        ret = err;
+    err = with_namespace(vx::nvs::r39::NS, load_r39_params);
+    if (ret == ESP_OK)
+        ret = err;
     return ret;
 }
 #pragma endregion
@@ -386,32 +418,25 @@ extern "C" void app_main(void)
                     nvs_flash_erase();
                     nvs_flash_init();
                 }
-                nvs_handle_t h;
-                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                vx::nvs::migrateLegacyKeys();
+                int8_t slot = -1;
+                if (strcmp("ota_0", runningPart->label) == 0)
                 {
-                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
-                    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-                    attemptRollBack();
+                    ESP_LOGI(__func__, "Running partition is ota_0");
+                    slot = 0;
+                }
+                else if (strcmp("ota_1", runningPart->label) == 0)
+                {
+                    ESP_LOGI(__func__, "Running partition is ota_1");
+                    slot = 1;
                 }
                 else
+                    ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
+                if (vx::nvs::recordBootSlot(slot) != ESP_OK)
                 {
-                    if (strcmp("ota_0", runningPart->label) == 0)
-                    {
-                        ESP_LOGI(__func__, "Running partition is ota_0");
-                        nvs_set_i8(h, "lastPart", 0);
-                    }
-                    else if (strcmp("ota_1", runningPart->label) == 0)
-                    {
-                        ESP_LOGI(__func__, "Running partition is ota_1");
-                        nvs_set_i8(h, "lastPart", 1);
-                    }
-                    else
-                    {
-                        ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
-                        nvs_set_i8(h, "lastPart", -1);
-                    }
-                    nvs_commit(h);
-                    nvs_close(h);
+                    ESP_LOGE(__func__, "Cannot record the boot slot in NVS");
+                    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+                    attemptRollBack();
                 }
 
                 ESP_LOGW(TAG, "Setting target boot partition to factory app (updater)");
@@ -526,91 +551,11 @@ extern "C" void app_main(void)
         }
         else // Successfully entered base NVS
         {
-            nvs_handle_t nvs_h;
-            nvs_err = nvs_open("storage", NVS_READWRITE, &nvs_h);
-            if (nvs_err != ESP_OK)
+            vx::nvs::migrateLegacyKeys();
+            if (load_calibration() != ESP_OK)
             {
-                ESP_LOGE(TAG, "Could not open normal NVS partition");
+                ESP_LOGE(TAG, "Could not initialise the calibration settings in NVS");
                 attemptRollBack();
-            }
-            else // "storage" namespace is open for business
-            {
-                // Fuel self-learning enable flag
-                uint8_t learn_en_u8 = fuel_learn_en ? 1 : 0;
-                nvs_err = nvs_get_u8(nvs_h, "fuel_learn_en", &learn_en_u8);
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
-                {
-                    ESP_LOGW(TAG, "Fuel learn enable flag not found in memory, initializing to true");
-                    learn_en_u8 = 1;
-                    nvs_err = nvs_set_u8(nvs_h, "fuel_learn_en", learn_en_u8);
-                    if (nvs_err != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Could not set fuel_learn_en in NVS");
-                        attemptRollBack();
-                    }
-                    else
-                        nvs_commit(nvs_h);
-                }
-                fuel_learn_en = (learn_en_u8 != 0);
-                ESP_LOGI(TAG, "Fuel self-learning enabled: %s", fuel_learn_en ? "YES" : "NO");
-
-                // Fuel full resistance (Ohms)
-                nvs_err = nvs_get_u16(nvs_h, "fuel_full_r", &fuel_full_r);
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
-                {
-                    ESP_LOGW(TAG, "Fuel full resistance not found in memory, initializing to %u Ohm", (uint16_t)COEFF_FUEL_FULL_R);
-                    fuel_full_r = (uint16_t)COEFF_FUEL_FULL_R;
-                    nvs_err = nvs_set_u16(nvs_h, "fuel_full_r", fuel_full_r);
-                    if (nvs_err != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Could not set fuel_full_r in NVS");
-                        attemptRollBack();
-                    }
-                    else
-                        nvs_commit(nvs_h);
-                }
-                ESP_LOGI(TAG, "Fuel full resistance: %u Ohm", fuel_full_r);
-
-                // Low fuel threshold
-                nvs_err = nvs_get_u16(nvs_h, "lo_fuel_thr", &fuel_low_level_threshold_pc); // Write if not found
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
-                {
-                    ESP_LOGW(TAG, "Fuel low threshold not found in memory, initializing");
-                    nvs_err = nvs_set_u16(nvs_h, "lo_fuel_thr", fuel_low_level_threshold_pc);
-                    if (nvs_err != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Could not set Fuel Low LVL in NVS");
-                        attemptRollBack();
-                    }
-                    else
-                        nvs_commit(nvs_h);
-                }
-
-                ESP_LOGI(TAG, "Low fuel threshold : %u pc", fuel_low_level_threshold_pc);
-                // Coolant overtemp threshold
-                nvs_err = nvs_get_u16(nvs_h, "overtemp_th", &coolant_overtemp_threshold_degC); // Write if not found
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
-                {
-                    ESP_LOGW(TAG, "Coolant overtemp threshold not found in memory, initializing");
-                    nvs_err = nvs_set_u16(nvs_h, "overtemp_th", coolant_overtemp_threshold_degC);
-                    if (nvs_err != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Could not set Overtmp in NVS");
-                        attemptRollBack();
-                    }
-                    else
-                        nvs_commit(nvs_h);
-                }
-
-                ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", coolant_overtemp_threshold_degC);
-
-                // ECE R39 speed compliance mode
-                if (load_r39_params(nvs_h) != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Could not initialise the ECE R39 settings in NVS");
-                    attemptRollBack();
-                }
-                nvs_close(nvs_h);
             }
         }
     }

@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/timers.h"
+#include "nvs_keys.hpp"
 
 #include <math.h>
 
@@ -367,11 +368,11 @@ inline void itf_slow_metrics_PKG(void *pvParameters)
                 ESP_LOGI(__func__, "Self-learning: updating fuel_full_r from %u Ohm to %u Ohm", fuel_full_r, new_learned_r);
                 fuel_full_r = new_learned_r;
 
-                // Persist to NVS storage namespace
+                // Persist to the fuel NVS namespace
                 nvs_handle_t nvs_h;
-                if (nvs_open("storage", NVS_READWRITE, &nvs_h) == ESP_OK)
+                if (nvs_open(vx::nvs::fuel::NS, NVS_READWRITE, &nvs_h) == ESP_OK)
                 {
-                    if (nvs_set_u16(nvs_h, "fuel_full_r", fuel_full_r) == ESP_OK)
+                    if (nvs_set_u16(nvs_h, vx::nvs::fuel::FULL_OHM, fuel_full_r) == ESP_OK)
                     {
                         nvs_commit(nvs_h);
                         ESP_LOGI(__func__, "Persisted fuel_full_r (%u Ohm) to NVS", fuel_full_r);

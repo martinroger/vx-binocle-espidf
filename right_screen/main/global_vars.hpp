@@ -9,6 +9,7 @@
 #include "display_hw.h"
 #include "version_parser.h"
 #include "binocan.h"
+#include "nvs_settings.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 

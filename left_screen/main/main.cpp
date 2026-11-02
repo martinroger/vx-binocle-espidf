@@ -72,13 +72,13 @@ extern "C" void action_save_brightness(lv_event_t *e)
     lv_obj_t *target = lv_event_get_target_obj(e);
     uint8_t targetBrightness = lv_slider_get_value(target);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
         if (target == objects.dark_slider && targetBrightness != display_board_st.darkBrightness)
         {
-            if (nvs_set_u8(h, "dark_bg", targetBrightness) != ESP_OK)
+            if (nvs_set_u8(h, vx::nvs::disp::BL_DARK_PCT, targetBrightness) != ESP_OK)
                 ESP_LOGE(__func__, "Could not set dark mode brightness in NVS");
             else
             {
@@ -90,7 +90,7 @@ extern "C" void action_save_brightness(lv_event_t *e)
         }
         else if (target == objects.light_slider && targetBrightness != display_board_st.lightBrightness)
         {
-            if (nvs_set_u8(h, "light_bg", targetBrightness) != ESP_OK)
+            if (nvs_set_u8(h, vx::nvs::disp::BL_LIGHT_PCT, targetBrightness) != ESP_OK)
                 ESP_LOGE(__func__, "Could not set light mode brightness in NVS");
             else
             {
@@ -124,11 +124,11 @@ extern "C" void action_mode_lock_switch_toggled(lv_event_t *e)
 {
     display_board_st.modeLocked = lv_obj_has_state(objects.mode_lock_switch, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "th_locked", (uint8_t)(display_board_st.modeLocked)) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::THEME_LOCKED, (uint8_t)(display_board_st.modeLocked)) != ESP_OK)
             ESP_LOGE(__func__, "Could not set theme lock in NVS");
         else
         {
@@ -158,11 +158,11 @@ extern "C" void action_mode_switch_toggled(lv_event_t *e)
         lvgl_port_unlock();
     }
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "light_th", (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t)(display_board_st.lightMode)) != ESP_OK)
             ESP_LOGE(__func__, "Could not set theme mode in NVS");
         nvs_commit(h);
         nvs_close(h);
@@ -175,11 +175,11 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
 {
     display_board_st.mph_selected = lv_obj_has_state(objects.mph_on, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "mph_on", (uint8_t)(display_board_st.mph_selected)) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::UNIT_MPH, (uint8_t)(display_board_st.mph_selected)) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save mph selector status");
         nvs_commit(h);
         nvs_close(h);
@@ -220,13 +220,13 @@ extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
 {
     display_board_st.rpm_alarm_override = lv_obj_has_state(objects.override_alarm_sw, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "rpm_al_overr", (uint8_t)display_board_st.rpm_alarm_override) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::ALARM_OVR, (uint8_t)display_board_st.rpm_alarm_override) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save rpm alarm override switch status");
-        if (nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::ALARM_RPM, &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM alarm threshold from NVS");
         nvs_commit(h);
         nvs_close(h);
@@ -251,11 +251,11 @@ extern "C" void action_blink_rpm_alarm_toggled(lv_event_t *e)
 {
     display_board_st.rpm_alarm_blink = lv_obj_has_state(objects.blink_alarm_sw, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "rpm_al_blnk", (uint8_t)display_board_st.rpm_alarm_blink) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::ALARM_BLINK, (uint8_t)display_board_st.rpm_alarm_blink) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save rpm alarm blink switch status");
         nvs_commit(h);
         nvs_close(h);
@@ -336,15 +336,15 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
     lv_obj_t *target = lv_event_get_target_obj(e);
 
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
         if (target == objects.save_rpm_alarm_btn)
         {
             display_board_st.rpm_alarm_threshold = lv_spinbox_get_value(objects.rpm_alarm_spinbox);
 
-            if (nvs_set_u32(h, "rpm_al_thr", display_board_st.rpm_alarm_threshold) != ESP_OK)
+            if (nvs_set_u32(h, vx::nvs::disp::ALARM_RPM, display_board_st.rpm_alarm_threshold) != ESP_OK)
                 ESP_LOGE(__func__, "Cannot save rpm alarm override threshold");
         }
         if (target == objects.save_shift_ind_btn)
@@ -352,9 +352,9 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
             display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
             display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
 
-            if (nvs_set_u32(h, "shft_mid", display_board_st.shift_mid_threshold) != ESP_OK)
+            if (nvs_set_u32(h, vx::nvs::disp::SHIFT_MID_RPM, display_board_st.shift_mid_threshold) != ESP_OK)
                 ESP_LOGE(__func__, "Cannot save shift light mid threshold");
-            if (nvs_set_u32(h, "shft_top", display_board_st.shift_top_threshold) != ESP_OK)
+            if (nvs_set_u32(h, vx::nvs::disp::SHIFT_TOP_RPM, display_board_st.shift_top_threshold) != ESP_OK)
                 ESP_LOGE(__func__, "Cannot save shift light top threshold");
         }
         nvs_commit(h);
@@ -368,16 +368,16 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
 {
     display_board_st.use_shift_indicator = lv_obj_has_state(objects.shift_ind_sw, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "shft_ind", (uint8_t)display_board_st.use_shift_indicator) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::SHIFT_EN, (uint8_t)display_board_st.use_shift_indicator) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save shift indicator status");
         // Following two gets are not really needed
-        if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::SHIFT_MID_RPM, &(display_board_st.shift_mid_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
-        if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::SHIFT_TOP_RPM, &(display_board_st.shift_top_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift top threshold from NVS");
         nvs_commit(h);
         nvs_close(h);
@@ -393,11 +393,11 @@ extern "C" void action_decimation_update(lv_event_t *e)
     else
         display_board_st.rpm_decimation = 10;
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u32(h, "rpm_dec", display_board_st.rpm_decimation) != ESP_OK)
+        if (nvs_set_u32(h, vx::nvs::disp::RPM_DECIM, display_board_st.rpm_decimation) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save RPM decimator status");
 
         nvs_commit(h);
@@ -410,7 +410,7 @@ extern "C" void action_decimation_update(lv_event_t *e)
 /**
  * @brief Enables or disables gear estimator display instead of RPM on the gauge.
  *
- * Saves the updated boolean toggle into NVS key "gear_on" under the "storage" namespace
+ * Saves the updated boolean toggle into NVS key vx::nvs::disp::GEAR_SHOW under the vx_disp namespace
  * and invalidates p_gearPosition to force an immediate UI redraw.
  *
  * @param[in] e Pointer to LVGL event structure (LV_EVENT_VALUE_CHANGED).
@@ -422,11 +422,11 @@ extern "C" void action_enable_gears(lv_event_t *e)
 {
     display_board_st.showGearPosition = lv_obj_has_state(objects.gear_on, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "gear_on", display_board_st.showGearPosition) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::GEAR_SHOW, display_board_st.showGearPosition) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save gear display status");
 
         nvs_commit(h);
@@ -441,11 +441,11 @@ extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
 {
     display_board_st.overTemp_buzz = lv_obj_has_state(objects.buzz_overtemp_sw, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "overt_bzz", (uint8_t)display_board_st.overTemp_buzz) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::HOT_BUZZ_EN, (uint8_t)display_board_st.overTemp_buzz) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save overtemp buzzer status");
         nvs_commit(h);
         nvs_close(h);
@@ -545,69 +545,63 @@ extern "C" void app_main()
         nvs_flash_erase();
         nvs_flash_init();
     }
-    nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+    vx::nvs::migrateLegacyKeys();
+    int8_t current_part = -1;
+    if (strcmp("ota_0", runningPart->label) == 0)
     {
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+        ESP_LOGI(__func__, "Running partition is ota_0");
+        current_part = 0;
+    }
+    else if (strcmp("ota_1", runningPart->label) == 0)
+    {
+        ESP_LOGI(__func__, "Running partition is ota_1");
+        current_part = 1;
+    }
+    else
+        ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
+    if (vx::nvs::recordBootSlot(current_part) != ESP_OK)
+        ESP_LOGE(__func__, "Could not record the boot slot in NVS");
+
+    nvs_handle_t h;
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+    {
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
         display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
         attemptRollBack();
     }
     else
     {
-        int8_t current_part = -1;
-        if (strcmp("ota_0", runningPart->label) == 0)
-        {
-            ESP_LOGI(__func__, "Running partition is ota_0");
-            current_part = 0;
-        }
-        else if (strcmp("ota_1", runningPart->label) == 0)
-        {
-            ESP_LOGI(__func__, "Running partition is ota_1");
-            current_part = 1;
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
-            current_part = -1;
-        }
-
-        int8_t saved_part = -2;
-        if (nvs_get_i8(h, "lastPart", &saved_part) != ESP_OK || saved_part != current_part)
-        {
-            nvs_set_i8(h, "lastPart", current_part);
-        }
-
-        if (nvs_get_u8(h, "mph_on", (uint8_t *)&(display_board_st.mph_selected)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::UNIT_MPH, (uint8_t *)&(display_board_st.mph_selected)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve MPH status from NVS");
-        if (nvs_get_u8(h, "gear_on", (uint8_t *)&(display_board_st.showGearPosition)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::GEAR_SHOW, (uint8_t *)&(display_board_st.showGearPosition)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve gear estimator display state from NVS");
 
-        if (nvs_get_u8(h, "rpm_al_overr", (uint8_t *)&(display_board_st.rpm_alarm_override)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::ALARM_OVR, (uint8_t *)&(display_board_st.rpm_alarm_override)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM alarm override.");
-        if (nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::ALARM_RPM, &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the RPM alarm threshold value.");
-        if (nvs_get_u8(h, "rpm_al_blnk", (uint8_t *)&(display_board_st.rpm_alarm_blink)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::ALARM_BLINK, (uint8_t *)&(display_board_st.rpm_alarm_blink)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the RPM alarm blinker status from NVS");
-        if (nvs_get_u8(h, "shft_ind", (uint8_t *)&(display_board_st.use_shift_indicator)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::SHIFT_EN, (uint8_t *)&(display_board_st.use_shift_indicator)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the shift indicator status from NVS");
-        if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::SHIFT_MID_RPM, &(display_board_st.shift_mid_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
-        if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::SHIFT_TOP_RPM, &(display_board_st.shift_top_threshold)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift top threshold from NVS");
-        if (nvs_get_u32(h, "rpm_dec", &(display_board_st.rpm_decimation)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::RPM_DECIM, &(display_board_st.rpm_decimation)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM decimation factor from NVS");
 
-        if (nvs_get_u8(h, "overt_bzz", (uint8_t *)&(display_board_st.overTemp_buzz)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::HOT_BUZZ_EN, (uint8_t *)&(display_board_st.overTemp_buzz)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve overtemp buzzer status from NVS");
 
-        if (nvs_get_u8(h, "dark_bg", &(display_board_st.darkBrightness)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::BL_DARK_PCT, &(display_board_st.darkBrightness)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the dark mode brightness value.");
-        if (nvs_get_u8(h, "light_bg", &(display_board_st.lightBrightness)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::BL_LIGHT_PCT, &(display_board_st.lightBrightness)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the light mode brightness value.");
-        if (nvs_get_u8(h, "th_locked", (uint8_t *)&(display_board_st.modeLocked)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::THEME_LOCKED, (uint8_t *)&(display_board_st.modeLocked)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the mode lock indicator.");
         if (display_board_st.modeLocked)
-            if (nvs_get_u8(h, "light_th", (uint8_t *)&(display_board_st.lightMode)) != ESP_OK)
+            if (nvs_get_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t *)&(display_board_st.lightMode)) != ESP_OK)
                 ESP_LOGW(__func__, "Could not retrieve light mode status.");
         nvs_commit(h);
         nvs_close(h);

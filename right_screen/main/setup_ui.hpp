@@ -43,10 +43,10 @@ inline void setup_ui()
         display_board_st.shift_mid_threshold = 5500;
         display_board_st.shift_top_threshold = 6500;
         nvs_handle_t h;
-        if (nvs_open("storage", NVS_READWRITE, &h) == ESP_OK)
+        if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) == ESP_OK)
         {
-            nvs_set_u32(h, "shft_mid", display_board_st.shift_mid_threshold);
-            nvs_set_u32(h, "shft_top", display_board_st.shift_top_threshold);
+            nvs_set_u32(h, vx::nvs::disp::SHIFT_MID_RPM, display_board_st.shift_mid_threshold);
+            nvs_set_u32(h, vx::nvs::disp::SHIFT_TOP_RPM, display_board_st.shift_top_threshold);
             nvs_commit(h);
             nvs_close(h);
         }
