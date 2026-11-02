@@ -1,6 +1,6 @@
 # ECE R39 Speed Compliance Mode (Plan)
 
-Status: plan only, nothing implemented. Tracks issue #133.
+Status: plan only, nothing implemented. Decisions agreed (see [Decisions](#decisions)). Tracks issue #133.
 
 ## Objective
 
@@ -33,7 +33,7 @@ For `V1 = A * V2 + B` this holds at every speed when:
 - `A >= 1` and `B >= 0` (never under-read), and
 - `A <= 1.10` and `B <= 4 km/h` (never over-read beyond the allowance).
 
-So the compliant envelope is **A in [1.00, 1.10]** (0 % to +10 %) and **B in [0, 4] km/h**. These become the input limits in both apps (see [Decision points](#decision-points) for a wider "expert" range).
+So the compliant envelope is **A in [1.00, 1.10]** (0 % to +10 %) and **B in [0, 4] km/h**. These are the hard input limits in both apps.
 
 ## Current state on `main`
 
@@ -61,23 +61,23 @@ Why this shape:
 - **Exactly 0 at standstill.** `y(0) = 0`, so a stopped car reads 0 km/h, and the 0 Hz timeout path stays 0.
 - **Still compliant inside the band.** With `A >= 1`, `B >= 0` and `0 <= w <= 1`, `y - v = (A - 1) v + B w` is never negative and never larger than `(A - 1) v + B`, which already sits inside the R39 envelope. The blend never makes the reading less legal.
 - **Continuous and monotonic.** `w` is non-decreasing, so `y` only rises with `v`. No step when crossing `V_BLEND`, and the slope matches `A` at both ends of the band (C1), so a needle does not jerk.
-- **Does not amplify low-speed noise.** Near 0 the slope is `A`, not `A + B / V_BLEND` as a linear ramp would give. Peak slope in the middle of the band is `A + 1.5 B / V_BLEND` (1.19 with the defaults).
+- **Does not amplify low-speed noise.** Near 0 the slope is `A`, not `A + B / V_BLEND` as a linear ramp would give. Peak slope in the middle of the band is `A + 1.5 B / V_BLEND` (1.34 with the defaults).
 - **Far from the test points.** R39 checks at 40, 80 and 120 km/h (or 80 % of top speed). Above `V_BLEND` the output is exactly `A * v + B`.
 
-`V_BLEND` default: **10 km/h**. It is a Kconfig option (`CONFIG_R39_BLEND_END_KPH`, range 1 to 30) rather than an NVS key, to keep the factory UI to the three values asked for.
+`V_BLEND`: **10 km/h**, a Kconfig option (`CONFIG_R39_BLEND_END_KPH`, default 10, range 1 to 30). There is no NVS key for it.
 
-Example with `A = 1.04` (+4 %), `B = 1.0` km/h, `V_BLEND = 10` km/h:
+Example with the defaults `A = 1.04` (+4 %), `B = 2.0` km/h, `V_BLEND = 10` km/h:
 
 | True speed (km/h) | Plain `A v + B` | Blended output | Over-read | R39 allowance |
 | ---: | ---: | ---: | ---: | ---: |
-| 0 | 1.00 | **0.00** | 0.00 | 4.0 |
-| 0.25 | 1.26 | 0.26 | 0.01 | 4.0 |
-| 2 | 3.08 | 2.18 | 0.18 | 4.2 |
-| 5 | 6.20 | 5.70 | 0.70 | 4.5 |
-| 10 | 11.40 | 11.40 | 1.40 | 5.0 |
-| 40 | 42.60 | 42.60 | 2.60 | 8.0 |
-| 80 | 84.20 | 84.20 | 4.20 | 12.0 |
-| 120 | 125.80 | 125.80 | 5.80 | 16.0 |
+| 0 | 2.00 | **0.00** | 0.00 | 4.0 |
+| 0.25 | 2.26 | 0.26 | 0.01 | 4.0 |
+| 2 | 4.08 | 2.29 | 0.29 | 4.2 |
+| 5 | 7.20 | 6.20 | 1.20 | 4.5 |
+| 10 | 12.40 | 12.40 | 2.40 | 5.0 |
+| 40 | 43.60 | 43.60 | 3.60 | 8.0 |
+| 80 | 85.20 | 85.20 | 5.20 | 12.0 |
+| 120 | 126.80 | 126.80 | 6.80 | 16.0 |
 
 A simpler alternative is a linear ramp `w = s`, which equals `y = v (A + B / V_BLEND)` below the band. It is also compliant and continuous but has a slope break at `V_BLEND` and the higher slope right at 0. Smoothstep costs three multiplications more per 20 ms frame; it is the recommendation.
 
@@ -89,68 +89,79 @@ Default `nvs` partition, namespace `storage`, next to `fuel_full_r` and friends.
 | :--- | :--- | :--- | :--- | :--- |
 | `r39_en` | u8 | Compliance mode on (1) or off (0) | 0..1 | 0 (off) |
 | `r39_a_bp` | u16 | Percentage added by `A`, in basis points (0.01 %). `A = 1 + r39_a_bp / 10000` | 0..1000 (0 % to 10.00 %) | 400 (+4 %) |
-| `r39_b_ckph` | i16 | `B` in 0.01 km/h | 0..400 (0 to 4.00 km/h) | 100 (1.00 km/h) |
+| `r39_b_ckph` | i16 | `B` in 0.01 km/h | 0..400 (0 to 4.00 km/h) | 200 (2.00 km/h) |
 
-- `r39_b_ckph` is signed so a wider range can be opened later without a new key (see decision points); today negatives are rejected.
+- `r39_b_ckph` is signed so a wider range could be opened later without a new key; negatives are rejected.
 - Off by default, so updating the ITF firmware does not change what the displays show until the mode is switched on.
 
-## Shared definitions: `common/r39_compliance.h`
+## Shared definitions: `common/r39_compliance.hpp`
 
-One header-only file, included by both apps, so defaults, limits, key names and the transform cannot drift:
+One header-only C++ file, included by both apps (both `main` components are C++ already), so defaults, limits, key names and the transform cannot drift. Everything sits in `namespace r39`:
 
-- `#define`s for the three NVS keys, their defaults and limits, and `R39_SPEED_MAX_KPH` (400).
-- `typedef struct { bool enabled; float a; float b_kph; float blend_end_kph; } r39_params_t;`
-- `static inline r39_params_t r39_params_from_raw(uint8_t en, uint16_t a_bp, int16_t b_ckph, float blend_end_kph)` (clamps to the limits).
-- `static inline bool r39_raw_in_range(uint16_t a_bp, int16_t b_ckph)`.
-- `static inline float r39_apply(const r39_params_t *p, float v_kph)`: the formula above; returns `v_kph` (clamped to 0..400 and finite) when `!p->enabled`.
+- `constexpr` NVS key names (`KEY_EN`, `KEY_A_BP`, `KEY_B_CKPH`), defaults (`DEFAULT_EN = false`, `DEFAULT_A_BP = 400`, `DEFAULT_B_CKPH = 200`), limits (`A_BP_MAX = 1000`, `B_CKPH_MAX = 400`) and `SPEED_MAX_KPH = 400.0f`.
+- `struct Params { bool enabled; float a; float b_kph; float blend_end_kph; float apply(float v_kph) const; };` with `apply()` implementing the formula above (`std::clamp`, `std::isfinite`); when `!enabled` it returns the raw speed, clamped to 0..400 and finite.
+- `struct RawParams { uint8_t en; uint16_t a_bp; int16_t b_ckph; };` with `constexpr bool in_range() const` and `Params to_params(float blend_end_kph) const`.
+- `constexpr RawParams defaults()`.
 
-Pure C, no ESP-IDF includes, so it can be covered by a host test later (see [Verification](#verification)).
+No ESP-IDF include, so it compiles with the host `g++` for a unit test (see [Verification](#verification)).
 
 ## ITF app changes (`interface_board`)
 
-1. **Globals** in [`global_vars.hpp`](../interface_board/main/global_vars.hpp): `r39_params_t r39_params` initialised from the defaults (mode off). Written once in `app_main()` before `twai_ops_init()` starts the packaging tasks, read-only afterwards, so no lock is needed.
+1. **Globals** in [`global_vars.hpp`](../interface_board/main/global_vars.hpp): `r39::Params r39_params` initialised from `r39::defaults()` (mode off). Written once in `app_main()` before `twai_ops_init()` starts the packaging tasks, read-only afterwards, so no lock is needed.
 2. **NVS self-init** in `app_main()`, inside the existing `storage` block after `overtemp_th`, same pattern as the other keys:
-   - `nvs_get_u8("r39_en")`, `nvs_get_u16("r39_a_bp")`, `nvs_get_i16("r39_b_ckph")`.
+   - `nvs_get_u8(r39::KEY_EN)`, `nvs_get_u16(r39::KEY_A_BP)`, `nvs_get_i16(r39::KEY_B_CKPH)` into an `r39::RawParams`.
    - `ESP_ERR_NVS_NOT_FOUND`: log a warning, write the default, commit. A failed write calls `attemptRollBack()` like the other keys.
-   - Value found but out of range (`r39_raw_in_range()` false, or `r39_en > 1`): log a warning, rewrite the default, commit. This keeps a hand-edited or future-format value from producing a non-compliant speed.
-   - Build `r39_params` with `r39_params_from_raw(..., CONFIG_R39_BLEND_END_KPH)` and log `ECE R39 mode: ON, A = 1.0400 (+4.00 %), B = 1.00 km/h, blend to 10 km/h` (or `OFF`).
+   - Value found but out of range (`RawParams::in_range()` false, which includes `en > 1`): log a warning, rewrite the default, commit. This keeps a hand-edited or future-format value from producing a non-compliant speed.
+   - Build `r39_params` with `raw.to_params(CONFIG_R39_BLEND_END_KPH)` and log `ECE R39 mode: ON, A = 1.0400 (+4.00 %), B = 2.00 km/h, blend to 10 km/h` (or `OFF`).
    - If the `storage` namespace cannot be opened at all, `r39_params` keeps its compiled defaults (mode off) and the existing degraded/rollback path applies.
-3. **Packaging callback** `itf_fast_metrics_PKG()` in [`twai_ops.hpp`](../interface_board/main/twai_ops.hpp): keep `speed` as the raw value, add `float speed_out = r39_apply(&r39_params, speed);` and encode `speed_out` into `itf_speed_kph`. Extend the existing `ESP_LOGD` line with `speed_out`. Nothing else in the task changes; the gear estimator, the odometer task and every `dbg_*_PKG()` task keep the raw values.
+3. **Packaging callback** `itf_fast_metrics_PKG()` in [`twai_ops.hpp`](../interface_board/main/twai_ops.hpp): keep `speed` as the raw value, add `float speed_out = r39_params.apply(speed);` and encode `speed_out` into `itf_speed_kph`. Extend the existing `ESP_LOGD` line with `speed_out`. Nothing else in the task changes; the gear estimator, the odometer task and every `dbg_*_PKG()` task keep the raw values.
 4. **Kconfig** in [`main/Kconfig.projbuild`](../interface_board/main/Kconfig.projbuild): `CONFIG_R39_BLEND_END_KPH` (int, default 10, range 1 30) in the speed/MCPWM menu.
-5. **Not touched:** `sendFastMetrics()` and `sendAnimation()` (boot sweep), the binocan DBC, the CAN IDs and cycle times.
+5. **Not touched:** the odometer and trip (`itf_odometer_PKG()`, raw pulse count), `sendFastMetrics()` and `sendAnimation()` (boot sweep), the binocan DBC, the CAN IDs and cycle times.
 
 ## ITF factory app changes
 
 The pattern follows the gear estimator: a separate header with cJSON handlers, registered from `start_webserver()`, and a sub-tab under Setup & Calibration.
 
-1. **REST** in a new [`main/r39_web.hpp`](../factory%20apps/ITF%20factory%20app/main) with `r39_web_register(server)`:
+1. **REST** in a new [`main/r39_web.hpp`](../factory%20apps/ITF%20factory%20app/main) (C++, like `gear_params_web.hpp`) with `r39_web_register(server)`:
 
    | Method | URI | Body / reply |
    | :--- | :--- | :--- |
    | GET | `/api/r39` | `{"source":"nvs"\|"default","enabled":bool,"a_pct":4.0,"b_kph":1.0,"blend_end_kph":10,"limits":{...},"preview":[{"v":0,"out":0.0},...]}` |
-   | POST | `/api/r39` | `{"enabled":bool,"a_pct":number,"b_kph":number}`; any field may be omitted (keeps the stored value). Range-checked with `r39_raw_in_range()`, stored as `r39_en` / `r39_a_bp` / `r39_b_ckph`, committed. 200, 400 (out of range, message names the field) or 500 (NVS). Replies with the same body as GET. |
+   | POST | `/api/r39` | `{"enabled":bool,"a_pct":number,"b_kph":number}`; any field may be omitted (keeps the stored value). Range-checked with `RawParams::in_range()`, stored as `r39_en` / `r39_a_bp` / `r39_b_ckph`, committed. 200, 400 (out of range, message names the field) or 500 (NVS). Replies with the same body as GET. |
 
-   - `a_pct` is the percentage the user types: stored as `lround(a_pct * 100)` basis points. Negative values are refused with 400, as asked ("always positive or null").
-   - `b_kph` is stored as `lround(b_kph * 100)`.
+   - `a_pct` is the percentage the user types: stored as `lround(a_pct * 100)` basis points. The server refuses (400) a non-number, a negative value, a value above 10 and a value that is not a whole number of basis points (more than 2 decimals, checked as `fabs(a_pct * 100 - lround(a_pct * 100)) > 1e-6`).
+   - `b_kph` is stored as `lround(b_kph * 100)` with the same checks against 0..4 km/h.
+   - The server checks stand on their own; the page checks below only spare the user a round trip.
    - GET does not write: when a key is missing it reports the default with `"source":"default"`, and the ITF app writes it on its next boot. This keeps the factory app read-only until the user saves.
-   - `preview` is computed on the device with `r39_apply()` at 0, 2, 5, 10, 20, 40, 80, 120 and 160 km/h, so the page shows exactly what the ITF will send with no JavaScript copy of the formula. `blend_end_kph` is the factory app's own `CONFIG_R39_BLEND_END_KPH` (same Kconfig symbol, mirrored in the factory app's `Kconfig.projbuild`, default 10).
+   - `preview` is computed on the device with `Params::apply()` at 0, 2, 5, 10, 20, 40, 80, 120 and 160 km/h, so the page shows exactly what the ITF will send with no JavaScript copy of the formula. `blend_end_kph` is the factory app's own `CONFIG_R39_BLEND_END_KPH` (same Kconfig symbol, mirrored in the factory app's `Kconfig.projbuild`, default 10).
    - `config.max_uri_handlers` is 28 with 22 in use today; two more fit.
-2. **UI** in [`main/web/index.html`](../factory%20apps/ITF%20factory%20app/main/web/index.html): a third button in `.subtab-nav`, "Speed (ECE R39)", and a `subtab-r39` panel:
+2. **UI** in [`main/web/index.html`](../factory%20apps/ITF%20factory%20app/main/web/index.html): a third button in `.subtab-nav`, "Speed (ECE R39)", and a `subtab-r39` panel built from the classes already on the page (`.card`, `.card-grid`, the `.gear-actions` action bar renamed to a shared `.subtab-actions`, `<mark>` for the source badge, `<small>` for help text), so it matches the General and Gear Estimator sub-tabs:
 
    ```
    ( General ) ( Gear Estimator ) ( Speed (ECE R39) )
-     Source: NVS | defaults (badge)
-     [x] Compliance mode enabled
-     Speed correction   [ 4.00 ] %     → A = 1.0400        (0 to 10 %)
-     Offset B           [ 1.00 ] km/h                       (0 to 4 km/h)
-     Preview: true km/h | sent km/h | over-read | R39 allowance (from GET reply)
-     [Save to NVS] [Reload] [Load defaults]
-     Note: takes effect on the next ITF app boot.
+     Source: [NVS | defaults]   [Save to NVS] [Reload] [Load defaults]
+     ┌ Settings ─────────────────────────┐ ┌ Preview ──────────────────────────────┐
+     │ [x] Compliance mode enabled       │ │ true km/h | sent km/h | over | allow  │
+     │ Speed correction [ 4.00 ] %       │ │ 0 / 0.00 / 0.00 / 4.0                 │
+     │   A = 1.0400  (0 to 10 %)         │ │ ...                                   │
+     │ Offset B         [ 2.00 ] km/h    │ │ (from the GET/POST reply)             │
+     │   (0 to 4 km/h)                   │ └───────────────────────────────────────┘
+     │ <inline error line>               │
+     └───────────────────────────────────┘
+     Takes effect on the next ITF app boot. "Load defaults" only fills the form.
    ```
 
-   - The percentage input has `min="0" max="10" step="0.01"`, B `min="0" max="4" step="0.01"`; A is shown read-only next to it.
-   - "Load defaults" only fills the form; Save posts and re-renders from the reply (fresh preview).
-3. **Live readout** (optional, small): the WebSocket `mcpwm` object gains `speed_r39_kph` computed with `r39_apply()` from the stored params, shown under the existing km/h readout in IO & Bus Debug. Lets the bench check the curve with the emulator console without a display.
+   **Input guards** (both fields; the page refuses to send anything the server would refuse):
+   - `<input type="number" inputmode="decimal" min="0" max="10" step="0.01" required>` for the percentage, `min="0" max="4" step="0.01" required` for B, so the browser spinner and native validation already stay in range.
+   - A `validateR39Form()` run on every `input` event and before Save. It parses with `Number()` (not `parseFloat`, so `"4abc"` is rejected), and rejects empty, `NaN`, `±Infinity`, negative values (including `-0` typed as `-`), values above the maximum, and values with more than 2 decimals (`Math.abs(v * 100 - Math.round(v * 100)) > 1e-6`). Out of range is never silently clamped; the user sees why.
+   - Each error goes to the field with `setCustomValidity()` (red outline from the stylesheet) and to the inline error line under the inputs; Save is disabled while any field is invalid.
+   - The "A = 1.0400" hint and the preview are only updated from valid values; an invalid field shows "A = -".
+   - The values sent are the integers the device will store: the page computes `Math.round(v * 100)` and checks it is in 0..1000 (basis points) and 0..400 (0.01 km/h) before building the JSON, then sends `a_pct` / `b_kph` as those integers divided by 100, so the page and the server agree on the stored value.
+   - A server 400 is shown in the inline error line (same text as the reply), like the gear editor shows its `alert()`, and the form keeps the user's values.
+3. **Live readout**: the WebSocket `mcpwm` object gains `speed_r39_kph`, computed with `Params::apply()` from the stored params (reloaded after each successful POST /api/r39, so it follows edits without a reboot), and `r39_en`. In IO & Bus Debug, the Speed tile of the "MCPWM Capture Signals" grid gets a third line under `val-speed-phys`, with the same `<small style="font-weight:600; color:var(--text);">` markup:
+   - mode on: `sent 43.6 km/h (R39)`;
+   - mode off: `sent = raw` in the muted colour.
+   The grid stays at three columns (`repeat(3, 1fr)`) and grid items stretch to the tallest tile, so the Coolant and RPM tiles keep the same height and the row stays aligned on a phone. No new tile, no new colour.
 4. **Docs**: `TOO.MD` endpoint list, `docs/REQUIREMENTS.md` (new `REQ-ITF-008` and an addition to `REQ-FAC-002`), README feature list.
 
 ## Display apps
@@ -180,7 +191,7 @@ sequenceDiagram
     Note over ITF: next boot
     ITF->>NVS: read keys (missing / out of range → write defaults)
     loop every 20 ms, itf_fast_metrics_PKG()
-        ITF->>ITF: v = raw speed, out = r39_apply(v)
+        ITF->>ITF: v = raw speed, out = r39_params.apply(v)
         ITF->>CAN: ITF_fast_metrics (ITF_speed_kph = out)
         ITF->>CAN: DBG_ITF_speed (raw, unchanged)
     end
@@ -190,7 +201,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    P1["Phase 1: common/r39_compliance.h<br/>+ host test of r39_apply()"] --> P2["Phase 2: ITF app<br/>NVS self-init + packaging callback"]
+    P1["Phase 1: common/r39_compliance.hpp<br/>+ host test of Params::apply()"] --> P2["Phase 2: ITF app<br/>NVS self-init + packaging callback"]
     P2 --> P3["Phase 3: factory app<br/>/api/r39 + sub-tab"]
     P3 --> M[main]
 ```
@@ -199,17 +210,22 @@ One branch (`ece-r39-compliance-mode`), one PR, one commit per phase.
 
 ## Verification
 
-- **Formula** (host test, plain C compiled with the host compiler, or the Linux target once host tests exist): `r39_apply()` returns 0 at 0 and for NaN/negative input; returns the raw speed when disabled; is monotonic over 0..400 km/h in 0.01 steps; equals `A v + B` above `V_BLEND`; satisfies `0 <= out - v <= 0.1 v + 4` for every `A` in 0..10 % and `B` in 0..4 km/h on a grid; never exceeds 400.
+- **Formula** (host test, a small C++ file compiled with the host `g++ -std=c++17`, or the Linux target once host tests exist): `Params::apply()` returns 0 at 0 and for NaN/negative input; returns the raw speed when disabled; is monotonic over 0..400 km/h in 0.01 steps; equals `A v + B` above `V_BLEND`; satisfies `0 <= out - v <= 0.1 v + 4` for every `A` in 0..10 % and `B` in 0..4 km/h on a grid; never exceeds 400.
 - **Builds**: `idf.py build` in `interface_board` and `factory apps/ITF factory app` (ESP-IDF 5.5.5), check the factory image still fits (26 % free today).
 - **Self-init** (bench): wipe NVS from the factory app, boot ITF, check the boot log reports the three keys initialised and `ECE R39 mode: OFF`; then write `r39_a_bp = 5000` by hand, reboot, check it is reset to 400.
-- **Factory app**: POST `a_pct = -1`, `a_pct = 12`, `b_kph = 5` → 400 and nothing stored; POST a valid set → badge "NVS", preview updated.
-- **CAN** (bench, emulator console driving speed): mode off → `ITF_speed_kph` equals raw speed. Mode on, +4 %, 1 km/h → 0 at standstill, about 5.7 at 5 km/h, 42.6 at 40 km/h; `DBG_ITF_speed` frequency unchanged; gear estimate and odometer unchanged.
+- **Factory app**: POST `a_pct = -1`, `a_pct = 12`, `a_pct = 4.005`, `b_kph = 5`, `b_kph = "x"` → 400 and nothing stored; POST a valid set → badge "NVS", preview updated.
+- **Factory page guards**: type `-1`, `11`, `4.005`, `abc`, an empty field and `4e1` in each input; Save stays disabled with the reason shown, nothing is sent (check the browser network tab). Check the new sub-tab and the Speed tile on a desktop width and on a phone width next to the other tabs.
+- **CAN** (bench, emulator console driving speed): mode off → `ITF_speed_kph` equals raw speed. Mode on, +4 %, 2 km/h → 0 at standstill, about 6.2 at 5 km/h, 43.6 at 40 km/h; the IO & Bus Debug readout shows the same values; `DBG_ITF_speed` frequency unchanged; gear estimate, odometer and trip unchanged.
 - **Displays**: unchanged binaries show the corrected speed.
 
-## Decision points
+## Decisions
 
-1. **B range.** Proposed 0 to 4 km/h, the only range that is compliant at every speed. Allowing negative B (sensor offset trimming) would let the car under-read at low speed, which R39 forbids. Keep 0..4?
-2. **A range.** Proposed 0 to 10 %. Above 10 % the reading exceeds the allowance at high speed. Keep the hard cap, or allow up to e.g. 15 % with a "not R39 compliant" warning in the UI?
-3. **Defaults.** Proposed off, +4 %, 1.0 km/h.
-4. **Blend band.** Proposed smoothstep up to 10 km/h, set in Kconfig. Make it a fourth NVS key instead?
-5. **Odometer.** Left on true distance. R39 does not ask to inflate it, and the odometer is legal evidence of mileage; confirm it should stay raw.
+Agreed on 2026-11-02:
+
+1. **B range:** 0 to 4 km/h. Negative B is refused.
+2. **A range:** 0 to 10 %, hard cap in both apps.
+3. **Defaults:** mode off, +4 % (`r39_a_bp = 400`), 2 km/h (`r39_b_ckph = 200`).
+4. **Blend band:** smoothstep up to 10 km/h, set by `CONFIG_R39_BLEND_END_KPH`. No fourth NVS key.
+5. **Odometer and trip:** stay on raw distance.
+6. **Language:** new shared code is C++ in `.hpp` headers (`common/r39_compliance.hpp`, `r39_web.hpp`), not C `.h`.
+7. **Live readout:** in, as a third line of the existing Speed tile.
