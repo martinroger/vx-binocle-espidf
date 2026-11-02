@@ -217,7 +217,7 @@ inline int updateLvglObjects(bool forceRefresh = false)
     }
 
 #endif
-    if (canRxTimedOut) // Turn all on if there is a CAN Timeout
+    if (CAN_RX_TimedOut) // Turn all on if there is a CAN Timeout
     {
         interlockOk = false;
         indicatorsOn = true;
@@ -314,10 +314,10 @@ inline int updateLvglObjects(bool forceRefresh = false)
         prevItfState = itfState;
         updatedElements++;
     }
-    if (canRxTimedOut != prevCanRxTimedOut || forceRefresh) // Same for CAN Timed out indicator
+    if (CAN_RX_TimedOut != prevCanRxTimedOut || forceRefresh) // Same for CAN Timed out indicator
     {
-        lv_obj_set_style_opa(objects.can_state, canRxTimedOut ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
-        prevCanRxTimedOut = canRxTimedOut;
+        lv_obj_set_style_opa(objects.can_state, CAN_RX_TimedOut ? LV_OPA_COVER : LV_OPA_TRANSP, LV_STATE_DEFAULT);
+        prevCanRxTimedOut = CAN_RX_TimedOut;
         updatedElements++;
     }
     if (prevOdometerKm != odometerKm || forceRefresh) // Odometer. Might need comparison at the uint level
