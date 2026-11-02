@@ -35,12 +35,27 @@ jobs:
         id: filter
         with:
           filters: |
-            emulator_board: 'emulator-console/**'
-            interface_board: 'interface_board/**'
-            left_screen: 'left_screen/**'
-            right_screen: 'right_screen/**'
+            # common/ holds headers and the display_hw component shared by the
+            # apps below, so a change there rebuilds every app that uses it.
+            # common/test only holds host tests and triggers nothing.
+            emulator_board:
+              - 'emulator-console/**'
+              - 'common/*'
+            interface_board:
+              - 'interface_board/**'
+              - 'common/*'
+            left_screen:
+              - 'left_screen/**'
+              - 'common/*'
+              - 'common/display_hw/**'
+            right_screen:
+              - 'right_screen/**'
+              - 'common/*'
+              - 'common/display_hw/**'
             itf_factory:
               - 'factory apps/ITF factory app/**'
+              - 'interface_board/main/**'
+              - 'common/*'
               - 'bennu/**'
             ldb_factory:
               - 'factory apps/left display factory app/**'
