@@ -23,8 +23,8 @@ bennu/
 ├── components/
 │   └── payload/
 │       ├── CMakeLists.txt      # Parameterized binary embedding (PAYLOAD_BIN_PATH / STORAGE_BIN_PATH)
-│       ├── payload.bin         # Default / fallback factory app binary
-│       └── storage.bin         # Default / fallback SPIFFS storage image
+│       ├── payload.bin         # Fallback factory app binary (gitignored, staged by CI or tools/build_deliveries.py)
+│       └── storage.bin         # Fallback SPIFFS storage image (gitignored, staged by CI or tools/build_deliveries.py)
 ├── main/
 │   ├── CMakeLists.txt          # Main component registration
 │   └── main.cpp                # Flash overwrite and boot handover logic

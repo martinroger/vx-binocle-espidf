@@ -70,10 +70,11 @@ Both apps must resolve the same `vx-gear-estimator` commit (see each `dependenci
 - **`POST /set_cal`** or **`POST /api/settings`**:
   - Accepts URL query parameters or JSON body payload:
     - `new_fuel_learn_en` / `fuel_learn_en`: `0`, `1`, `true`, `false`
-    - `new_fuel_full_r` / `fuel_full_r`: `150` to `350` ($\Omega$)
-    - `new_low_fuel_threshold` / `low_fuel_threshold` / `lo_fuel_thr`: `0` to `100` (%)
-    - `new_overtemp_threshold` / `overtemp_threshold` / `overtemp_th`: `0` to `250` (°C)
-  - **Response**: HTTP 200 on successful commit, HTTP 400 on invalid or malformed parameters.
+    - `new_fuel_full_r` / `fuel_full_r`: clamped to `150` to `350` ($\Omega$)
+    - `new_low_fuel_threshold` / `low_fuel_threshold` / `lo_fuel_thr`: clamped to `0` to `100` (%)
+    - `new_overtemp_threshold` / `overtemp_threshold` / `overtemp_th`: clamped to `0` to `250` (°C)
+  - Out-of-range numbers are not rejected: a negative value is made positive, then the value is clamped to the range above and stored.
+  - **Response**: HTTP 200 on successful commit, HTTP 400 when no known parameter is present.
 
 ### 3.2 Gear Estimator Parameters ([`gear_params_web.hpp`](main/gear_params_web.hpp))
 
@@ -171,6 +172,7 @@ sequenceDiagram
     },
     "mcpwm": {
       "coolant_hz": 45.2,
+      "coolant_duty": 33.5,
       "coolant_c": 88.5,
       "rpm_hz": 830.0,
       "rpm_val": 24900,

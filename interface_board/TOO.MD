@@ -28,8 +28,8 @@ graph TD
 ## 2. Signal Processing & Ingestion
 
 ### 2.1 Speed & RPM Pulse Processing
-- **Vehicle Speed**: Capture timer measures pulse period $\Delta t$. Speed in km/h is computed from pulses-per-km stored in NVS:
-  $$v = \frac{3600}{\text{pulses\_per\_km} \times \Delta t}$$
+- **Vehicle Speed**: The capture channel measures the speed pulse frequency $f$. Speed in km/h uses the fixed coefficient `COEFF_FREQ_TO_SPEED_KPH_M` from [`coefficients.h`](../common/coefficients.h) (no NVS key):
+  $$v = \frac{7651}{31285} \cdot f$$
 - **Engine RPM**: Ignition pulse period is converted to revolutions per minute based on cylinder pulses per crankshaft revolution.
 - **Pulse Accumulator**: Accumulated wheel pulses increment the high-resolution trip and odometer registers ([`odometer.c`](components/odometer/src/odometer.c)).
 - **MCPWM Processor Task**: A deterministic 25 ms periodic task ([`mcpwm_processor.hpp`](main/mcpwm_processor.hpp)) computes duty cycles and frequencies for coolant, RPM, and wheel speed capture channels.
@@ -72,7 +72,7 @@ sequenceDiagram
     participant HW as MCPWM Hardware ISR
     participant Task as MCPWM Processor Task (25ms)
     participant Bay as Bayesian Estimator Engine
-    participant CAN as TWAI Fast Metrics PKG (20ms)
+    participant CAN as TWAI Fast Metrics PKG (25ms)
 
     HW->>Task: Update edge timestamps (speed & RPM)
     Task->>Task: compute_freq_dut()
@@ -86,7 +86,7 @@ sequenceDiagram
         Bay->>Bay: Reset pending_time_ms = 0
     end
     CAN->>Bay: Read latched_gear
-    CAN->>CAN: Encode into ITF_values frame
+    CAN->>CAN: Encode into ITF_fast_metrics frame
     CAN->>HW: twai_transmit_msg(0x100)
 ```
 
@@ -94,15 +94,17 @@ sequenceDiagram
 
 ## 3. CAN Telemetry Dispatch
 
-The TWAI daemon broadcasts frames via zero-copy direct transmission according to standard schedules:
-- **`ITF_values` (20 ms)**: Real-time speed, RPM, and latched gear position (`itf_gear_position_st`).
-- **`ITF_status` (50 ms)**: Coolant temperature, fuel level, battery voltage, and discrete indicators.
-- **`ITF_odometer` (250 ms)**: Monotonic odometer and trip distance.
-- **`ITF_board_version` (1000 ms)**: App descriptor metadata and git commit SHA.
-- **`ITF_debug` (100 ms)**: Debug telemetry broadcast tasks (enabled conditionally via Kconfig):
-  - `DBG_ITF_speed` (`0x300`): Raw speed frequency and duty cycle.
-  - `DBG_ITF_RPM` (`0x301`): Raw RPM frequency and duty cycle.
-  - `DBG_ITF_coolant` (`0x302`): Coolant sensor PWM frequency and duty cycle.
-  - `DBG_ITF_ADC_raw` (`0x303`): Unfiltered supply rail voltages (3.3V $V_{dd}$ reference and 12V board rail).
-  - `DBG_ITF_pulse_counts` (`0x304`): Cumulative monotonic pulse counts for RPM and vehicle speed signals.
-  - `DBG_ITF_fuel` (`0x305`): Raw fuel sender voltage, unfiltered fuel percentage, active/learned $R_{full}$ baseline, and dynamic sender resistance ($\Omega$).
+The TWAI daemon broadcasts frames via zero-copy direct transmission. IDs and cycle times come from `binocan` (`BINOCAN_*_FRAME_ID`, `BINOCAN_*_CYCLE_TIME_MS`):
+- **`ITF_fast_metrics` (`0x100`, 25 ms)**: Real-time speed, RPM, and latched gear position (`itf_gear_position_st`).
+- **`ITF_active_hi_lo` (`0x101`, 200 ms)**: Discrete telltales and switch states, including the coolant over-temperature telltale.
+- **`ITF_slow_metrics` (`0x110`, 500 ms)**: Coolant temperature, fuel level and battery voltage.
+- **`ITF_odometer` (`0x111`, 250 ms)**: Monotonic odometer and trip distance.
+- **`ITF_board_st` (`0x120`, 200 ms)**: Board state machine, 5V rails, ADC and expander health, fuel sensing caliber, MCU temperature, and LDB/RDB alive flags.
+- **`ITF_board_version` (`0x130`, 1000 ms)**: App descriptor metadata and git commit SHA.
+- **Debug frames** (each enabled by its own Kconfig option):
+  - `DBG_ITF_speed` (`0x300`, 25 ms): Raw speed frequency and duty cycle.
+  - `DBG_ITF_RPM` (`0x301`, 25 ms): Raw RPM frequency and duty cycle.
+  - `DBG_ITF_coolant` (`0x302`, 100 ms): Coolant sensor PWM frequency and duty cycle.
+  - `DBG_ITF_ADC_raw` (`0x303`, 100 ms): Unfiltered supply rail voltages (3.3V $V_{dd}$ reference and 12V board rail).
+  - `DBG_ITF_pulse_counts` (`0x304`, 100 ms): Cumulative monotonic pulse counts for RPM and vehicle speed signals.
+  - `DBG_ITF_fuel` (`0x305`, 200 ms): Raw fuel sender voltage, unfiltered fuel percentage, active/learned $R_{full}$ baseline, and dynamic sender resistance ($\Omega$).

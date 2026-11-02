@@ -5,18 +5,37 @@
 ```mermaid
 graph TD
     A[Client Browser] -->|Wi-Fi SoftAP / HTTP| B(ESP-IDF HTTP Server)
-    B -->|REST & WebSockets| C(Display Diagnostics Engine)
-    C -->|RGB / Pattern Flush| D[LCD Display Panel]
-    B -->|OTA Binary Upload| E(esp_ota Storage Handler)
-    E -->|Write Flash| F[OTA App Partition]
+    B -->|GET /, /simple.min.css| S[SPIFFS storage partition]
+    B -->|GET /nvs/list, POST /nvs/wipe| N[NVS partitions]
+    B -->|POST /upload| E(esp_ota handler)
+    E -->|Write Flash| F[Next OTA App Partition]
+    B -->|POST /set_boot, /reboot| R(Boot partition select & restart)
+    T(twai_daemon) -->|TX recessive| CAN[CAN transceiver]
 ```
+
+The app has no display driver and no WebSocket endpoint. The LCD stays dark while it runs.
 
 ---
 
-## 2. Diagnostics & Test Sequencing
+## 2. HTTP Endpoints
 
-- **Pattern Generator**: Validates pixel response, color uniformity, and backplane contrast.
-- **NVS Brightness & Offset Settings**: Calibrates minimum/maximum backlight duty cycles and display orientation parameters.
-- **NVS Dynamic Inspection & Wipe**: Discovers all active NVS partitions/namespaces/keys via `GET /nvs/list` and offers full safe flash wipe via `POST /nvs/wipe`.
-- **TWAI / CAN Bus Protection**: Initializes `twai_daemon` with `initCAN(NULL)` on GPIO 19 (TX) and GPIO 20 (RX) upon startup, holding the transceiver TX line recessive (logic HIGH) to prevent bus grounding while in factory app mode.
-- **OTA Verification**: Verifies binary headers and checksums before marking OTA partitions as bootable.
+| Method | URI | Function |
+| :--- | :--- | :--- |
+| GET | `/`, `/simple.min.css` | Web page and stylesheet, served from the `storage` SPIFFS partition |
+| GET | `/version` | Project name, version and build date from the app descriptor |
+| GET | `/partitions` | Partition table and states |
+| GET | `/prevboot` | Previously booted partition |
+| POST | `/upload` | Multipart upload of an app image into the next OTA partition |
+| POST | `/set_boot` | Select the boot partition |
+| POST | `/reboot` | Restart the MCU |
+| GET | `/nvs/list` | All NVS partitions, namespaces and keys as JSON |
+| POST | `/nvs/wipe` | Erase and re-initialize all NVS partitions |
+
+---
+
+## 3. Startup
+
+- Mounts the `storage` SPIFFS partition.
+- **TWAI / CAN Bus Protection**: Initializes `twai_daemon` with `initCAN(NULL)` on GPIO 19 (TX) and GPIO 20 (RX), holding the transceiver TX line recessive (logic HIGH) to prevent bus disruption while in factory app mode.
+- Starts the SoftAP (`LDB-XXXXXX`), mDNS (`left-display.local`) and the HTTP server.
+- **OTA Verification**: `/upload` validates the image with `esp_ota_end()` and only then sets it as the boot partition.

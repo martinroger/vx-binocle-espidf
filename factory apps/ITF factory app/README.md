@@ -1,7 +1,7 @@
 # Interface Board Factory App (ITF Factory)
 
 ## Overview
-The **ITF Factory App** provides a dedicated provisioning, calibration, and maintenance environment for the Interface Board. It exposes a captive Wi-Fi Access Point and responsive Web UI for sensor calibration and NVS parameter management.
+The **ITF Factory App** provides a dedicated provisioning, calibration, and maintenance environment for the Interface Board. It exposes a Wi-Fi Access Point and responsive Web UI for sensor calibration and NVS parameter management.
 
 ## Key Capabilities
 - **Wi-Fi AP & mDNS**: Broadcasts `interface-board.local` (`ITF-XXXXXX` AP) for instant browser access.

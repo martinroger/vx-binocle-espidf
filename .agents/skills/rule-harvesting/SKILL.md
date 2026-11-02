@@ -11,8 +11,8 @@ Use this skill when auditing workspace project repositories—either targeting a
 
 ## Operating Modes
 
-- **Targeted Project Mode**: Pass a specific target project directory (e.g. `/home/martinroger/Documents/superPod` or `CAN-logger-R56`). The workflow focuses specifically on discovering, extracting, and generalizing rules from that designated repository.
-- **Full Workspace Audit Mode**: Scan all project repositories in the workspace root (e.g., `/home/martinroger/Documents/*`) to audit cross-project practices and gather rules systematically.
+- **Targeted Project Mode**: Pass a specific target project directory (e.g. `<workspace>/superPod` or `CAN-logger-R56`). The workflow focuses specifically on discovering, extracting, and generalizing rules from that designated repository.
+- **Full Workspace Audit Mode**: Scan all project repositories in the workspace root (e.g., `<workspace>/*`) to audit cross-project practices and gather rules systematically.
 
 ---
 
@@ -26,10 +26,10 @@ Scan the specified target project (or all workspace projects in full audit mode)
 - **Build & Dependency Configs**: Inspect `CMakeLists.txt`, `sdkconfig`, `package.json`, `idf_component.yml`, and `dependencies.lock` for platform-specific edge cases or recurring fix patterns.
 
 ### 2. Analysis & Deduplication
-Compare discovered rules and constraints against existing centralized rulesets in `antigravity-rules`:
-- **[`rules/base.geminirules`](../../rules/base.geminirules)**: Core execution quality, requirement grilling, debugging, log inspection, max build retries, and industry protocol nomenclature.
-- **[`rules/documentation.geminirules`](../../rules/documentation.geminirules)**: Markdown scope & constraint tracking, user-facing artifact previews, portable relative links, human-focused sub-project README / `TOO.MD` separation, Doxygen `@param` defaults, and `SCENARIOS.md` sequence diagrams.
-- **[`rules/esp-idf.geminirules`](../../rules/esp-idf.geminirules)**: ESP32 hardware target, virtual environment (`eim`), `managed_components/` read-only boundary, FreeRTOS core pinning, strapping pin verification, dependency matrices, and HTTP server URI handler capacity checks.
+Compare discovered rules and constraints against existing centralized rulesets in the separate `antigravity-rules` repository (paths below are relative to that repository, not to this one):
+- **`rules/base.geminirules`**: Core execution quality, requirement grilling, debugging, log inspection, max build retries, and industry protocol nomenclature.
+- **`rules/documentation.geminirules`**: Markdown scope & constraint tracking, user-facing artifact previews, portable relative links, human-focused sub-project README / `TOO.MD` separation, Doxygen `@param` defaults, and `SCENARIOS.md` sequence diagrams.
+- **`rules/esp-idf.geminirules`**: ESP32 hardware target, virtual environment (`eim`), `managed_components/` read-only boundary, FreeRTOS core pinning, strapping pin verification, dependency matrices, and HTTP server URI handler capacity checks.
 
 ### 3. Classification & Generalization
 Evaluate each candidate practice and classify it into one of four tiers:
