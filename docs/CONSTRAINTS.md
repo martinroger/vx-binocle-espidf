@@ -3,7 +3,7 @@
 ## 1. Platform & Tooling Constraints
 
 - **Target SoC**: Espressif **ESP32-S3** (dual-core Xtensa LX7, 240 MHz).
-- **Target Framework Version**: **ESP-IDF v5.5.x** (v5.5.0 to v5.5.5). Any backward compatibility anterior to v5.5 or future v6.x migrations must be guarded with appropriate preprocessor version checks (`ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)`).
+- **Target Framework Version**: **ESP-IDF v5.5.5** (CI builds with v5.5.5; the display stack requires >= v5.5.5). Any backward compatibility anterior to v5.5 or future v6.x migrations must be guarded with appropriate preprocessor version checks (`ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(5, 5, 0)`).
 - **Build Clean Invariant**: Whenever `Kconfig`, `Kconfig.projbuild`, or `sdkconfig.defaults` are modified, `idf.py fullclean build` must be executed to ensure clean CMake cache re-evaluation.
 - **Managed Components Boundary**: The `managed_components/` directory across all subprojects is strictly READ-ONLY. No local patches or modifications are permitted within managed components.
 
@@ -22,8 +22,8 @@
 ## 3. Software & Real-Time Constraints
 
 - **FreeRTOS Task Core Pinning**:
-  - **Core 0**: Protocol daemons, TWAI/CAN bus transmission/reception, ADC sampling loops, and Wi-Fi/HTTP network stacks.
-  - **Core 1**: LVGL rendering pipeline, UI animation loops, and display buffer flushing.
+  - **Display apps**: TWAI/CAN tasks on core 0 (`CONFIG_CAN_CORE_AFFINITY=0`); LVGL task (`CONFIG_LVGL_TASK_CORE_ID`, default 1) and the UI update task on core 1.
+  - **Interface board**: does not override `CONFIG_CAN_CORE_AFFINITY`, so the `twai_daemon` default of core 1 applies to the CAN packaging tasks and the MCPWM processor task.
 - **Display Stack (LDB & RDB)**: `left_screen` and `right_screen` use [`common/display_hw`](../common/display_hw) on plain `esp_lcd` drivers with `espressif/esp_lvgl_adapter`, which requires ESP-IDF >= 5.5.5. Its I2C peripherals (TCA9554, GT911) use the `i2c_master` driver only; the legacy `driver/i2c.h` driver must not be linked into either display app. RGB bounce buffers stay enabled (64 B data cache line with 80 MHz PSRAM).
 - **Task Stack Allocations**: Minimum 4096 bytes allocated to FreeRTOS tasks interacting with C standard library, floating-point math, or logging.
 - **TWAI Modern Driver Architecture & Bus-Off Recovery**:
@@ -39,6 +39,6 @@
 
 ## 4. OTA & Flash Partition Constraints
 
-- **Dual-Bank Partition Alignment**: Factory partitions and dual OTA slots (`ota_0`, `ota_1`) must be 64KB-aligned with identical sizing (minimum 2 MB each for display firmware, 1.5 MB for interface board).
+- **Partition Layout**: App partitions are 64 KB-aligned. The `factory` partition is 1 MB on every board; `ota_0` and `ota_1` are 2 MB each on the interface board and 6 MB each on the displays (16 MB flash). See each sub-project's `partitionTable.csv`.
 - **OTA Flash Write Watchdog Safety**: During in-flight SPI flash sector erasure and write operations (via Web or CAN), the OTA task must yield periodically (`vTaskDelay(1)`) to avoid triggering the Task Watchdog Timer (TWDT).
 - **CAN Bus Bandwidth Throttling**: OTA-over-CAN block streaming must observe inter-frame pacing or flow-control ACKs to prevent bus saturation and preserve minimum timing margins for arbitration.

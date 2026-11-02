@@ -68,7 +68,7 @@ Before executing initial builds at session start or immediately after switching 
 - [ ] Run `idf.py fullclean` (or `eim run "idf.py fullclean" <env>`) at the start of a session or after a branch switch before attempting `idf.py build`.
 
 ### Agent Scope & Constraint Verification
-- Check for existing `REQUIREMENTS.md` and `CONSTRAINTS.md` files in the repository root. Ensure code modifications conform to declared architecture limits and operational scope.
+- Check for existing `REQUIREMENTS.md` and `CONSTRAINTS.md` files (in `docs/` in this repository). Ensure code modifications conform to declared architecture limits and operational scope.
 
 ### Task Stack Allocation
 - Verify FreeRTOS stack allocation sizes. Recommended minimum task stack: **2048 to 4096 bytes** for tasks performing C standard library formatting (`printf`/`sprintf`), file system operations, or networking.

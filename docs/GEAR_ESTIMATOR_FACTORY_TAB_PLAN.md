@@ -1,6 +1,6 @@
 # Gear Estimator Parameters in the ITF Factory App (Proposal)
 
-Status: implemented on `update-gear-estimator` (control builds only, not yet validated on hardware). Endpoints and UI are documented in the factory app [TOO.MD](../factory%20apps/ITF%20factory%20app/TOO.MD).
+Status: implemented and merged (#142), validated on hardware 2026-11-02. Endpoints and UI are documented in the factory app [TOO.MD](../factory%20apps/ITF%20factory%20app/TOO.MD).
 
 ## Objective
 

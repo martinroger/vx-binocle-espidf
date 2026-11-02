@@ -118,4 +118,4 @@ esp32s3# help
 | **I2C Bus**    | SDA / SCL                             | GPIO 5 / GPIO 6              |
 | **Expander 0** | Primary IO Expander (Active Hi/Lo)    | I2C Address `0x20` (TCA9555) |
 | **Expander 1** | Secondary IO Expander (Resistor Bank) | I2C Address `0x21` (TCA9555) |
-| **DAC Out**    | DAC0 / DAC1                           | GPIO 13 / GPIO 14            |
+| **DAC Out**    | DAC0 / DAC1 (Kconfig only, unused: the ESP32-S3 has no DAC) | GPIO 13 / GPIO 14 |

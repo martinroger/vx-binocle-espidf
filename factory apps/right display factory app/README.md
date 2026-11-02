@@ -1,13 +1,13 @@
 # Right Display Factory App (RDB Factory)
 
 ## Overview
-The **RDB Factory App** provides the provisioning, calibration, and OTA environment for the Right Display Board. It mirrors the LDB factory test suite for display diagnostics and secondary UI calibration.
+The **RDB Factory App** is the recovery and maintenance firmware for the Right Display Board. It runs from the `factory` partition and serves a small web page over its own Wi-Fi access point for firmware uploads, boot partition selection and NVS maintenance. It does not drive the LCD.
 
 ## Key Capabilities
-- **Wi-Fi AP & mDNS**: Broadcasts `rdb-factory.local`.
+- **Wi-Fi AP & mDNS**: Starts a SoftAP named `RDB-XXXXXX` (last three MAC bytes) and answers on `right-display.local`.
 - **NVS Inspection & Wipe**: Scans all active NVS partitions and entries; supports full NVS wipe.
-- **Display Test Patterns**: Generates full-screen RGB and geometry calibration grids.
-- **Web OTA**: Web browser-based firmware upgrades.
+- **OTA Updates**: Browser upload of an app image to the next OTA partition, which then becomes the boot partition (`/upload`); manual boot partition selection (`/set_boot`) and reboot.
+- **CAN**: Starts `twai_daemon` (TX GPIO 19, RX GPIO 20) so the transceiver TX line is driven recessive while the factory app runs.
 
 ## Building & Flashing
 ```bash

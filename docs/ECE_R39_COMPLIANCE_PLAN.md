@@ -1,6 +1,6 @@
 # ECE R39 Speed Compliance Mode (Plan)
 
-Status: implemented on `ece-r39-compliance-mode` (host test passes; not yet validated on hardware). Decisions agreed (see [Decisions](#decisions)). Tracks issue #133.
+Status: implemented and merged (#143), host test passes, validated on hardware 2026-11-02. The "Current state on `main`" section describes the code before this change. Decisions agreed (see [Decisions](#decisions)). Tracks issue #133.
 
 ## Objective
 

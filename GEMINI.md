@@ -46,7 +46,7 @@
 
 ### Sub-Project & Module Documentation (`README.md` & `TOO.MD`)
 - **Sub-Project `README.md` Content**: `README.md` files located at the root of individual sub-projects or modules MUST remain lightweight, technical, and human-focused. They should describe subproject purpose, target architecture, hardware/network configuration, and key capabilities.
-- **Exclusion of Agent Instructions**: Sub-project `README.md` files MUST NOT contain agentic prompt instructions, internal rule citations (e.g., "Rule 6"), or AI operational constraint references. Agent-specific guidelines belong in repo-level files (`REQUIREMENTS.md`, top-level `README.md`, or `.geminirules`).
+- **Exclusion of Agent Instructions**: Sub-project `README.md` files MUST NOT contain agentic prompt instructions, internal rule citations (e.g., "Rule 6"), or AI operational constraint references. Agent-specific guidelines belong in repo-level files (`REQUIREMENTS.md`, top-level `README.md`, or `GEMINI.md`).
 - **Theory of Operation (`TOO.MD`) Requirement**: Each active sub-project and major shared component MUST maintain a `TOO.MD` (or `OTA_TOO.MD`) detailing system architecture, hardware subsystems, signal processing, data/bus ingestion and dispatch loops, API endpoints, and sequence diagrams (including protocol handshakes and timeout/error escape points).
 
 ### Doxygen & API Code Documentation

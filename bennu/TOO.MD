@@ -41,7 +41,7 @@ sequenceDiagram
     participant NVS as Boot / NVS Configuration
     participant Flash as Flash Memory (Factory & Storage)
 
-    User->>Web: Upload <TARGET>_bennu.bin via /update endpoint
+    User->>Web: Upload <TARGET>_bennu.bin via /upload endpoint
     Web->>MCU_OTA: Stream bytes to passive OTA partition (e.g. ota_0)
     MCU_OTA->>NVS: Set next boot partition to ota_0
     MCU_OTA->>MCU_OTA: Restart MCU

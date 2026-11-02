@@ -39,10 +39,10 @@ sequenceDiagram
     ITF->>ITF: Resume fast metrics & active hi/lo periodic tasks
 
     loop Periodic Operational Telemetry
-        ITF->>CAN: Broadcast ITF_FAST_METRICS (20ms: RPM, Speed, Gear)
-        ITF->>CAN: Broadcast ITF_SLOW_METRICS (100ms: Coolant, Fuel, Voltage)
-        ITF->>CAN: Broadcast ITF_ACTIVE_HI_LO (50ms: Discrete telltales & switches)
-        ITF->>CAN: Broadcast ITF_ODOMETER (250ms) / ITF_BOARD_ST (1000ms)
+        ITF->>CAN: Broadcast ITF_FAST_METRICS (25ms: RPM, Speed, Gear)
+        ITF->>CAN: Broadcast ITF_SLOW_METRICS (500ms: Coolant, Fuel, Voltage)
+        ITF->>CAN: Broadcast ITF_ACTIVE_HI_LO (200ms: Discrete telltales & switches)
+        ITF->>CAN: Broadcast ITF_ODOMETER (250ms) / ITF_BOARD_ST (200ms) / ITF_BOARD_VERSION (1000ms)
         CAN-->>LDB: Ingest CAN telemetry -> updateUI_task renders UI
         CAN-->>RDB: Ingest CAN telemetry -> updateUI_task renders UI
     end
@@ -87,21 +87,21 @@ sequenceDiagram
     participant LDB as Left Display Board
     participant BUZZ as Audio Buzzer (IO Expander Pin 7)
 
-    SENS->>ITF: Coolant Temperature > Over-Temperature Threshold
+    SENS->>ITF: Coolant Temperature >= overtemp_th (NVS, default 106 °C)
     ITF->>ITF: Flag itf_over_temperature_tt = true in active_hi_lo state
     ITF->>CAN: Broadcast BINOCAN_ITF_ACTIVE_HI_LO (itf_over_temperature_tt = ON)
     CAN-->>LDB: Ingest frame -> overTemperatureOn = true
     
     LDB->>LDB: updateUI_task illuminates over-temperature telltale icon
     opt Buzzer Enabled in Settings (overTemp_buzz == true)
-        LDB->>BUZZ: IO Expander digitalWrite(Pin 7, HIGH)
+        LDB->>BUZZ: display_hw_buzzer_set(true) (TCA9554 P7)
     end
     
     Note over SENS, BUZZ: Coolant Cools Down Below Threshold
     SENS->>ITF: Normal Coolant Temperature
     ITF->>CAN: Broadcast BINOCAN_ITF_ACTIVE_HI_LO (itf_over_temperature_tt = OFF)
     CAN-->>LDB: Ingest frame -> overTemperatureOn = false
-    LDB->>BUZZ: IO Expander digitalWrite(Pin 7, LOW)
+    LDB->>BUZZ: display_hw_buzzer_set(false) (TCA9554 P7)
     LDB->>LDB: updateUI_task hides over-temperature telltale icon
 ```
 

@@ -39,11 +39,11 @@ graph LR
 | Directory | Target Hardware | Purpose & Core Capabilities |
 | :--- | :--- | :--- |
 | **[`interface_board`](interface_board)** | ESP32-S3 | Sensor acquisition node (pulse capture, ADS1115 ADC, TCA9555 expander, TWAI broadcaster). |
-| **[`left_screen`](left_screen)** | ESP32-S3 | Primary cluster display (LVGL v9, RPM arc, speed readout, overtemperature buzzer alarm). |
-| **[`right_screen`](right_screen)** | ESP32-S3 | Secondary cluster display (LVGL v9, fuel/battery/oil gauges, trip statistics). |
-| **[`factory apps/ITF factory app`](factory%20apps/ITF%20factory%20app)** | ESP32-S3 | ITF captive Wi-Fi AP, NVS calibration, sensor zeroing, and safe reboot sequencing. |
-| **[`factory apps/left display factory app`](factory%20apps/left%20display%20factory%20app)** | ESP32-S3 | LDB display diagnostics, test pattern generation, and web-based OTA flashing. |
-| **[`factory apps/right display factory app`](factory%20apps/right%20display%20factory%20app)** | ESP32-S3 | RDB display diagnostics, test pattern generation, and web-based OTA flashing. |
+| **[`left_screen`](left_screen)** | ESP32-S3 | Primary cluster display (LVGL v9, RPM arc or gear position, shift light and RPM alarm, fuel/coolant/voltage, odometer/trip, overtemperature buzzer). |
+| **[`right_screen`](right_screen)** | ESP32-S3 | Secondary cluster display (LVGL v9, speed arc and readout in km/h or mph, fuel/coolant/voltage, odometer/trip, brightness settings). |
+| **[`factory apps/ITF factory app`](factory%20apps/ITF%20factory%20app)** | ESP32-S3 | ITF Wi-Fi AP, NVS calibration, gear estimator and ECE R39 settings, IO debug, OTA (local and LDB/RDB over CAN), and safe reboot sequencing. |
+| **[`factory apps/left display factory app`](factory%20apps/left%20display%20factory%20app)** | ESP32-S3 | LDB Wi-Fi AP, NVS inspection and wipe, and web-based OTA flashing. |
+| **[`factory apps/right display factory app`](factory%20apps/right%20display%20factory%20app)** | ESP32-S3 | RDB Wi-Fi AP, NVS inspection and wipe, and web-based OTA flashing. |
 | **[`bennu`](bennu)** | ESP32-S3 | Special delivery recovery payload for remote factory app & SPIFFS overwrite via OTA. |
 | **[`emulator-console`](emulator-console)** | ESP32-S3 | Vehicle simulator with serial console, ESPHome firmware, and Node-RED drivecycle replayer. |
 | **[`common/display_hw`](common/display_hw)** | Shared | Waveshare 2.8C bring-up on plain `esp_lcd` (ST7701, GT911, TCA9554, LEDC backlight) with `esp_lvgl_adapter` glue (used by `left_screen` and `right_screen`). |
@@ -53,13 +53,13 @@ graph LR
 
 ## 📦 Global External Dependency Matrix
 
-The table below summarizes external component dependencies managed via `idf_component.yml` and locked in `dependencies.lock`:
+The table below summarizes external component dependencies managed via `idf_component.yml` and locked in each sub-project's `dependencies.lock` (`emulator-console` has no lock file, so its versions are not pinned):
 
 | Sub-Project | External Dependency | Locally Installed Version | Version Requirement |
 | :--- | :--- | :--- | :--- |
 | `emulator-console` | `espressif/ESP32_IO_Expander` | `1.1.1` | `*` |
 | `emulator-console` | `espressif/esp-lib-utils` | `0.2.3` | `0.2.*` *(transitive)* |
-| `interface_board` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
+| `interface_board` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
 | `interface_board` | `binocan` | `0.3.0` (`328f1a0`) | `v0.3.0` *(git: martinroger/binocan)* |
 | `interface_board` | `vx-gear-estimator` | `0.1.0` (`0d135d9`) | `main` *(git: martinroger/vx-gear-estimator)* |
 | `interface_board` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
@@ -111,11 +111,13 @@ The table below summarizes external component dependencies managed via `idf_comp
 | `factory apps/ITF factory app` | `vx-gear-estimator` | `0.1.0` (`0d135d9`) | `main` *(git: martinroger/vx-gear-estimator)* |
 | `factory apps/ITF factory app` | `esp-idf-lib/ads111x` | `1.1.14` | `^1.1.14` |
 | `factory apps/ITF factory app` | `esp-idf-lib/tca95x5` | `1.0.7` | `^1.0.7` |
-| `factory apps/ITF factory app` | `espressif/mdns` | `1.13.1` | `*` |
-| `factory apps/left display factory app` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
-| `factory apps/left display factory app` | `espressif/mdns` | `1.9.1` | `*` |
-| `factory apps/right display factory app` | `twai_daemon` | `0.1.0` | `v0.1.0` *(git: martinroger/twai_daemon)* |
-| `factory apps/right display factory app` | `espressif/mdns` | `1.9.1` | `*` |
+| `factory apps/ITF factory app` | `esp-idf-lib/esp_idf_lib_helpers` | `1.4.0` | `*` *(transitive)* |
+| `factory apps/ITF factory app` | `esp-idf-lib/i2cdev` | `2.1.2` | `*` *(transitive)* |
+| `factory apps/ITF factory app` | `espressif/mdns` | `1.14.0` | `*` |
+| `factory apps/left display factory app` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
+| `factory apps/left display factory app` | `espressif/mdns` | `1.14.0` | `*` |
+| `factory apps/right display factory app` | `twai_daemon` | `0.1.0` (`588c470`) | `v0.1.0` *(git: martinroger/twai_daemon)* |
+| `factory apps/right display factory app` | `espressif/mdns` | `1.14.0` | `*` |
 
 ---
 
@@ -134,7 +136,7 @@ For technical specifications, platform constraints, and interaction flows, refer
 
 ## 🛠️ Build & Compilation Guidelines
 
-This project targets **ESP-IDF v5.5.x** on the **ESP32-S3** architecture.
+This project targets **ESP-IDF v5.5.5** on the **ESP32-S3** architecture (the display stack needs at least v5.5.5, and CI builds with v5.5.5).
 
 ```bash
 # Build all 3 main cluster applications (ITF, Left Display, Right Display)
@@ -152,6 +154,23 @@ python tools/build_deliveries.py --app all
 # Check and interactively update project dependencies across all apps
 python tools/manage_dependencies.py
 ```
+
+`tools/manage_dependencies.py` rewrites only the *Version Requirement* column of the dependency matrix above. Update the *Locally Installed Version* column by hand from each `dependencies.lock`, including the rows that come from `common/display_hw`.
+
+### CMake presets (interface board)
+
+`interface_board` and `factory apps/ITF factory app` have a `CMakePresets.json` with two presets:
+
+- `default`: current hardware (v0.3 and later), build directory `build/default`.
+- `prev03`: hardware older than v0.3, where the coolant and RPM capture GPIOs are swapped. It adds `sdkconfig.defaults.prev03` on top of `sdkconfig.defaults`, build directory `build/prev03`.
+
+Each preset keeps its `sdkconfig` in its build directory. After changing `sdkconfig.defaults`, delete `build/<preset>/sdkconfig`, or the old values stay in use.
+
+### Display apps
+
+`left_screen/main` and `right_screen/main` are the same code. The side is chosen with the Kconfig choice `DISPLAY_SIDE` (`CONFIG_LEFT_SIDE_DISPLAY=y` in `left_screen/sdkconfig.defaults`; `right_screen` uses the choice default, the right side). Keep both `main` folders identical.
+
+The display apps' `CMakeLists.txt` make `idf.py flash` write the app to `ota_0` and write a blank `otadata`, so the board still boots the factory app afterwards. Select the new image with `otatool.py switch_ota_partition --slot 0`, or switch partitions from the factory app.
 
 > [!TIP]
 > When modifying `Kconfig`, `Kconfig.projbuild`, or `sdkconfig.defaults`, always run a full clean build (`idf.py fullclean build` or pass `--clean` to `tools/build_main_apps.py` / `tools/build_deliveries.py`).

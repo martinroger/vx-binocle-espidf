@@ -20,8 +20,9 @@ graph TD
 ## 2. UI Pipeline & Font Rendering
 
 - **Display & LVGL**: Board bring-up (ST7701 RGB panel, GT911 touch, TCA9554 expander, LEDC backlight) in [`common/display_hw`](../common/display_hw/TOO.MD); LVGL task, lock and double-buffered DIRECT flush provided by `espressif/esp_lvgl_adapter`. The LVGL task core, priority and stack come from `menuconfig` → Display Application → LVGL task. The legacy `lvgl_port_lock()` / `lvgl_port_unlock()` names are kept by [`ui_lock.hpp`](main/ui_lock.hpp).
-- **Typography**: Custom-generated White Rabbit pixel fonts (20px, 28px, 32px) for crisp contrast under automotive lighting.
-- **Boot Sequence**: Initializes secondary instrumentation, oil pressure, charge cooling metrics, and trip statistics.
+- **Typography**: Custom-generated White Rabbit pixel fonts (14 px to 128 px) for crisp contrast under automotive lighting.
+- **Content**: Speed arc and readout (km/h or mph), fuel level, coolant, battery voltage, odometer and trip, telltales, and light/dark brightness settings. The external oil and charge-cooling frames are routed and watched, but no gauge shows them.
+- **Startup Animation**: Driven by the interface board over CAN, as on the left display.
 
 ---
 
