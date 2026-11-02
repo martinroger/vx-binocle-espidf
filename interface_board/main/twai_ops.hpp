@@ -437,10 +437,11 @@ inline void itf_fast_metrics_PKG(void *pvParameters)
         //     ESP_LOGW(__func__,"Speed DutFreq Compute error : %s",esp_err_to_name(compute_err));
         float rpm = COEFF_FREQ_TO_RPM_M * pwm_cap_rpm.frequency + COEFF_FREQ_TO_RPM_P;
         float speed = COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P;
-        ESP_LOGD(__func__, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed);
+        float speed_out = r39_params.apply(speed); // ECE R39 compliant speed when the mode is on, raw speed otherwise
+        ESP_LOGD(__func__, "RPM : %.2f - %.1f - %.2f Speed: %.2f - %.1f - %.2f - sent %.2f", pwm_cap_rpm.frequency, pwm_cap_rpm.duty_cycle, rpm, pwm_cap_speed.frequency, pwm_cap_speed.duty_cycle, speed, speed_out);
 
         binocan_itf_fast_metrics.itf_rpm = binocan_itf_fast_metrics_itf_rpm_encode(rpm);
-        binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed);
+        binocan_itf_fast_metrics.itf_speed_kph = binocan_itf_fast_metrics_itf_speed_kph_encode(speed_out);
         switch (gear_estimator.latched_gear)
         {
         case GEAR_NEUTRAL:

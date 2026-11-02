@@ -8,6 +8,7 @@
 #include "odometer.h"              // For odometer and trip variables
 #include "mcpwm_capture_helpers.h" // For pwm_info_t struct and capture handles
 #include "gear_estimator.h"         // For gear estimator
+#include "r39_compliance.hpp"       // For the ECE R39 speed compliance mode
 
 struct board_ST
 {
@@ -37,6 +38,7 @@ bool fuel_learn_en = true;                          // Enable/disable self-learn
 bool fuel_sensor_open_circuit = false;              // Fuel sender open circuit flag (>3.4kOhm)
 uint16_t fuel_low_level_threshold_pc = 20;
 uint16_t coolant_overtemp_threshold_degC = 106;
+r39::Params r39_params = r39::defaults().to_params(CONFIG_R39_BLEND_END_KPH); // ECE R39 speed compliance, loaded from NVS at boot, read-only afterwards
 
 #pragma region MCPWM declarations
 // PWM stats structures for coolant, rpm and speed captures
