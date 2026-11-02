@@ -141,7 +141,7 @@ The pattern follows the gear estimator: a separate header with cJSON handlers, r
    ( General ) ( Gear Estimator ) ( Speed (ECE R39) )
      Source: [NVS | defaults]   [Save to NVS] [Reload] [Load defaults]
      ┌ Settings ─────────────────────────┐ ┌ Preview ──────────────────────────────┐
-     │ [x] Compliance mode enabled       │ │ true km/h | sent km/h | over | allow  │
+     │ [x] Compliance mode enabled       │ │ true km/h | sent km/h | over | allowed │
      │ Speed correction [ 4.00 ] %       │ │ 0 / 0.00 / 0.00 / 4.0                 │
      │   A = 1.0400  (0 to 10 %)         │ │ ...                                   │
      │ Offset B         [ 2.00 ] km/h    │ │ (from the GET/POST reply)             │
@@ -159,8 +159,8 @@ The pattern follows the gear estimator: a separate header with cJSON handlers, r
    - The values sent are the integers the device will store: the page computes `Math.round(v * 100)` and checks it is in 0..1000 (basis points) and 0..400 (0.01 km/h) before building the JSON, then sends `a_pct` / `b_kph` as those integers divided by 100, so the page and the server agree on the stored value.
    - A server 400 is shown in the inline error line (same text as the reply), like the gear editor shows its `alert()`, and the form keeps the user's values.
 3. **Live readout**: the WebSocket `mcpwm` object gains `speed_r39_kph`, computed with `Params::apply()` from the stored params (reloaded after each successful POST /api/r39, so it follows edits without a reboot), and `r39_en`. In IO & Bus Debug, the Speed tile of the "MCPWM Capture Signals" grid gets a third line under `val-speed-phys`, with the same `<small style="font-weight:600; color:var(--text);">` markup:
-   - mode on: `sent 43.6 km/h (R39)`;
-   - mode off: `sent = raw` in the muted colour.
+   - mode on: `R39: 43.6 km/h`;
+   - mode off: `R39: off` in the muted colour.
    The grid stays at three columns (`repeat(3, 1fr)`) and grid items stretch to the tallest tile, so the Coolant and RPM tiles keep the same height and the row stays aligned on a phone. No new tile, no new colour.
 4. **Docs**: `TOO.MD` endpoint list, `docs/REQUIREMENTS.md` (new `REQ-ITF-008` and an addition to `REQ-FAC-002`), README feature list.
 

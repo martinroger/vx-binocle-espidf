@@ -447,9 +447,9 @@
                     </div>
                     <div class="card">
                         <h3>Preview</h3>
-                        <small>Speed the interface board sends with the saved A and B, mode on. Computed by the factory app with the interface board formula; refreshed on Reload and Save.</small>
+                        <small>Speed the interface board sends with the saved A and B, mode on. Over-read is sent minus true speed; Allowed is the R39 limit (10 % + 4 km/h). Computed by the factory app with the interface board formula; refreshed on Reload and Save.</small>
                         <table class="r39-table">
-                            <thead><tr><th>True km/h</th><th>Sent km/h</th><th>Over-read</th><th>R39 max</th></tr></thead>
+                            <thead><tr><th>True km/h</th><th>Sent km/h</th><th>Over-read</th><th>Allowed</th></tr></thead>
                             <tbody id="r39_preview"><tr><td colspan="4">-</td></tr></tbody>
                         </table>
                     </div>
@@ -556,7 +556,7 @@
                             <small>Speed</small><br>
                             <strong id="val-pwm-speed" style="font-size:1.1rem; color:var(--accent);">- Hz</strong><br>
                             <small id="val-speed-phys" style="font-weight:600; color:var(--text);">- km/h</small><br>
-                            <small id="val-speed-r39" style="font-weight:600; color:var(--text-light);">sent = raw</small>
+                            <small id="val-speed-r39" style="font-weight:600; color:var(--text-light);">R39: off</small>
                         </div>
                     </div>
                 </div>
@@ -760,7 +760,7 @@
             var tb = document.getElementById('r39_preview');
             if (!preview || !preview.length) { tb.innerHTML = '<tr><td colspan="4">-</td></tr>'; return; }
             tb.innerHTML = preview.map(p => '<tr><td>' + p.v.toFixed(0) + '</td><td>' + p.out.toFixed(2) + '</td><td>'
-                + (p.out - p.v).toFixed(2) + '</td><td>' + (p.v + 0.1 * p.v + 4).toFixed(1) + '</td></tr>').join('');
+                + (p.out - p.v).toFixed(2) + '</td><td>' + (0.1 * p.v + 4).toFixed(1) + '</td></tr>').join('');
         }
 
         function fillR39Form(j) {
@@ -1094,10 +1094,10 @@
                 if (msg.mcpwm.r39_en !== undefined) {
                     var r39el = document.getElementById('val-speed-r39');
                     if (msg.mcpwm.r39_en && msg.mcpwm.speed_r39_kph !== undefined) {
-                        r39el.innerText = 'sent ' + msg.mcpwm.speed_r39_kph.toFixed(1) + ' km/h (R39)';
+                        r39el.innerText = 'R39: ' + msg.mcpwm.speed_r39_kph.toFixed(1) + ' km/h';
                         r39el.style.color = 'var(--text)';
                     } else {
-                        r39el.innerText = 'sent = raw';
+                        r39el.innerText = 'R39: off';
                         r39el.style.color = 'var(--text-light)';
                     }
                 }
