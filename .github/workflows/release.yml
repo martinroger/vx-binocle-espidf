@@ -34,35 +34,51 @@ jobs:
       - uses: dorny/paths-filter@v4
         id: filter
         with:
+          # A file counts for a filter when it matches one of the app's paths
+          # and none of the excluded documentation paths.
+          predicate-quantifier: 'some-with-excludes'
           filters: |
             # common/ holds headers and the display_hw component shared by the
             # apps below, so a change there rebuilds every app that uses it.
             # common/test only holds host tests and triggers nothing.
+            # Documentation and agent notes never change a firmware image, so
+            # every filter excludes them (anchor defined on first use).
             emulator_board:
               - 'emulator-console/**'
               - 'common/*'
+              - &not_docs
+                - '!**/*.md'
+                - '!**/*.MD'
+                - '!docs/**'
+                - '!**/.agents/**'
             interface_board:
               - 'interface_board/**'
               - 'common/*'
+              - *not_docs
             left_screen:
               - 'left_screen/**'
               - 'common/*'
               - 'common/display_hw/**'
+              - *not_docs
             right_screen:
               - 'right_screen/**'
               - 'common/*'
               - 'common/display_hw/**'
+              - *not_docs
             itf_factory:
               - 'factory apps/ITF factory app/**'
               - 'interface_board/main/**'
               - 'common/*'
               - 'bennu/**'
+              - *not_docs
             ldb_factory:
               - 'factory apps/left display factory app/**'
               - 'bennu/**'
+              - *not_docs
             rdb_factory:
               - 'factory apps/right display factory app/**'
               - 'bennu/**'
+              - *not_docs
 
   build:
     needs: changes
