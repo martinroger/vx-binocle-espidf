@@ -217,6 +217,15 @@ menu "Interface board configuration"
         config MCPWM_CAP_TIMER_RESOLUTION
             int "Resolution in Hz applied to the capture timer"
             default 100000
+
+        config R39_BLEND_END_KPH
+            int "ECE R39 mode: end of the low-speed blend band (km/h)"
+            range 1 30
+            default 10
+            help
+                When the ECE R39 compliance mode is on, the offset B is faded in with a
+                smoothstep from 0 km/h up to this speed, so a stopped car reads 0 km/h.
+                Above it the broadcast speed is exactly A * v + B.
     endmenu
 
     menu "Display control"

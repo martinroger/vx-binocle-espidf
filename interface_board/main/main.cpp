@@ -202,6 +202,63 @@ esp_err_t disable_5V_AUX(void)
 }
 #pragma endregion
 
+#pragma region ECE R39 settings
+/// @brief Reads one ECE R39 key, writing the default when it is missing or out of range.
+/// @tparam T Stored integer type
+/// @param h Open handle on the "storage" namespace
+/// @param key NVS key
+/// @param[in,out] value Default on entry, stored value on return
+/// @param valid Range check of the stored value
+/// @param get nvs_get_* function for T
+/// @param set nvs_set_* function for T
+/// @return ESP_OK, or the error of the failed write or commit
+template <typename T>
+static esp_err_t r39_self_init_key(nvs_handle_t h, const char *key, T &value, bool (*valid)(T),
+                                   esp_err_t (*get)(nvs_handle_t, const char *, T *), esp_err_t (*set)(nvs_handle_t, const char *, T))
+{
+    const T def = value;
+    esp_err_t err = get(h, key, &value);
+    if (err == ESP_OK && valid(value))
+        return ESP_OK;
+    if (err == ESP_OK)
+        ESP_LOGW(TAG, "NVS: %s = %ld out of range, resetting to %ld", key, (long)value, (long)def);
+    else
+        ESP_LOGW(TAG, "NVS: %s not found (%s), initialising to %ld", key, esp_err_to_name(err), (long)def);
+    value = def;
+    err = set(h, key, value);
+    if (err == ESP_OK)
+        err = nvs_commit(h);
+    return err;
+}
+
+/// @brief Loads the ECE R39 compliance settings into r39_params, self-initialising missing or out-of-range keys.
+/// @param h Open read-write handle on the "storage" namespace
+/// @return ESP_OK, or the first NVS write error (r39_params then holds the defaults for the failed keys)
+static esp_err_t load_r39_params(nvs_handle_t h)
+{
+    r39::RawParams raw = r39::defaults();
+    esp_err_t ret = ESP_OK;
+    esp_err_t err;
+
+    err = r39_self_init_key<uint8_t>(h, r39::KEY_EN, raw.en, [](uint8_t v) { return v <= 1; }, nvs_get_u8, nvs_set_u8);
+    if (err != ESP_OK && ret == ESP_OK)
+        ret = err;
+    err = r39_self_init_key<uint16_t>(h, r39::KEY_A_BP, raw.a_bp, [](uint16_t v) { return v <= r39::A_BP_MAX; }, nvs_get_u16, nvs_set_u16);
+    if (err != ESP_OK && ret == ESP_OK)
+        ret = err;
+    err = r39_self_init_key<int16_t>(h, r39::KEY_B_CKPH, raw.b_ckph, [](int16_t v) { return v >= r39::B_CKPH_MIN && v <= r39::B_CKPH_MAX; }, nvs_get_i16, nvs_set_i16);
+    if (err != ESP_OK && ret == ESP_OK)
+        ret = err;
+
+    r39_params = raw.to_params(CONFIG_R39_BLEND_END_KPH);
+    if (r39_params.enabled)
+        ESP_LOGI(TAG, "ECE R39 mode: ON, A = %.4f (+%.2f %%), B = %.2f km/h, blend to %d km/h", r39_params.a, raw.a_pct(), r39_params.b_kph, CONFIG_R39_BLEND_END_KPH);
+    else
+        ESP_LOGI(TAG, "ECE R39 mode: OFF (stored A = +%.2f %%, B = %.2f km/h)", raw.a_pct(), raw.b_kph());
+    return ret;
+}
+#pragma endregion
+
 #pragma region Main App
 /// @brief Wrapper function to attempt a rollback
 /// @return ESP_OK if rollback scheduled, some NOT_OK error otherwise
@@ -546,6 +603,13 @@ extern "C" void app_main(void)
                 }
 
                 ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", coolant_overtemp_threshold_degC);
+
+                // ECE R39 speed compliance mode
+                if (load_r39_params(nvs_h) != ESP_OK)
+                {
+                    ESP_LOGE(TAG, "Could not initialise the ECE R39 settings in NVS");
+                    attemptRollBack();
+                }
                 nvs_close(nvs_h);
             }
         }

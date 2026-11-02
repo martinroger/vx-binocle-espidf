@@ -64,6 +64,7 @@ T swap_endian(T u)
 #include "runtime_stats.hpp"
 #endif
 #include "gear_params_web.hpp"
+#include "r39_web.hpp"
 
 #pragma region Global variables
 // Should be extended to more ?
@@ -682,6 +683,8 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 		if (rpm_val < 0.0f) rpm_val = 0.0f;
 		float speed_val_kph = (float)(COEFF_FREQ_TO_SPEED_KPH_M * pwm_cap_speed.frequency + COEFF_FREQ_TO_SPEED_KPH_P);
 		if (speed_val_kph < 0.0f) speed_val_kph = 0.0f;
+		const r39::Params r39_live = r39_live_params();
+		float speed_r39_kph = r39_live.apply(speed_val_kph); // what the ITF app would send with the stored ECE R39 settings
 
 		float coolant_duty_pc = (float)(100.0f * pwm_cap_coolant.duty_cycle);
 		if (coolant_duty_pc < 0.0f) coolant_duty_pc = 0.0f;
@@ -702,7 +705,7 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 				 "\"button\":%s,\"backlight\":%s,\"coolant_low\":%s},"
 				 "\"adc_raw\":{\"ch0\":%ld,\"ch1\":%ld,\"ch2\":%ld,\"ch3\":%ld},"
 				 "\"adc_phys\":{\"fuel_r\":%.1f,\"fuel_pc\":%.1f,\"fuel_cal\":\"%s\",\"batt_v\":%.2f},"
-				 "\"mcpwm\":{\"coolant_hz\":%.1f,\"coolant_duty\":%.1f,\"coolant_c\":%.1f,\"rpm_hz\":%.1f,\"rpm_val\":%.0f,\"speed_hz\":%.1f,\"speed_kph\":%.1f},"
+				 "\"mcpwm\":{\"coolant_hz\":%.1f,\"coolant_duty\":%.1f,\"coolant_c\":%.1f,\"rpm_hz\":%.1f,\"rpm_val\":%.0f,\"speed_hz\":%.1f,\"speed_kph\":%.1f,\"speed_r39_kph\":%.1f,\"r39_en\":%s},"
 				 "\"can_nodes\":{\"ldb\":{\"alive\":%s,\"version\":\"%s\"},\"rdb\":{\"alive\":%s,\"version\":\"%s\"}}}",
 				 io_snap.AH_ignition ? "true" : "false", io_snap.AH_hi_beams ? "true" : "false",
 				 io_snap.AL_alternator ? "true" : "false", io_snap.AL_brake_low ? "true" : "false",
@@ -715,6 +718,7 @@ static void ws_telemetry_broadcast_task(void *pvParameters)
 				 (long)mv0, (long)mv1, (long)mv2, (long)mv3,
 				 fuel_level_R, fuel_level_pc, is_hi_cal ? "HIGH" : "LOW", batt_v,
 				 pwm_cap_coolant.frequency, coolant_duty_pc, coolant_degC, pwm_cap_rpm.frequency, rpm_val, pwm_cap_speed.frequency, speed_val_kph,
+				 speed_r39_kph, r39_live.enabled ? "true" : "false",
 				 ld_alive ? "true" : "false", can_ldb_diag.version[0] ? can_ldb_diag.version : "v-.-.-",
 				 rd_alive ? "true" : "false", can_rdb_diag.version[0] ? can_rdb_diag.version : "v-.-.-");
 
@@ -2521,6 +2525,8 @@ static esp_err_t nvs_wipe_post_handler(httpd_req_t *req)
 		part_it = esp_partition_next(part_it);
 	}
 
+	r39_live_reload(); // the live readout falls back to the defaults
+
 	httpd_resp_set_type(req, "application/json");
 	const char *resp = "{\"status\":\"OK\",\"message\":\"All NVS partitions erased and reinitialized successfully.\"}";
 	httpd_resp_sendstr(req, resp);
@@ -2576,6 +2582,7 @@ static httpd_handle_t start_webserver(void)
 	httpd_uri_t nvs_wipe_uri = {.uri = "/nvs/wipe", .method = HTTP_POST, .handler = nvs_wipe_post_handler};
 	httpd_register_uri_handler(server, &nvs_wipe_uri);
 	gear_params_web_register(server);
+	r39_web_register(server);
 
 	// Register WebSocket endpoint /ws
 	httpd_uri_t ws_uri = {

@@ -34,6 +34,13 @@ graph TD
 - **Pulse Accumulator**: Accumulated wheel pulses increment the high-resolution trip and odometer registers ([`odometer.c`](components/odometer/src/odometer.c)).
 - **MCPWM Processor Task**: A deterministic 25 ms periodic task ([`mcpwm_processor.hpp`](main/mcpwm_processor.hpp)) computes duty cycles and frequencies for coolant, RPM, and wheel speed capture channels.
 
+### 2.1.1 ECE R39 Speed Compliance Mode
+Optional, off by default. When `r39_en` is set, `itf_fast_metrics_PKG()` broadcasts the speed from [`r39_compliance.hpp`](../common/r39_compliance.hpp) instead of the raw speed $v$:
+  $$s = \min(v / v_b, 1), \quad w = s^2 (3 - 2s), \quad v_{out} = \mathrm{clamp}(A v + B w,\ 0,\ 400)$$
+with $A = 1 + \texttt{r39\_a\_bp} / 10000$ (0 to +10 %), $B = \texttt{r39\_b\_ckph} / 100$ km/h (0 to 4 km/h) and $v_b$ = `CONFIG_R39_BLEND_END_KPH` (10 km/h). A stopped car reads 0 km/h, the curve is continuous and monotonic, and above $v_b$ it is exactly $A v + B$, so $0 \le v_{out} - v \le 0.1 v + 4$ km/h at every speed.
+- Only `ITF_speed_kph` changes. `DBG_ITF_speed`, `DBG_ITF_pulse_counts`, the gear estimator, the odometer, the trip and the boot sweep keep the raw values.
+- The three keys live in the `storage` namespace of the default `nvs` partition and are edited from the ITF factory app. At boot a missing or out-of-range key is rewritten with its default (off, `400` = +4 %, `200` = 2 km/h).
+
 ### 2.2 Analog Ingestion & Dual-Caliber Fuel Sensing
 - ADS1115 samples analog channels continuously at configured data rates (Channel 0: Fuel sender, Channel 1: 12V rail, Channel 3: 3.3V reference $V_{dd}$).
 - **Ratiometric Compensation**: Fuel sender resistance is computed against the live $V_{dd}$ reference reading on Channel 3 ($R_{load} = \text{COEFF\_FUEL\_CORRECTION\_MULT} \cdot K \cdot \text{raw}_{fuel} / \text{raw}_{3v3}$), with fallback to ideal 3.3V if measured $V_{ref} \notin [3.0\text{V}, 3.6\text{V}]$.
