@@ -26,6 +26,11 @@
 - **Sequential Build Enforcement**: Subagents are strictly prohibited from executing build, compilation, or flash commands concurrently. All verification builds must be run sequentially or yielded to the parent overseer agent to execute.
 - **Workspace & Branch Isolation**: Subagents are strictly restricted to the workspace root directory (must not read, write, or inspect files outside the repository) and must operate on isolated feature branches, submitting work via Pull Requests or structured diff reviews for parent overseer merging.
 
+### Naming Conventions (NVS Keys & C++ Symbols)
+- **Mandatory Convention**: Follow [`.agents/rules/naming_conventions.md`](.agents/rules/naming_conventions.md) for every NVS namespace/key and every C++ symbol in all sub-projects.
+- **NVS Summary**: Namespaces `vx_<domain>`, keys short `snake_case` ending in their unit (`full_ohm`, `shift_mid_rpm`), at most 15 characters, all declared in `common/nvs_keys.hpp` (never as string literals in app code). A rename or type change requires a `vx::nvs::legacy::RENAMES` row so stored values migrate. The odometer keys are frozen.
+- **Symbol Summary**: `camelCase` variables/members/functions, `PascalCase` types, `UPPER_SNAKE` constants and macros, unit as the last word (`speedKph`), `prev*` for previous values, `pack*`/`on*`/`on*Timeout` for CAN frame functions. Never rename generated (`binocan_*`), framework, EEZ UI or external component symbols.
+
 ---
 
 ## 2. Documentation & Presentation Standards
