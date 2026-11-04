@@ -60,7 +60,10 @@ sequenceDiagram
         ADP-->>APP: error
         APP->>APP: XDB_SM_ST_DEGRADED, attemptRollback()
     end
-    APP->>APP: ui_init, mark app valid, backlight fade-in
+    APP->>APP: ui_init, mark app valid
+    APP->>ADP: display_hw_lvgl_wait_frame(500), without the LVGL lock
+    ADP-->>APP: true once the first frame is on the panel (false on timeout)
+    APP->>APP: backlight fade-in
 ```
 
 ## 3. Design notes

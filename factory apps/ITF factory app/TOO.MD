@@ -202,14 +202,13 @@ sequenceDiagram
   ```json
   {
     "type": "ota_progress",
-    "stage": "uploading",
-    "percent": 45,
-    "bytes_done": 460800,
-    "total_bytes": 1024000,
-    "speed_kbps": 128.5,
-    "message": "Writing OTA partition..."
+    "phase": "local_ota",
+    "written": 460800,
+    "total": 1024000,
+    "message": "Flashing local OTA partition..."
   }
   ```
+  `phase` is `local_ota` for `/upload` and `can_flash` for `/flash`. Sent by `broadcast_ota_progress()` every 32 KB and at the end; the page computes the percentage from `written` / `total`.
 
 ---
 
@@ -217,7 +216,7 @@ sequenceDiagram
 
 The Factory App interface uses a responsive 4-tab layout built on top of [SimpleCSS](https://simplecss.org/):
 1. **Setup & Calibration**, with three sub-tabs:
-   - **General**: Real-time NVS calibration parameters (`fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`) and live odometer/trip adjustment.
+   - **General**: Fuel self-learning toggle, full-tank resistance, low fuel threshold and coolant overtemperature threshold (form fields `fuel_learn_en`, `fuel_full_r`, `low_fuel_threshold`, `overtemp_threshold`, stored as the `vx_fuel` and `vx_coolant` keys of section 2.1), and live odometer/trip adjustment.
    - **Gear Estimator**: Form generated from the `fields` table of `GET /api/gear`, one card per group (Ratio model, Gating, Filter, Transitions, Clutch drop), with the stored source, *Save to NVS*, *Reload*, *Load tuned defaults* (fills the form only) and *Erase stored copy*. The form is loaded the first time the sub-tab is opened.
    - **Speed (ECE R39)**: Compliance mode checkbox, speed correction A in percent (0 to 10 %) and offset B in km/h (0 to 4 km/h), with the source badge, *Save to NVS*, *Reload*, *Load defaults* (fills the form only) and a preview table (true speed, sent speed, over-read, allowed over-read). Both number fields are checked on every keystroke: empty, non-numeric, negative, exponent, out-of-range or more than 2 decimals is refused with the reason under the fields, the field is outlined, and *Save to NVS* stays disabled. Values are never clamped silently.
 2. **IO & Bus Debug**:
@@ -237,7 +236,7 @@ The Factory App interface uses a responsive 4-tab layout built on top of [Simple
 
 1. **Boot Initialization**:
    - Initializes NVS (settings namespaces in the default partition, after copying legacy keys, and `storage` in the `nvs_odo` partition).
-   - Verifies existence of required keys (`fuel_learn_en`, `fuel_full_r`, `lo_fuel_thr`, `overtemp_th`, `lastPart`, `odometer_m`, `trip_m`). Missing keys are initialized with defaults.
+   - Copies legacy keys with `vx::nvs::migrateLegacyKeys()`, then writes the default of any missing key: `vx_fuel`/`learn_en`, `full_ohm`, `low_pct` and `vx_coolant`/`hot_degc` (`vx::nvs::loadOrInit()`), `vx_sys`/`boot_slot` (`-1`, only when neither it nor the legacy `lastPart` exists), and `odometer_m`, `trip_m` in `nvs_odo`.
    - Initializes I2C bus, TCA9555 IO expander (with optional IRQ on `CONFIG_EXP_INT_PIN`), ADS1115 ADC, and MCPWM capture channels.
    - Starts TWAI CAN driver with `dispatch_can_frame` callback for LDB/RDB version and heartbeat monitoring.
    - Spawns background hardware tasks:

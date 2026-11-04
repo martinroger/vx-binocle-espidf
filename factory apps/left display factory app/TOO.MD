@@ -24,7 +24,7 @@ The app has no display driver and no WebSocket endpoint. The LCD stays dark whil
 | GET | `/`, `/simple.min.css` | Web page and stylesheet, served from the `storage` SPIFFS partition |
 | GET | `/version` | Project name, version and build date from the app descriptor |
 | GET | `/partitions` | Partition table and states |
-| GET | `/prevboot` | Previously booted partition |
+| GET | `/prevboot` | Previously booted partition, from NVS `vx_sys`/`boot_slot` (falls back to the legacy `storage`/`lastPart`), and the partition to flash next |
 | POST | `/upload` | Multipart upload of an app image into the next OTA partition |
 | POST | `/set_boot` | Select the boot partition |
 | POST | `/reboot` | Restart the MCU |

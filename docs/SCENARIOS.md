@@ -87,13 +87,13 @@ sequenceDiagram
     participant LDB as Left Display Board
     participant BUZZ as Audio Buzzer (IO Expander Pin 7)
 
-    SENS->>ITF: Coolant Temperature >= overtemp_th (NVS, default 106 °C)
+    SENS->>ITF: Coolant Temperature >= vx_coolant/hot_degc (NVS, default 106 °C)
     ITF->>ITF: Flag itf_over_temperature_tt = true in active_hi_lo state
     ITF->>CAN: Broadcast BINOCAN_ITF_ACTIVE_HI_LO (itf_over_temperature_tt = ON)
     CAN-->>LDB: Ingest frame -> overTemperatureOn = true
     
     LDB->>LDB: updateUiTask illuminates over-temperature telltale icon
-    opt Buzzer Enabled in Settings (overTemp_buzz == true)
+    opt Buzzer Enabled in Settings (hotBuzzEnabled == true)
         LDB->>BUZZ: display_hw_buzzer_set(true) (TCA9554 P7)
     end
     
@@ -128,7 +128,7 @@ sequenceDiagram
     loop For each Consecutive Frame (CF: 0x20..0x2F with 7 data bytes)
         MASTER->>CAN: UDS_REQ (0x20 | SequenceNumber, 7 Bytes Chunk)
         CAN-->>DSP: handleOta validates Sequence Number & esp_ota_write()
-        DSP->>DSP: Update transfer progress (trip_km / fuelLevel_pc indicator)
+        DSP->>DSP: Update transfer progress (tripKm / fuelLevelPct indicator)
         opt BlockCounter reached BlockSize
             DSP->>CAN: UDS_RESP Flow Control (0x30, BlockSize, ST_min)
             CAN-->>MASTER: FC Frame Received
