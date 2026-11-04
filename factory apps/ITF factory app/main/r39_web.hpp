@@ -2,8 +2,8 @@
  * @file r39_web.hpp
  * @brief REST endpoints to read and store the ECE R39 speed compliance settings, and the live compliant speed.
  *
- * The settings live in the default NVS partition, namespace "storage" (keys from common/r39_compliance.hpp), next
- * to the other calibration values. The interface board reads them, and rewrites any missing or out-of-range key
+ * The settings live in the default NVS partition, namespace "vx_r39" (keys from common/nvs_keys.hpp), beside
+ * the other calibration namespaces. The interface board reads them, and rewrites any missing or out-of-range key
  * with its default, on its next boot.
  *
  * Endpoints:
@@ -27,6 +27,7 @@
 #include "nvs.h"
 #include "sdkconfig.h"
 #include "r39_compliance.hpp"
+#include "nvs_keys.hpp"
 
 /** Maximum accepted POST /api/r39 body, in bytes. */
 #define R39_WEB_MAX_BODY (256)
@@ -56,22 +57,22 @@ namespace r39_web
 	{
 		raw = r39::defaults();
 		nvs_handle_t h;
-		if (nvs_open("storage", NVS_READONLY, &h) != ESP_OK)
+		if (nvs_open(vx::nvs::r39::NS, NVS_READONLY, &h) != ESP_OK)
 			return Source::Default;
 
 		bool all = true;
 		uint8_t en;
 		uint16_t a_bp;
 		int16_t b_ckph;
-		if (nvs_get_u8(h, r39::KEY_EN, &en) == ESP_OK && en <= 1)
+		if (nvs_get_u8(h, vx::nvs::r39::EN, &en) == ESP_OK && en <= 1)
 			raw.en = en;
 		else
 			all = false;
-		if (nvs_get_u16(h, r39::KEY_A_BP, &a_bp) == ESP_OK && a_bp <= r39::A_BP_MAX)
+		if (nvs_get_u16(h, vx::nvs::r39::A_BP, &a_bp) == ESP_OK && a_bp <= r39::A_BP_MAX)
 			raw.a_bp = a_bp;
 		else
 			all = false;
-		if (nvs_get_i16(h, r39::KEY_B_CKPH, &b_ckph) == ESP_OK && b_ckph >= r39::B_CKPH_MIN && b_ckph <= r39::B_CKPH_MAX)
+		if (nvs_get_i16(h, vx::nvs::r39::B_CKPH, &b_ckph) == ESP_OK && b_ckph >= r39::B_CKPH_MIN && b_ckph <= r39::B_CKPH_MAX)
 			raw.b_ckph = b_ckph;
 		else
 			all = false;
@@ -258,14 +259,14 @@ namespace r39_web
 		}
 
 		nvs_handle_t h;
-		esp_err_t err = nvs_open("storage", NVS_READWRITE, &h);
+		esp_err_t err = nvs_open(vx::nvs::r39::NS, NVS_READWRITE, &h);
 		if (err == ESP_OK)
 		{
-			err = nvs_set_u8(h, r39::KEY_EN, raw.en);
+			err = nvs_set_u8(h, vx::nvs::r39::EN, raw.en);
 			if (err == ESP_OK)
-				err = nvs_set_u16(h, r39::KEY_A_BP, raw.a_bp);
+				err = nvs_set_u16(h, vx::nvs::r39::A_BP, raw.a_bp);
 			if (err == ESP_OK)
-				err = nvs_set_i16(h, r39::KEY_B_CKPH, raw.b_ckph);
+				err = nvs_set_i16(h, vx::nvs::r39::B_CKPH, raw.b_ckph);
 			if (err == ESP_OK)
 				err = nvs_commit(h);
 			nvs_close(h);

@@ -42,10 +42,10 @@
  *
  * @param[in] pvParameters Unused FreeRTOS task parameter (Default: NULL).
  *
- * @note Thread Safety: Reads volatile capture buffers updated by ISRs; writes to global gear_estimator.
- * @note Side Effects: Updates frequency fields of pwm_cap_coolant, pwm_cap_rpm, pwm_cap_speed, and gear_estimator state.
+ * @note Thread Safety: Reads volatile capture buffers updated by ISRs; writes to global gearEstimator.
+ * @note Side Effects: Updates frequency fields of pwmCapCoolant, pwmCapRpm, pwmCapSpeed, and gearEstimator state.
  */
-inline void acquire_mcpwm(void *pvParameters)
+inline void acquireMcpwm(void *pvParameters)
 {
     (void)pvParameters;
     TickType_t last_wake_time = xTaskGetTickCount();
@@ -53,10 +53,10 @@ inline void acquire_mcpwm(void *pvParameters)
     while (true)
     {
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(MCPWM_PROCESSOR_CYCLE_TIME_MS));
-        compute_freq_dut(&pwm_cap_coolant);
-        compute_freq_dut(&pwm_cap_rpm);
-        compute_freq_dut(&pwm_cap_speed);
-        gear_estimator_update(&gear_estimator, pwm_cap_speed.frequency, pwm_cap_rpm.frequency, MCPWM_PROCESSOR_SAMPLE_DT_S);
+        compute_freq_dut(&pwmCapCoolant);
+        compute_freq_dut(&pwmCapRpm);
+        compute_freq_dut(&pwmCapSpeed);
+        gear_estimator_update(&gearEstimator, pwmCapSpeed.frequency, pwmCapRpm.frequency, MCPWM_PROCESSOR_SAMPLE_DT_S);
     }
 }
 
@@ -71,7 +71,7 @@ inline void acquire_mcpwm(void *pvParameters)
  * @note Thread Safety: Must be called during system initialization before starting telemetry packaging tasks.
  * @note Side Effects: May write the default gear parameters to NVS. Allocates FreeRTOS task with 4096 bytes stack pinned to CONFIG_CAN_CORE_AFFINITY.
  */
-inline esp_err_t mcpwm_processor_init(void)
+inline esp_err_t initMcpwmProcessor(void)
 {
     esp_err_t ret = ESP_OK;
 
@@ -82,9 +82,9 @@ inline esp_err_t mcpwm_processor_init(void)
         ESP_LOGW(__func__, "Gear parameters not persisted (%s), using tuned defaults", esp_err_to_name(gear_err));
     else
         ESP_LOGI(__func__, "Gear parameters loaded from %s", (gear_params_src == GEAR_PARAMS_FROM_NVS) ? "NVS" : "tuned defaults");
-    gear_estimator_init(&gear_estimator, &gear_params);
+    gear_estimator_init(&gearEstimator, &gear_params);
 
-    if (xTaskCreatePinnedToCore(acquire_mcpwm, "PWM PROC", 4096, NULL, 4, &acquire_mcpwm_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(acquireMcpwm, "PWM PROC", 4096, NULL, 4, &acquireMcpwmTaskHandle, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create MCPWM processor task");
         ret = ESP_FAIL;

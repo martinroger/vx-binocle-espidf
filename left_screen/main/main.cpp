@@ -62,7 +62,7 @@ extern "C" void action_test_brightness(lv_event_t *e)
 {
     lv_obj_t *target = lv_event_get_target_obj(e);
     uint8_t testBrightness = lv_slider_get_value(target);
-    set_backlight_brightness_instant(testBrightness);
+    setBacklightInstant(testBrightness);
 }
 
 /// @brief Save brightness on slider release, if the value is different from the currently saved one
@@ -72,31 +72,31 @@ extern "C" void action_save_brightness(lv_event_t *e)
     lv_obj_t *target = lv_event_get_target_obj(e);
     uint8_t targetBrightness = lv_slider_get_value(target);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (target == objects.dark_slider && targetBrightness != display_board_st.darkBrightness)
+        if (target == objects.dark_slider && targetBrightness != displayBoard.blDarkPct)
         {
-            if (nvs_set_u8(h, "dark_bg", targetBrightness) != ESP_OK)
+            if (nvs_set_u8(h, vx::nvs::disp::BL_DARK_PCT, targetBrightness) != ESP_OK)
                 ESP_LOGE(__func__, "Could not set dark mode brightness in NVS");
             else
             {
-                display_board_st.darkBrightness = targetBrightness;
+                displayBoard.blDarkPct = targetBrightness;
                 lvgl_port_lock(-1);
-                lv_label_set_text_fmt(objects.d_bright, "%u", display_board_st.darkBrightness);
+                lv_label_set_text_fmt(objects.d_bright, "%u", displayBoard.blDarkPct);
                 lvgl_port_unlock();
             }
         }
-        else if (target == objects.light_slider && targetBrightness != display_board_st.lightBrightness)
+        else if (target == objects.light_slider && targetBrightness != displayBoard.blLightPct)
         {
-            if (nvs_set_u8(h, "light_bg", targetBrightness) != ESP_OK)
+            if (nvs_set_u8(h, vx::nvs::disp::BL_LIGHT_PCT, targetBrightness) != ESP_OK)
                 ESP_LOGE(__func__, "Could not set light mode brightness in NVS");
             else
             {
-                display_board_st.lightBrightness = targetBrightness;
+                displayBoard.blLightPct = targetBrightness;
                 lvgl_port_lock(-1);
-                lv_label_set_text_fmt(objects.l_bright, "%u", display_board_st.lightBrightness);
+                lv_label_set_text_fmt(objects.l_bright, "%u", displayBoard.blLightPct);
                 lvgl_port_unlock();
             }
         }
@@ -111,10 +111,10 @@ extern "C" void action_save_brightness(lv_event_t *e)
         nvs_commit(h);
         nvs_close(h);
 
-        if (display_board_st.lightMode)
-            set_backlight_brightness_smooth(display_board_st.lightBrightness, 150);
+        if (displayBoard.themeLight)
+            setBacklightSmooth(displayBoard.blLightPct, 150);
         else
-            set_backlight_brightness_smooth(display_board_st.darkBrightness, 150);
+            setBacklightSmooth(displayBoard.blDarkPct, 150);
     }
 }
 
@@ -122,28 +122,28 @@ extern "C" void action_save_brightness(lv_event_t *e)
 /// @param e LV event, assumes LV_VALUE_CHANGED
 extern "C" void action_mode_lock_switch_toggled(lv_event_t *e)
 {
-    display_board_st.modeLocked = lv_obj_has_state(objects.mode_lock_switch, LV_STATE_CHECKED);
+    displayBoard.themeLocked = lv_obj_has_state(objects.mode_lock_switch, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "th_locked", (uint8_t)(display_board_st.modeLocked)) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::THEME_LOCKED, (uint8_t)(displayBoard.themeLocked)) != ESP_OK)
             ESP_LOGE(__func__, "Could not set theme lock in NVS");
         else
         {
             if (lvgl_port_lock(-1))
             {
-                lv_obj_set_state(objects.theme_switch, LV_STATE_DISABLED, !(display_board_st.modeLocked)); // Free access to the switch for the theme
+                lv_obj_set_state(objects.theme_switch, LV_STATE_DISABLED, !(displayBoard.themeLocked)); // Free access to the switch for the theme
                 lvgl_port_unlock();
             }
         }
         nvs_commit(h);
         nvs_close(h);
     }
-    if (!(display_board_st.modeLocked))
+    if (!(displayBoard.themeLocked))
     {
-        p_headlightsOn = !headlightsOn;
+        prevHeadlightsOn = !headlightsOn;
     }
 }
 
@@ -151,18 +151,18 @@ extern "C" void action_mode_lock_switch_toggled(lv_event_t *e)
 /// @param e LV event, assumes LV_VALUE_CHANGED
 extern "C" void action_mode_switch_toggled(lv_event_t *e)
 {
-    display_board_st.lightMode = !(lv_obj_has_state(objects.theme_switch, LV_STATE_CHECKED));
+    displayBoard.themeLight = !(lv_obj_has_state(objects.theme_switch, LV_STATE_CHECKED));
     if (lvgl_port_lock(-1))
     {
-        switch_theme(!(display_board_st.lightMode));
+        switchTheme(!(displayBoard.themeLight));
         lvgl_port_unlock();
     }
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "light_th", (uint8_t)(display_board_st.lightMode)) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t)(displayBoard.themeLight)) != ESP_OK)
             ESP_LOGE(__func__, "Could not set theme mode in NVS");
         nvs_commit(h);
         nvs_close(h);
@@ -173,25 +173,25 @@ extern "C" void action_mode_switch_toggled(lv_event_t *e)
 /// @param e LV event, assumes LV_VALUE_CHANGED
 extern "C" void action_mph_switch_toggled(lv_event_t *e)
 {
-    display_board_st.mph_selected = lv_obj_has_state(objects.mph_on, LV_STATE_CHECKED);
+    displayBoard.unitMph = lv_obj_has_state(objects.mph_on, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "mph_on", (uint8_t)(display_board_st.mph_selected)) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::UNIT_MPH, (uint8_t)(displayBoard.unitMph)) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save mph selector status");
         nvs_commit(h);
         nvs_close(h);
     }
     if (lvgl_port_lock(-1))
     {
-        if (!(display_board_st.mph_selected))
+        if (!(displayBoard.unitMph))
         {
             lv_scale_set_range(objects.speed_scale, 0, 2400);
             lv_scale_set_total_tick_count(objects.speed_scale, 49);
             lv_scale_set_major_tick_every(objects.speed_scale, 4);
-            lv_scale_set_text_src(objects.speed_scale, speed_kph_scale_labels);
+            lv_scale_set_text_src(objects.speed_scale, speedKphScaleLabels);
             lv_arc_set_range(objects.speed_arc, 0, 2400);
             lv_label_set_text(objects.speed_unit, "KPH");
         }
@@ -200,16 +200,16 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
             lv_scale_set_range(objects.speed_scale, 0, 1600);
             lv_scale_set_total_tick_count(objects.speed_scale, 33);
             lv_scale_set_major_tick_every(objects.speed_scale, 4);
-            lv_scale_set_text_src(objects.speed_scale, speed_mph_scale_labels);
+            lv_scale_set_text_src(objects.speed_scale, speedMphScaleLabels);
             lv_arc_set_range(objects.speed_arc, 0, 1600);
             lv_label_set_text(objects.speed_unit, "MPH");
         }
         lvgl_port_unlock();
     }
     // Force refresh
-    p_odometer_km = 0;
-    p_trip_km = 0;
-    p_speed_kph = 0;
+    prevOdometerKm = 0;
+    prevTripKm = 0;
+    prevSpeedKph = 0;
 }
 
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
@@ -218,28 +218,28 @@ extern "C" void action_mph_switch_toggled(lv_event_t *e)
 /// @param e LV event, assumes LV_VALUE_CHANGED
 extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
 {
-    display_board_st.rpm_alarm_override = lv_obj_has_state(objects.override_alarm_sw, LV_STATE_CHECKED);
+    displayBoard.alarmOverride = lv_obj_has_state(objects.override_alarm_sw, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "rpm_al_overr", (uint8_t)display_board_st.rpm_alarm_override) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::ALARM_OVR, (uint8_t)displayBoard.alarmOverride) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save rpm alarm override switch status");
-        if (nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::ALARM_RPM, &(displayBoard.alarmRpm)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM alarm threshold from NVS");
         nvs_commit(h);
         nvs_close(h);
         if (lvgl_port_lock(-1))
         {
-            lv_obj_set_state(objects.override_alarm_sw, LV_STATE_CHECKED, (display_board_st.rpm_alarm_override));
-            lv_obj_set_state(objects.blink_alarm_sw, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
-            lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
-            lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
-            lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
-            lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, !(display_board_st.rpm_alarm_override));
-            lv_spinbox_set_value(objects.rpm_alarm_spinbox, (int32_t)display_board_st.rpm_alarm_threshold);
-            lv_obj_set_state(objects.blink_alarm_sw, LV_STATE_CHECKED, display_board_st.rpm_alarm_blink);
+            lv_obj_set_state(objects.override_alarm_sw, LV_STATE_CHECKED, (displayBoard.alarmOverride));
+            lv_obj_set_state(objects.blink_alarm_sw, LV_STATE_DISABLED, !(displayBoard.alarmOverride));
+            lv_obj_set_state(objects.dec_rpm_alarm_btn, LV_STATE_DISABLED, !(displayBoard.alarmOverride));
+            lv_obj_set_state(objects.inc_rpm_alarm_btn, LV_STATE_DISABLED, !(displayBoard.alarmOverride));
+            lv_obj_set_state(objects.rpm_alarm_spinbox, LV_STATE_DISABLED, !(displayBoard.alarmOverride));
+            lv_obj_set_state(objects.save_rpm_alarm_btn, LV_STATE_DISABLED, !(displayBoard.alarmOverride));
+            lv_spinbox_set_value(objects.rpm_alarm_spinbox, (int32_t)displayBoard.alarmRpm);
+            lv_obj_set_state(objects.blink_alarm_sw, LV_STATE_CHECKED, displayBoard.alarmBlink);
             lvgl_port_unlock();
         }
     }
@@ -249,13 +249,13 @@ extern "C" void action_set_rpm_alarm_override(lv_event_t *e)
 /// @param e LV event VALUE_CHANGED
 extern "C" void action_blink_rpm_alarm_toggled(lv_event_t *e)
 {
-    display_board_st.rpm_alarm_blink = lv_obj_has_state(objects.blink_alarm_sw, LV_STATE_CHECKED);
+    displayBoard.alarmBlink = lv_obj_has_state(objects.blink_alarm_sw, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "rpm_al_blnk", (uint8_t)display_board_st.rpm_alarm_blink) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::ALARM_BLINK, (uint8_t)displayBoard.alarmBlink) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save rpm alarm blink switch status");
         nvs_commit(h);
         nvs_close(h);
@@ -286,10 +286,10 @@ extern "C" void action_inc_rpm_spinbox(lv_event_t *e)
         lv_spinbox_increment(target_spinbox);
         if (target_spinbox != objects.rpm_alarm_spinbox)
         {
-            display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
-            display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
-            lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
-            lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
+            displayBoard.shiftMidRpm = lv_spinbox_get_value(objects.shift_mid_spinbox);
+            displayBoard.shiftTopRpm = lv_spinbox_get_value(objects.shift_top_spinbox);
+            lv_spinbox_set_max_value(objects.shift_mid_spinbox, displayBoard.shiftTopRpm - 1);
+            lv_spinbox_set_min_value(objects.shift_top_spinbox, displayBoard.shiftMidRpm + 1);
         }
 
         lvgl_port_unlock();
@@ -320,10 +320,10 @@ extern "C" void action_dec_rpm_spinbox(lv_event_t *e)
         lv_spinbox_decrement(target_spinbox);
         if (target_spinbox != objects.rpm_alarm_spinbox)
         {
-            display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
-            display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
-            lv_spinbox_set_max_value(objects.shift_mid_spinbox, display_board_st.shift_top_threshold - 1);
-            lv_spinbox_set_min_value(objects.shift_top_spinbox, display_board_st.shift_mid_threshold + 1);
+            displayBoard.shiftMidRpm = lv_spinbox_get_value(objects.shift_mid_spinbox);
+            displayBoard.shiftTopRpm = lv_spinbox_get_value(objects.shift_top_spinbox);
+            lv_spinbox_set_max_value(objects.shift_mid_spinbox, displayBoard.shiftTopRpm - 1);
+            lv_spinbox_set_min_value(objects.shift_top_spinbox, displayBoard.shiftMidRpm + 1);
         }
         lvgl_port_unlock();
     }
@@ -336,25 +336,25 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
     lv_obj_t *target = lv_event_get_target_obj(e);
 
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
         if (target == objects.save_rpm_alarm_btn)
         {
-            display_board_st.rpm_alarm_threshold = lv_spinbox_get_value(objects.rpm_alarm_spinbox);
+            displayBoard.alarmRpm = lv_spinbox_get_value(objects.rpm_alarm_spinbox);
 
-            if (nvs_set_u32(h, "rpm_al_thr", display_board_st.rpm_alarm_threshold) != ESP_OK)
+            if (nvs_set_u32(h, vx::nvs::disp::ALARM_RPM, displayBoard.alarmRpm) != ESP_OK)
                 ESP_LOGE(__func__, "Cannot save rpm alarm override threshold");
         }
         if (target == objects.save_shift_ind_btn)
         {
-            display_board_st.shift_mid_threshold = lv_spinbox_get_value(objects.shift_mid_spinbox);
-            display_board_st.shift_top_threshold = lv_spinbox_get_value(objects.shift_top_spinbox);
+            displayBoard.shiftMidRpm = lv_spinbox_get_value(objects.shift_mid_spinbox);
+            displayBoard.shiftTopRpm = lv_spinbox_get_value(objects.shift_top_spinbox);
 
-            if (nvs_set_u32(h, "shft_mid", display_board_st.shift_mid_threshold) != ESP_OK)
+            if (nvs_set_u32(h, vx::nvs::disp::SHIFT_MID_RPM, displayBoard.shiftMidRpm) != ESP_OK)
                 ESP_LOGE(__func__, "Cannot save shift light mid threshold");
-            if (nvs_set_u32(h, "shft_top", display_board_st.shift_top_threshold) != ESP_OK)
+            if (nvs_set_u32(h, vx::nvs::disp::SHIFT_TOP_RPM, displayBoard.shiftTopRpm) != ESP_OK)
                 ESP_LOGE(__func__, "Cannot save shift light top threshold");
         }
         nvs_commit(h);
@@ -366,18 +366,18 @@ extern "C" void action_save_rpm_spinbox(lv_event_t *e)
 /// @param e LV event VALUE_CHANGED
 extern "C" void action_shift_indicator_toggled(lv_event_t *e)
 {
-    display_board_st.use_shift_indicator = lv_obj_has_state(objects.shift_ind_sw, LV_STATE_CHECKED);
+    displayBoard.shiftEnabled = lv_obj_has_state(objects.shift_ind_sw, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "shft_ind", (uint8_t)display_board_st.use_shift_indicator) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::SHIFT_EN, (uint8_t)displayBoard.shiftEnabled) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save shift indicator status");
         // Following two gets are not really needed
-        if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::SHIFT_MID_RPM, &(displayBoard.shiftMidRpm)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
-        if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::SHIFT_TOP_RPM, &(displayBoard.shiftTopRpm)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift top threshold from NVS");
         nvs_commit(h);
         nvs_close(h);
@@ -389,71 +389,71 @@ extern "C" void action_shift_indicator_toggled(lv_event_t *e)
 extern "C" void action_decimation_update(lv_event_t *e)
 {
     if (lv_obj_has_state(objects.decimation_sw, LV_STATE_CHECKED))
-        display_board_st.rpm_decimation = 100;
+        displayBoard.rpmDecim = 100;
     else
-        display_board_st.rpm_decimation = 10;
+        displayBoard.rpmDecim = 10;
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u32(h, "rpm_dec", display_board_st.rpm_decimation) != ESP_OK)
+        if (nvs_set_u32(h, vx::nvs::disp::RPM_DECIM, displayBoard.rpmDecim) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save RPM decimator status");
 
         nvs_commit(h);
         nvs_close(h);
     }
-    p_rpm = 1000; // Force refresh indirectly
+    prevRpm = 1000; // Force refresh indirectly
     rpm = 0;
 }
 
 /**
  * @brief Enables or disables gear estimator display instead of RPM on the gauge.
  *
- * Saves the updated boolean toggle into NVS key "gear_on" under the "storage" namespace
- * and invalidates p_gearPosition to force an immediate UI redraw.
+ * Saves the updated boolean toggle into NVS key vx::nvs::disp::GEAR_SHOW under the vx_disp namespace
+ * and invalidates prevGearPosition to force an immediate UI redraw.
  *
  * @param[in] e Pointer to LVGL event structure (LV_EVENT_VALUE_CHANGED).
  *
  * @note Thread Safety: Invoked from LVGL event handler context on Core 1.
- * @note Side Effects: Writes display_board_st.showGearPosition to NVS; invalidates p_gearPosition.
+ * @note Side Effects: Writes displayBoard.gearShow to NVS; invalidates prevGearPosition.
  */
 extern "C" void action_enable_gears(lv_event_t *e)
 {
-    display_board_st.showGearPosition = lv_obj_has_state(objects.gear_on, LV_STATE_CHECKED);
+    displayBoard.gearShow = lv_obj_has_state(objects.gear_on, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "gear_on", display_board_st.showGearPosition) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::GEAR_SHOW, displayBoard.gearShow) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save gear display status");
 
         nvs_commit(h);
         nvs_close(h);
     }
-    p_gearPosition = gearPosition + 1;
+    prevGearPosition = gearPosition + 1;
 }
 
 /// @brief Updates the overtemperature buzzer enabled status
 /// @param e LV event VALUE CHANGED
 extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
 {
-    display_board_st.overTemp_buzz = lv_obj_has_state(objects.buzz_overtemp_sw, LV_STATE_CHECKED);
+    displayBoard.hotBuzzEnabled = lv_obj_has_state(objects.buzz_overtemp_sw, LV_STATE_CHECKED);
     nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
     else
     {
-        if (nvs_set_u8(h, "overt_bzz", (uint8_t)display_board_st.overTemp_buzz) != ESP_OK)
+        if (nvs_set_u8(h, vx::nvs::disp::HOT_BUZZ_EN, (uint8_t)displayBoard.hotBuzzEnabled) != ESP_OK)
             ESP_LOGE(__func__, "Cannot save overtemp buzzer status");
         nvs_commit(h);
         nvs_close(h);
     }
-    if (!display_board_st.overTemp_buzz)
+    if (!displayBoard.hotBuzzEnabled)
     {
         // Ensure buzzer is off
-        if (display_board_st.displayHwReady)
+        if (displayBoard.displayHwReady)
         {
             display_hw_buzzer_set(false);
         }
@@ -461,7 +461,7 @@ extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
     else if (overTemperatureOn)
     {
         // Enable buzzer if needed
-        if (display_board_st.displayHwReady)
+        if (displayBoard.displayHwReady)
         {
             display_hw_buzzer_set(true);
         }
@@ -475,9 +475,9 @@ extern "C" void action_buzz_overtemp_toggled(lv_event_t *e)
 
 /// @brief Wrapper function to attempt a rollback
 /// @return ESP_OK if rollback scheduled, some NOT_OK error otherwise
-esp_err_t attemptRollBack()
+esp_err_t attemptRollback()
 {
-    display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
+    displayBoard.smState = XDB_SM_ST_DEGRADED;
 
     // Force an immediate display state message transmission over CAN if task is running
     if (display_board_st_PKG_hdl != nullptr)
@@ -486,7 +486,7 @@ esp_err_t attemptRollBack()
         vTaskDelay(pdMS_TO_TICKS(100)); // Allow TWAI driver to push frame to the bus
     }
 
-    if (rollBackPossible)
+    if (rollbackPossible)
     {
         ESP_LOGW(__func__, "Activating rollback and restarting.");
         esp_err_t err = esp_ota_mark_app_invalid_rollback();
@@ -504,31 +504,31 @@ esp_err_t attemptRollBack()
 extern "C" void app_main()
 {
     // Declare board state at initialisation
-    display_board_st.internal_ST = XDB_SM_ST_INIT;
+    displayBoard.smState = XDB_SM_ST_INIT;
 
 #pragma region App metadata parse
-    // Allocate memory for app_metadata and fill it by reference
-    display_board_st.app_metadata = (parsed_app_meta_t *)malloc(sizeof(parsed_app_meta_t));
-    if (display_board_st.app_metadata) // Successful allocation
+    // Allocate memory for appMeta and fill it by reference
+    displayBoard.appMeta = (parsed_app_meta_t *)malloc(sizeof(parsed_app_meta_t));
+    if (displayBoard.appMeta) // Successful allocation
     {
-        esp_err_t meta_err = parse_app_metadata(display_board_st.app_metadata);
+        esp_err_t meta_err = parse_app_metadata(displayBoard.appMeta);
         if (meta_err != ESP_OK)
         {
             ESP_LOGW(TAG, "Failed to parse app metadata");
-            attemptRollBack();
+            attemptRollback();
         }
     }
     else // Unsuccessful memory allocation
     {
         ESP_LOGE(TAG, "Failed to allocate memory for app_metadata");
-        attemptRollBack();
+        attemptRollback();
     }
 #pragma endregion
 
 #pragma region OTA NVS ROLLBACK
     // Get Rollback status and first boot state
-    rollBackPossible = esp_ota_check_rollback_is_possible();
-    ESP_LOGI(__func__, "Rollback Possible ? %u", rollBackPossible);
+    rollbackPossible = esp_ota_check_rollback_is_possible();
+    ESP_LOGI(__func__, "Rollback Possible ? %u", rollbackPossible);
     const esp_partition_t *runningPart = esp_ota_get_running_partition();
     esp_ota_img_states_t imageState;
     esp_ota_get_state_partition(runningPart, &imageState);
@@ -545,114 +545,108 @@ extern "C" void app_main()
         nvs_flash_erase();
         nvs_flash_init();
     }
-    nvs_handle_t h;
-    if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+    vx::nvs::migrateLegacyKeys();
+    int8_t current_part = -1;
+    if (strcmp("ota_0", runningPart->label) == 0)
     {
-        ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        ESP_LOGI(__func__, "Running partition is ota_0");
+        current_part = 0;
+    }
+    else if (strcmp("ota_1", runningPart->label) == 0)
+    {
+        ESP_LOGI(__func__, "Running partition is ota_1");
+        current_part = 1;
+    }
+    else
+        ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
+    if (vx::nvs::recordBootSlot(current_part) != ESP_OK)
+        ESP_LOGE(__func__, "Could not record the boot slot in NVS");
+
+    nvs_handle_t h;
+    if (nvs_open(vx::nvs::disp::NS, NVS_READWRITE, &h) != ESP_OK)
+    {
+        ESP_LOGE(__func__, "Cannot get into the display settings namespace of default NVS");
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
     }
     else
     {
-        int8_t current_part = -1;
-        if (strcmp("ota_0", runningPart->label) == 0)
-        {
-            ESP_LOGI(__func__, "Running partition is ota_0");
-            current_part = 0;
-        }
-        else if (strcmp("ota_1", runningPart->label) == 0)
-        {
-            ESP_LOGI(__func__, "Running partition is ota_1");
-            current_part = 1;
-        }
-        else
-        {
-            ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
-            current_part = -1;
-        }
-
-        int8_t saved_part = -2;
-        if (nvs_get_i8(h, "lastPart", &saved_part) != ESP_OK || saved_part != current_part)
-        {
-            nvs_set_i8(h, "lastPart", current_part);
-        }
-
-        if (nvs_get_u8(h, "mph_on", (uint8_t *)&(display_board_st.mph_selected)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::UNIT_MPH, (uint8_t *)&(displayBoard.unitMph)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve MPH status from NVS");
-        if (nvs_get_u8(h, "gear_on", (uint8_t *)&(display_board_st.showGearPosition)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::GEAR_SHOW, (uint8_t *)&(displayBoard.gearShow)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve gear estimator display state from NVS");
 
-        if (nvs_get_u8(h, "rpm_al_overr", (uint8_t *)&(display_board_st.rpm_alarm_override)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::ALARM_OVR, (uint8_t *)&(displayBoard.alarmOverride)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM alarm override.");
-        if (nvs_get_u32(h, "rpm_al_thr", &(display_board_st.rpm_alarm_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::ALARM_RPM, &(displayBoard.alarmRpm)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the RPM alarm threshold value.");
-        if (nvs_get_u8(h, "rpm_al_blnk", (uint8_t *)&(display_board_st.rpm_alarm_blink)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::ALARM_BLINK, (uint8_t *)&(displayBoard.alarmBlink)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the RPM alarm blinker status from NVS");
-        if (nvs_get_u8(h, "shft_ind", (uint8_t *)&(display_board_st.use_shift_indicator)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::SHIFT_EN, (uint8_t *)&(displayBoard.shiftEnabled)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the shift indicator status from NVS");
-        if (nvs_get_u32(h, "shft_mid", &(display_board_st.shift_mid_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::SHIFT_MID_RPM, &(displayBoard.shiftMidRpm)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift mid threshold from NVS");
-        if (nvs_get_u32(h, "shft_top", &(display_board_st.shift_top_threshold)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::SHIFT_TOP_RPM, &(displayBoard.shiftTopRpm)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve shift top threshold from NVS");
-        if (nvs_get_u32(h, "rpm_dec", &(display_board_st.rpm_decimation)) != ESP_OK)
+        if (nvs_get_u32(h, vx::nvs::disp::RPM_DECIM, &(displayBoard.rpmDecim)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve RPM decimation factor from NVS");
 
-        if (nvs_get_u8(h, "overt_bzz", (uint8_t *)&(display_board_st.overTemp_buzz)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::HOT_BUZZ_EN, (uint8_t *)&(displayBoard.hotBuzzEnabled)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve overtemp buzzer status from NVS");
 
-        if (nvs_get_u8(h, "dark_bg", &(display_board_st.darkBrightness)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::BL_DARK_PCT, &(displayBoard.blDarkPct)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the dark mode brightness value.");
-        if (nvs_get_u8(h, "light_bg", &(display_board_st.lightBrightness)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::BL_LIGHT_PCT, &(displayBoard.blLightPct)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the light mode brightness value.");
-        if (nvs_get_u8(h, "th_locked", (uint8_t *)&(display_board_st.modeLocked)) != ESP_OK)
+        if (nvs_get_u8(h, vx::nvs::disp::THEME_LOCKED, (uint8_t *)&(displayBoard.themeLocked)) != ESP_OK)
             ESP_LOGW(__func__, "Could not retrieve the mode lock indicator.");
-        if (display_board_st.modeLocked)
-            if (nvs_get_u8(h, "light_th", (uint8_t *)&(display_board_st.lightMode)) != ESP_OK)
+        if (displayBoard.themeLocked)
+            if (nvs_get_u8(h, vx::nvs::disp::THEME_LIGHT, (uint8_t *)&(displayBoard.themeLight)) != ESP_OK)
                 ESP_LOGW(__func__, "Could not retrieve light mode status.");
         nvs_commit(h);
         nvs_close(h);
     }
 
     // Retrieve app metadata to display on the debug screen
-    const esp_app_desc_t *app_metadata;
-    app_metadata = esp_app_get_description();
-    if (!app_metadata)
+    const esp_app_desc_t *appMeta;
+    appMeta = esp_app_get_description();
+    if (!appMeta)
     {
         ESP_LOGE(TAG, "No app metadata available");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
     }
 #pragma endregion
 
 #pragma region CAN START
     // Pre-empt the CAN TO timers
     ESP_LOGI(__func__, "Starting CAN message timeout watchdogs");
-    if (TO_timers_init() != ESP_OK)
+    if (initTimeoutTimers() != ESP_OK)
     {
         ESP_LOGW(__func__, "Impossible to init CAN timeout watchdog timers");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
     }
     // CAN communications
     ESP_LOGI(__func__, "Starting TWAI port and daemon");
     if (initCAN(&dispatchFrame) != ESP_OK)
     {
         ESP_LOGW(__func__, "Issue starting TWAI port and daemon.");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
     }
     // Set up and start CAN packagers
-    if (xTaskCreatePinnedToCore(display_board_st_PKG, "XDB_ST", 4096, NULL, 3, &display_board_st_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(packDisplayBoardSt, "XDB_ST", 4096, NULL, 3, &display_board_st_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create display state package task");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
     }
-    if (xTaskCreatePinnedToCore(display_board_version_PKG, "XDB_VER", 4096, NULL, 3, &display_board_version_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
+    if (xTaskCreatePinnedToCore(packDisplayBoardVersion, "XDB_VER", 4096, NULL, 3, &display_board_version_PKG_hdl, CONFIG_CAN_CORE_AFFINITY) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create display version package task");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
     }
 #pragma endregion
 
@@ -670,17 +664,17 @@ extern "C" void app_main()
     else if (hw_err != ESP_OK)
     {
         ESP_LOGW(__func__, "Could not initialize board: %s", esp_err_to_name(hw_err));
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
     }
     if (hw.panel != nullptr)
     {
-        display_board_st.displayHwReady = true;
-        backlight_fader_init();
-        set_backlight_brightness_instant(0);
+        displayBoard.displayHwReady = true;
+        initBacklightFader();
+        setBacklightInstant(0);
         display_hw_buzzer_set(false);
     }
-    if (display_board_st.internal_ST == XDB_SM_ST_DEGRADED)
+    if (displayBoard.smState == XDB_SM_ST_DEGRADED)
     {
         ESP_LOGE(__func__, "Board initialization failed, halting initialization sequence.");
         return;
@@ -698,8 +692,8 @@ extern "C" void app_main()
     if (lvgl_err != ESP_OK)
     {
         ESP_LOGW(__func__, "Could not start LVGL adapter: %s", esp_err_to_name(lvgl_err));
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
         return;
     }
 
@@ -708,11 +702,11 @@ extern "C" void app_main()
     {
         ui_init(); // Load the UI library and draw it
         // Set up the debug screen
-        lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", app_metadata->version, app_metadata->date, app_metadata->time);
-        lv_label_set_text_fmt(objects.project_info, "%s", app_metadata->project_name);
+        lv_label_set_text_fmt(objects.version_info, "%s - %s - %s", appMeta->version, appMeta->date, appMeta->time);
+        lv_label_set_text_fmt(objects.project_info, "%s", appMeta->project_name);
         lv_label_set_text_fmt(objects.current_partition, "%s", runningPart->label);
 
-        setup_ui();
+        setupUi();
         lvgl_port_unlock();
     }
 
@@ -720,40 +714,40 @@ extern "C" void app_main()
         ESP_LOGW(__func__, "Blinking timer could not be started.");
 
     // Launch UI elements update task
-    if (xTaskCreatePinnedToCore(updateUI_task, "UI_UPDATE", 8192, NULL, 2, &updateUI_task_hdl, 1) != pdPASS)
+    if (xTaskCreatePinnedToCore(updateUiTask, "UI_UPDATE", 8192, NULL, 2, &updateUiTaskHandle, 1) != pdPASS)
     {
         ESP_LOGE(__func__, "Could not create UI update task");
-        display_board_st.internal_ST = XDB_SM_ST_DEGRADED;
-        attemptRollBack();
+        displayBoard.smState = XDB_SM_ST_DEGRADED;
+        attemptRollback();
         return;
     }
 #pragma endregion
 
     ESP_LOGI(__func__, "Setup done");
-    if (display_board_st.internal_ST != XDB_SM_ST_DEGRADED)
+    if (displayBoard.smState != XDB_SM_ST_DEGRADED)
     {
         esp_ota_mark_app_valid_cancel_rollback();
         ESP_LOGI(__func__, "App image is valid.");
 
-        triggerUIForceRefresh();
-        if (display_board_st.modeLocked)
-            switch_theme(!(display_board_st.lightMode), true, 400);
-        if (display_board_st.lightMode)
+        forceUiRefresh();
+        if (displayBoard.themeLocked)
+            switchTheme(!(displayBoard.themeLight), true, 400);
+        if (displayBoard.themeLight)
         {
-            set_backlight_brightness_smooth(display_board_st.lightBrightness, 400);
+            setBacklightSmooth(displayBoard.blLightPct, 400);
         }
         else
         {
-            set_backlight_brightness_smooth(display_board_st.darkBrightness, 400);
+            setBacklightSmooth(displayBoard.blDarkPct, 400);
         }
 
         // Start message timeout watchdogs now that the UI task is running and display is illuminated
-        TO_timers_start();
+        startTimeoutTimers();
 
         // Apply initial buzzer state if active
-        if (display_board_st.displayHwReady)
+        if (displayBoard.displayHwReady)
         {
-            display_hw_buzzer_set(display_board_st.overTemp_buzz && overTemperatureOn);
+            display_hw_buzzer_set(displayBoard.hotBuzzEnabled && overTemperatureOn);
         }
 
         if (firstBoot)
@@ -770,7 +764,7 @@ extern "C" void app_main()
                     lv_obj_remove_state(objects.speed, LV_STATE_CHECKED);
                     lv_label_set_text(objects.speed, "0");
                     lvgl_port_unlock();
-                    triggerUIForceRefresh();
+                    forceUiRefresh();
                 }
             }
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
@@ -785,18 +779,18 @@ extern "C" void app_main()
                     lv_obj_remove_state(objects.rpm, LV_STATE_CHECKED);
                     lv_label_set_text(objects.rpm, "0");
                     lvgl_port_unlock();
-                    triggerUIForceRefresh();
+                    forceUiRefresh();
                 }
             }
 #endif
         }
         // Everything is OK, inform the rest of the network
         vTaskDelay(pdMS_TO_TICKS(500));
-        display_board_st.internal_ST = XDB_SM_ST_OK;
+        displayBoard.smState = XDB_SM_ST_OK;
     }
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
-    xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
+    xTaskCreate(printSystemStats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
 
     // Initialization complete: return cleanly so the main task is deleted and its stack memory is reclaimed

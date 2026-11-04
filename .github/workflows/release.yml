@@ -73,10 +73,12 @@ jobs:
               - *not_docs
             ldb_factory:
               - 'factory apps/left display factory app/**'
+              - 'common/*'
               - 'bennu/**'
               - *not_docs
             rdb_factory:
               - 'factory apps/right display factory app/**'
+              - 'common/*'
               - 'bennu/**'
               - *not_docs
 

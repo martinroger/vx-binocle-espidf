@@ -33,6 +33,7 @@
 #include "adc_helpers.h"
 #include "mcpwm_capture_helpers.h"
 #include "coefficients.h"
+#include "nvs_settings.hpp"
 #include <math.h>
 
 #ifdef TAG
@@ -84,10 +85,10 @@ struct board_ST
 
 } interface_board_st;
 
-bool fuel_learn_en = true;
-uint16_t fuel_full_r = 250;
-uint16_t fuel_low_level_threshold_pc = 20;
-uint16_t coolant_overtemp_threshold_degC = 106;
+bool fuelLearnEnabled = true;
+uint16_t fuelFullOhm = 250;
+uint16_t fuelLowPct = 20;
+uint16_t coolantHotDegC = 106;
 
 #pragma region MCPWM and Sensor Globals
 // Capture PWM info buffers
@@ -546,7 +547,7 @@ static void adc_processing_task(void *pvParameters)
 		if (fuel_r < 0.0f) fuel_r = 0.0f;
 		if (fuel_r > 4095.0f) fuel_r = 4095.0f;
 
-		float fuel_pc = (fuel_full_r > 0) ? (100.0f * fuel_r / (float)fuel_full_r) : 0.0f;
+		float fuel_pc = (fuelFullOhm > 0) ? (100.0f * fuel_r / (float)fuelFullOhm) : 0.0f;
 		if (fuel_pc > 100.0f) fuel_pc = 100.0f;
 		if (fuel_pc < 0.0f) fuel_pc = 0.0f;
 
@@ -938,15 +939,12 @@ static esp_err_t prevboot_get_handler(httpd_req_t *req)
 	const esp_partition_t *ota1Partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_1, "ota_1");
 	esp_ota_img_states_t ota0State, ota1State;
 
-	nvs_handle_t h;
-	nvs_open("storage", NVS_READONLY, &h);
 	// Defaulting to the factory app partition
 	int8_t prevBootID = -1;
-	esp_err_t nvs_err = nvs_get_i8(h, "lastPart", &prevBootID);
+	esp_err_t nvs_err = vx::nvs::readBootSlot(prevBootID);
 	if (nvs_err != ESP_OK)
-		ESP_LOGW(__func__, "Error reading lastPart : %s", esp_err_to_name(nvs_err));
+		ESP_LOGW(__func__, "Error reading the boot slot : %s", esp_err_to_name(nvs_err));
 
-	nvs_close(h);
 	// Prepare short buffers for the lastPartition and nextPartition
 	char lastPart[10];
 	char nextPart[10];
@@ -1024,11 +1022,11 @@ static esp_err_t odometer_get_handler(httpd_req_t *req)
 	esp_err_t err = ESP_FAIL;
 
 	/* Try reading from partition "nvs_odo" with namespace "storage", fall back to default */
-	err = nvs_open_from_partition("nvs_odo", "storage", NVS_READONLY, &h);
+	err = nvs_open_from_partition(vx::nvs::odo::PARTITION, vx::nvs::odo::NS, NVS_READONLY, &h);
 	if (err != ESP_OK)
 	{
 		ESP_LOGW(__func__, "Could not open the nvs_odo partition with namespace storage, attempting to open the default nvs partition.");
-		err = nvs_open("storage", NVS_READONLY, &h);
+		err = nvs_open(vx::nvs::odo::NS, NVS_READONLY, &h);
 		if (err != ESP_OK)
 		{
 			ESP_LOGW(__func__, "Could not open the default nvs partition.");
@@ -1037,12 +1035,12 @@ static esp_err_t odometer_get_handler(httpd_req_t *req)
 		}
 	}
 	ESP_LOGI(__func__, "Partition successfully opened.");
-	if (nvs_get_u32(h, "odometer_m", &odometer_m) == ESP_ERR_NVS_NOT_FOUND)
+	if (nvs_get_u32(h, vx::nvs::odo::ODOMETER_M, &odometer_m) == ESP_ERR_NVS_NOT_FOUND)
 	{
 		ESP_LOGW(__func__, "Could not find the odometer_m key in nvs.");
 		odometer_m = UINT32_MAX;
 	}
-	if (nvs_get_u32(h, "trip_m", &trip_m) == ESP_ERR_NVS_NOT_FOUND)
+	if (nvs_get_u32(h, vx::nvs::odo::TRIP_M, &trip_m) == ESP_ERR_NVS_NOT_FOUND)
 	{
 		ESP_LOGW(__func__, "Could not find the trip_m key in nvs.");
 		trip_m = UINT32_MAX;
@@ -1084,40 +1082,42 @@ static esp_err_t calibration_get_handler(httpd_req_t *req)
 	nvs_handle_t h;
 	esp_err_t err = ESP_FAIL;
 
-	err = nvs_open("storage", NVS_READONLY, &h);
+	err = nvs_open(vx::nvs::fuel::NS, NVS_READONLY, &h);
 	if (err != ESP_OK)
 	{
-		ESP_LOGW(__func__, "Could not open the base NVS 'storage' namespace.");
+		ESP_LOGW(__func__, "Could not open the NVS fuel namespace.");
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS open failed");
 		return ESP_FAIL;
 	}
 	uint8_t learn_en_u8 = 1;
-	if (nvs_get_u8(h, "fuel_learn_en", &learn_en_u8) == ESP_ERR_NVS_NOT_FOUND)
+	if (nvs_get_u8(h, vx::nvs::fuel::LEARN_EN, &learn_en_u8) == ESP_ERR_NVS_NOT_FOUND)
 	{
-		ESP_LOGW(__func__, "Could not find fuel_learn_en in nvs, using default: 1");
+		ESP_LOGW(__func__, "Could not find %s in nvs, using default: 1", vx::nvs::fuel::LEARN_EN);
 		learn_en_u8 = 1;
 	}
-	fuel_learn_en = (learn_en_u8 != 0);
+	fuelLearnEnabled = (learn_en_u8 != 0);
 
-	if (nvs_get_u16(h, "fuel_full_r", &fuel_full_r) == ESP_ERR_NVS_NOT_FOUND)
+	if (nvs_get_u16(h, vx::nvs::fuel::FULL_OHM, &fuelFullOhm) == ESP_ERR_NVS_NOT_FOUND)
 	{
-		ESP_LOGW(__func__, "Could not find fuel_full_r in nvs, using default: 250");
-		fuel_full_r = 250;
+		ESP_LOGW(__func__, "Could not find %s in nvs, using default: 250", vx::nvs::fuel::FULL_OHM);
+		fuelFullOhm = 250;
 	}
-	if (nvs_get_u16(h, "lo_fuel_thr", &fuel_low_level_threshold_pc) == ESP_ERR_NVS_NOT_FOUND)
+	if (nvs_get_u16(h, vx::nvs::fuel::LOW_PCT, &fuelLowPct) == ESP_ERR_NVS_NOT_FOUND)
 	{
-		ESP_LOGW(__func__, "Could not find lo_fuel_thr in nvs, using default: 20");
-		fuel_low_level_threshold_pc = 20;
-	}
-	if (nvs_get_u16(h, "overtemp_th", &coolant_overtemp_threshold_degC) == ESP_ERR_NVS_NOT_FOUND)
-	{
-		ESP_LOGW(__func__, "Could not find overtemp_th in nvs, using default: 106");
-		coolant_overtemp_threshold_degC = 106;
+		ESP_LOGW(__func__, "Could not find %s in nvs, using default: 20", vx::nvs::fuel::LOW_PCT);
+		fuelLowPct = 20;
 	}
 	nvs_close(h);
+	coolantHotDegC = 106;
+	if (nvs_open(vx::nvs::coolant::NS, NVS_READONLY, &h) == ESP_OK)
+	{
+		if (nvs_get_u16(h, vx::nvs::coolant::HOT_DEGC, &coolantHotDegC) != ESP_OK)
+			coolantHotDegC = 106;
+		nvs_close(h);
+	}
 	char out[256];
 	snprintf(out, sizeof(out), "{\"fuel_learn_en\":%u,\"fuel_full_r\":%u,\"low_fuel_threshold\":%u,\"overtemp_threshold\":%u}",
-	         fuel_learn_en ? 1 : 0, fuel_full_r, fuel_low_level_threshold_pc, coolant_overtemp_threshold_degC);
+	         fuelLearnEnabled ? 1 : 0, fuelFullOhm, fuelLowPct, coolantHotDegC);
 	ESP_LOGI(__func__, "Returning calibration JSON payload: %s", out);
 	httpd_resp_set_type(req, "application/json");
 	httpd_resp_sendstr(req, out);
@@ -1147,11 +1147,18 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 		}
 	}
 
-	nvs_handle_t h;
-	esp_err_t nvserr = nvs_open("storage", NVS_READWRITE, &h);
+	nvs_handle_t h;  // fuel namespace
+	nvs_handle_t hc; // coolant namespace
+	esp_err_t nvserr = nvs_open(vx::nvs::fuel::NS, NVS_READWRITE, &h);
+	if (nvserr == ESP_OK)
+	{
+		nvserr = nvs_open(vx::nvs::coolant::NS, NVS_READWRITE, &hc);
+		if (nvserr != ESP_OK)
+			nvs_close(h);
+	}
 	if (nvserr != ESP_OK)
 	{
-		ESP_LOGE(__func__, "Could not open nvs -> storage, error %s", esp_err_to_name(nvserr));
+		ESP_LOGE(__func__, "Could not open the fuel/coolant NVS namespaces, error %s", esp_err_to_name(nvserr));
 		httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Could not load NVS");
 		return ESP_FAIL;
 	}
@@ -1179,9 +1186,9 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 		{
 			en = (atol(learn_ptr) != 0) ? 1 : 0;
 		}
-		nvs_set_u8(h, "fuel_learn_en", en);
-		fuel_learn_en = (en != 0);
-		ESP_LOGI(__func__, "NVS key 'fuel_learn_en' set to %u (%s)", en, en ? "ENABLED" : "DISABLED");
+		nvs_set_u8(h, vx::nvs::fuel::LEARN_EN, en);
+		fuelLearnEnabled = (en != 0);
+		ESP_LOGI(__func__, "NVS key 'learn_en' set to %u (%s)", en, en ? "ENABLED" : "DISABLED");
 		updated = true;
 	}
 
@@ -1199,9 +1206,9 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 			if (val < 0) val = -val;
 			if (val < 150) val = 150;
 			if (val > 350) val = 350;
-			nvs_set_u16(h, "fuel_full_r", (uint16_t)val);
-			fuel_full_r = (uint16_t)val;
-			ESP_LOGI(__func__, "NVS key 'fuel_full_r' set to %u Ohm", (uint16_t)val);
+			nvs_set_u16(h, vx::nvs::fuel::FULL_OHM, (uint16_t)val);
+			fuelFullOhm = (uint16_t)val;
+			ESP_LOGI(__func__, "NVS key 'full_ohm' set to %u Ohm", (uint16_t)val);
 			updated = true;
 		}
 	}
@@ -1220,9 +1227,9 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 			long val = atol(low_fuel_ptr);
 			if (val < 0) val = -val;
 			if (val > 100) val = 100;
-			nvs_set_u16(h, "lo_fuel_thr", (uint16_t)val);
-			fuel_low_level_threshold_pc = (uint16_t)val;
-			ESP_LOGI(__func__, "NVS key 'lo_fuel_thr' set to %u %%", (uint16_t)val);
+			nvs_set_u16(h, vx::nvs::fuel::LOW_PCT, (uint16_t)val);
+			fuelLowPct = (uint16_t)val;
+			ESP_LOGI(__func__, "NVS key 'low_pct' set to %u %%", (uint16_t)val);
 			updated = true;
 		}
 	}
@@ -1240,9 +1247,9 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 			long val = atol(overtemp_ptr);
 			if (val < 0) val = -val;
 			if (val > 250) val = 250;
-			nvs_set_u16(h, "overtemp_th", (uint16_t)val);
-			coolant_overtemp_threshold_degC = (uint16_t)val;
-			ESP_LOGI(__func__, "NVS key 'overtemp_th' set to %u °C", (uint16_t)val);
+			nvs_set_u16(hc, vx::nvs::coolant::HOT_DEGC, (uint16_t)val);
+			coolantHotDegC = (uint16_t)val;
+			ESP_LOGI(__func__, "NVS key 'hot_degc' set to %u °C", (uint16_t)val);
 			updated = true;
 		}
 	}
@@ -1252,10 +1259,13 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 		ESP_LOGE(__func__, "Invalid update request: no recognized calibration keys in URI (%s) or body (%s)", req->uri, body_buf);
 		httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Malformed request, no valid parameter found");
 		nvs_close(h);
+		nvs_close(hc);
 		return ESP_FAIL;
 	}
 
 	esp_err_t commit_err = nvs_commit(h);
+	if (commit_err == ESP_OK)
+		commit_err = nvs_commit(hc);
 	if (commit_err != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Failed to commit NVS changes: %s", esp_err_to_name(commit_err));
@@ -1265,6 +1275,7 @@ static esp_err_t set_cal_post_handler(httpd_req_t *req)
 		ESP_LOGI(__func__, "Successfully committed updated calibration settings to NVS storage.");
 	}
 	nvs_close(h);
+	nvs_close(hc);
 	httpd_resp_send(req, HTTPD_200, sizeof(HTTPD_200));
 	return ESP_OK;
 }
@@ -2155,7 +2166,7 @@ static esp_err_t set_trip_odo_post_handler(httpd_req_t *req)
 {
 	ESP_LOGI(__func__, "Req: %d URI: %s", req->method, req->uri);
 	nvs_handle_t h;
-	esp_err_t nvserr = nvs_open_from_partition("nvs_odo", "storage", NVS_READWRITE, &h);
+	esp_err_t nvserr = nvs_open_from_partition(vx::nvs::odo::PARTITION, vx::nvs::odo::NS, NVS_READWRITE, &h);
 	if (nvserr != ESP_OK)
 	{
 		ESP_LOGE(__func__, "Could not open nvs_odo -> storage, error %s", esp_err_to_name(nvserr));
@@ -2187,7 +2198,7 @@ static esp_err_t set_trip_odo_post_handler(httpd_req_t *req)
 				detectedNumber *= -1;
 			if (detectedNumber > UINT32_MAX)
 				detectedNumber = UINT32_MAX;
-			nvs_set_u32(h, "trip_m", (uint32_t)detectedNumber);
+			nvs_set_u32(h, vx::nvs::odo::TRIP_M, (uint32_t)detectedNumber);
 			ESP_LOGI(__func__, "Trip updated to %lu m", (uint32_t)detectedNumber);
 			nvs_commit(h);
 		}
@@ -2216,7 +2227,7 @@ static esp_err_t set_trip_odo_post_handler(httpd_req_t *req)
 				detectedNumber *= -1;
 			if (detectedNumber > UINT32_MAX)
 				detectedNumber = UINT32_MAX;
-			nvs_set_u32(h, "odometer_m", (uint32_t)detectedNumber);
+			nvs_set_u32(h, vx::nvs::odo::ODOMETER_M, (uint32_t)detectedNumber);
 			ESP_LOGI(__func__, "Odometer updated to %lu m", (uint32_t)detectedNumber);
 			nvs_commit(h);
 		}
@@ -2672,57 +2683,44 @@ extern "C" void app_main(void)
 
 	// Auto-populate default NVS keys if not yet initialized
 	ESP_LOGI(__func__, "Checking and populating NVS defaults...");
-	nvs_handle_t h_storage;
-	if (nvs_open("storage", NVS_READWRITE, &h_storage) == ESP_OK)
+	vx::nvs::migrateLegacyKeys();
+	nvs_handle_t h_set;
+	if (nvs_open(vx::nvs::fuel::NS, NVS_READWRITE, &h_set) == ESP_OK)
 	{
-		uint8_t val8 = 0;
-		if (nvs_get_u8(h_storage, "fuel_learn_en", &val8) == ESP_ERR_NVS_NOT_FOUND)
-		{
-			nvs_set_u8(h_storage, "fuel_learn_en", 1);
-			ESP_LOGI(__func__, "Populated default NVS key fuel_learn_en: 1");
-		}
-		uint16_t val16 = 0;
-		if (nvs_get_u16(h_storage, "fuel_full_r", &val16) == ESP_ERR_NVS_NOT_FOUND)
-		{
-			nvs_set_u16(h_storage, "fuel_full_r", 250);
-			ESP_LOGI(__func__, "Populated default NVS key fuel_full_r: 250");
-		}
-		if (nvs_get_u16(h_storage, "lo_fuel_thr", &val16) == ESP_ERR_NVS_NOT_FOUND)
-		{
-			nvs_set_u16(h_storage, "lo_fuel_thr", 20);
-			ESP_LOGI(__func__, "Populated default NVS key lo_fuel_thr: 20");
-		}
-		if (nvs_get_u16(h_storage, "overtemp_th", &val16) == ESP_ERR_NVS_NOT_FOUND)
-		{
-			nvs_set_u16(h_storage, "overtemp_th", 106);
-			ESP_LOGI(__func__, "Populated default NVS key overtemp_th: 106");
-		}
-		int8_t val_i8 = 0;
-		if (nvs_get_i8(h_storage, "lastPart", &val_i8) == ESP_ERR_NVS_NOT_FOUND)
-		{
-			nvs_set_i8(h_storage, "lastPart", -1);
-			ESP_LOGI(__func__, "Populated default NVS key lastPart: -1");
-		}
-		nvs_commit(h_storage);
-		nvs_close(h_storage);
+		uint8_t learnEn = 1;
+		uint16_t fullOhm = 250;
+		uint16_t lowPct = 20;
+		vx::nvs::loadOrInit<uint8_t>(h_set, vx::nvs::fuel::LEARN_EN, learnEn);
+		vx::nvs::loadOrInit<uint16_t>(h_set, vx::nvs::fuel::FULL_OHM, fullOhm);
+		vx::nvs::loadOrInit<uint16_t>(h_set, vx::nvs::fuel::LOW_PCT, lowPct);
+		nvs_close(h_set);
 	}
 	else
+		ESP_LOGE(__func__, "Could not open the NVS fuel namespace for defaults check");
+	if (nvs_open(vx::nvs::coolant::NS, NVS_READWRITE, &h_set) == ESP_OK)
 	{
-		ESP_LOGE(__func__, "Could not open default NVS storage namespace for defaults check");
+		uint16_t hotDegC = 106;
+		vx::nvs::loadOrInit<uint16_t>(h_set, vx::nvs::coolant::HOT_DEGC, hotDegC);
+		nvs_close(h_set);
 	}
+	else
+		ESP_LOGE(__func__, "Could not open the NVS coolant namespace for defaults check");
+	int8_t slot = -1;
+	if (vx::nvs::readBootSlot(slot) != ESP_OK)
+		vx::nvs::recordBootSlot(-1);
 
 	nvs_handle_t h_odo;
-	if (nvs_open_from_partition("nvs_odo", "storage", NVS_READWRITE, &h_odo) == ESP_OK)
+	if (nvs_open_from_partition(vx::nvs::odo::PARTITION, vx::nvs::odo::NS, NVS_READWRITE, &h_odo) == ESP_OK)
 	{
 		uint32_t val32 = 0;
-		if (nvs_get_u32(h_odo, "odometer_m", &val32) == ESP_ERR_NVS_NOT_FOUND)
+		if (nvs_get_u32(h_odo, vx::nvs::odo::ODOMETER_M, &val32) == ESP_ERR_NVS_NOT_FOUND)
 		{
-			nvs_set_u32(h_odo, "odometer_m", 0);
+			nvs_set_u32(h_odo, vx::nvs::odo::ODOMETER_M, 0);
 			ESP_LOGI(__func__, "Populated default NVS key odometer_m: 0");
 		}
-		if (nvs_get_u32(h_odo, "trip_m", &val32) == ESP_ERR_NVS_NOT_FOUND)
+		if (nvs_get_u32(h_odo, vx::nvs::odo::TRIP_M, &val32) == ESP_ERR_NVS_NOT_FOUND)
 		{
-			nvs_set_u32(h_odo, "trip_m", 0);
+			nvs_set_u32(h_odo, vx::nvs::odo::TRIP_M, 0);
 			ESP_LOGI(__func__, "Populated default NVS key trip_m: 0");
 		}
 		nvs_commit(h_odo);

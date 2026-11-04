@@ -9,14 +9,15 @@
 #include "display_hw.h"
 #include "version_parser.h"
 #include "binocan.h"
+#include "nvs_settings.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-TaskHandle_t updateUI_task_hdl = NULL;
+TaskHandle_t updateUiTaskHandle = NULL;
 
 // ESP32 is Little Endian, UDS is BE
 template <typename T>
-T swap_endian(T u)
+T swapEndian(T u)
 {
     static_assert(CHAR_BIT == 8, "CHAR_BIT != 8");
     union
@@ -48,75 +49,75 @@ T swap_endian(T u)
 
 #pragma region COMMON
 /// @brief Internal state structure
-struct board_ST
+struct DisplayBoardState
 {
-    bool screen_interlock_OK = false;    // Left to right screen interlock state
-    uint8_t internal_ST = XDB_SM_ST_OFF; // Internal board state
-    bool mph_selected = false;           // MPH unit selected over KPH
-    uint32_t rpm_decimation = 10;        // RPM decimation factor
-    bool rpm_alarm_override = false;     // RPM alarm override from vehicle
-    uint32_t rpm_alarm_threshold = 6000; // RPM value at which to trigger alarm
-    bool rpm_alarm_blink = false;        // Whether the alarm blinker is enabled
-    bool use_shift_indicator = false;    // Activation of the SHIFT alarm
-    uint32_t shift_mid_threshold = 5500; // Orange SHIFT RPM threshold
-    uint32_t shift_top_threshold = 6500; // Red SHIFT RPM threshold
-    bool overTemp_buzz = false;          // Overtemperature buzzer enable
-    parsed_app_meta_t *app_metadata;     // App metadata
+    bool interlockOk = false;    // Left to right screen interlock state
+    uint8_t smState = XDB_SM_ST_OFF; // Internal board state
+    bool unitMph = false;           // MPH unit selected over KPH
+    uint32_t rpmDecim = 10;        // RPM decimation factor
+    bool alarmOverride = false;     // RPM alarm override from vehicle
+    uint32_t alarmRpm = 6000; // RPM value at which to trigger alarm
+    bool alarmBlink = false;        // Whether the alarm blinker is enabled
+    bool shiftEnabled = false;    // Activation of the SHIFT alarm
+    uint32_t shiftMidRpm = 5500; // Orange SHIFT RPM threshold
+    uint32_t shiftTopRpm = 6500; // Red SHIFT RPM threshold
+    bool hotBuzzEnabled = false;          // Overtemperature buzzer enable
+    parsed_app_meta_t *appMeta;     // App metadata
     bool displayHwReady = false;         // Backlight and IO expander are initialised
-    uint8_t darkBrightness = 100;        // Screen brightness in dark mode
-    uint8_t lightBrightness = 100;       // Screen brightness in light mode
-    bool lightMode = true;               // Light mode active indicator
-    bool modeLocked = false;             // Light/Dark mode override lock indicator
-    bool showGearPosition = false;       // Show gear position instead of RPM
-} display_board_st;
+    uint8_t blDarkPct = 100;        // Screen brightness in dark mode
+    uint8_t blLightPct = 100;       // Screen brightness in light mode
+    bool themeLight = true;               // Light mode active indicator
+    bool themeLocked = false;             // Light/Dark mode override lock indicator
+    bool gearShow = false;       // Show gear position instead of RPM
+} displayBoard;
 
 // Validation-related booleans
-bool rollBackPossible; // Is rollback possible ?
+bool rollbackPossible; // Is rollback possible ?
 bool firstBoot;        // Is this the first boot after OTA ?
 
 // Used only to selectively update in LVGL
-bool screen_interlock_OK = false, p_screen_interlock_OK = false; // Checks opposite display status
-int64_t last_interlock_ts;
-uint8_t p_internal_ST = XDB_SM_ST_DEGRADED; // Checks internal state in the LVGL elements update routine
-uint8_t itf_board_st = XDB_SM_ST_DEGRADED, p_itf_board_st = XDB_SM_ST_DEGRADED;
-bool p_CAN_RX_TimedOut = true;
+bool interlockOk = false, prevInterlockOk = false; // Checks opposite display status
+int64_t lastInterlockTs;
+uint8_t prevSmState = XDB_SM_ST_DEGRADED; // Checks internal state in the LVGL elements update routine
+uint8_t itfState = XDB_SM_ST_DEGRADED, prevItfState = XDB_SM_ST_DEGRADED;
+bool prevCanRxTimedOut = true;
 
 // Vehicle variables and previous values retainers
-bool indicatorsOn = true, p_indicatorsOn = true;
-bool rightTurnOn = true, p_rightTurnOn = true;
-bool leftTurnOn = true, p_leftTurnOn = true;
-bool highBeamOn = true, p_highBeamOn = true;
-bool lowFuelOn = true, p_lowFuelOn = true;
-bool overTemperatureOn = true, p_overTemperatureOn = true;
-bool brakesOn = true, p_brakesOn = true;
-bool absOn = true, p_absOn = true;
-bool parkingBrakeOn = true, p_parkingBrakeOn = true;
-bool lowCoolantOn = true, p_lowCoolantOn = true;
-bool batteryOn = true, p_batteryOn = true;
-bool lowOilOn = true, p_lowOilOn = true;
-bool milOn = true, p_milOn = true;
-bool airbagOn = true, p_airbagOn = true;
-bool ignitionST = false, p_ignitionST = false;
-bool alarmOn = true, p_alarmOn = true;
-bool headlightsOn = true, p_headlightsOn = true;
+bool indicatorsOn = true, prevIndicatorsOn = true;
+bool rightTurnOn = true, prevRightTurnOn = true;
+bool leftTurnOn = true, prevLeftTurnOn = true;
+bool highBeamOn = true, prevHighBeamOn = true;
+bool lowFuelOn = true, prevLowFuelOn = true;
+bool overTemperatureOn = true, prevOverTemperatureOn = true;
+bool brakesOn = true, prevBrakesOn = true;
+bool absOn = true, prevAbsOn = true;
+bool parkingBrakeOn = true, prevParkingBrakeOn = true;
+bool lowCoolantOn = true, prevLowCoolantOn = true;
+bool batteryOn = true, prevBatteryOn = true;
+bool lowOilOn = true, prevLowOilOn = true;
+bool milOn = true, prevMilOn = true;
+bool airbagOn = true, prevAirbagOn = true;
+bool ignitionOn = false, prevIgnitionOn = false;
+bool alarmOn = true, prevAlarmOn = true;
+bool headlightsOn = true, prevHeadlightsOn = true;
 
 // Vehicle numerical parameters
-float speed_kph, p_speed_kph = 0;
-float lvVoltage_v, p_lvVoltage_v = 12.0;
-uint32_t rpm, p_rpm = 0;
-uint8_t gearPosition, p_gearPosition = BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE;
-uint8_t fuelLevel_pc, p_fuelLevel_pc = 50;
-uint8_t coolant_degC, p_coolant_degC = 88;
+float speedKph, prevSpeedKph = 0;
+float supplyV, prevSupplyV = 12.0;
+uint32_t rpm, prevRpm = 0;
+uint8_t gearPosition, prevGearPosition = BINOCAN_ITF_FAST_METRICS_ITF_GEAR_POSITION_ST_NEUTRAL_CHOICE;
+uint8_t fuelLevelPct, prevFuelLevelPct = 50;
+uint8_t coolantDegC, prevCoolantDegC = 88;
 
 // Odometer/trip values
-float odometer_km, p_odometer_km = 0.0;
-float trip_km, p_trip_km = 0.0;
+float odometerKm, prevOdometerKm = 0.0;
+float tripKm, prevTripKm = 0.0;
 #pragma endregion
 
 #pragma region SPECIFIC
 #ifdef CONFIG_RIGHT_SIDE_DISPLAY
-static const char *speed_kph_scale_labels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
-static const char *speed_mph_scale_labels[10] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", NULL};
+static const char *speedKphScaleLabels[14] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", "180", "200", "220", "240", NULL};
+static const char *speedMphScaleLabels[10] = {"0", "20", "40", "60", "80", "100", "120", "140", "160", NULL};
 #elifdef CONFIG_LEFT_SIDE_DISPLAY
 static const char *rpm_scale_labels[10] = {"0", "10", "20", "30", "40", "50", "60", "70", "80", NULL};
 #endif

@@ -7,6 +7,7 @@
 #include "freertos/task.h"
 #include "freertos/timers.h"
 #include "coefficients.h"
+#include "nvs_settings.hpp"
 
 #include "esp_partition.h"
 #include "esp_ota_ops.h"
@@ -35,7 +36,7 @@
 static TimerHandle_t trip_reset_timer = NULL;
 
 // Timer callback runs in timer task context (not ISR)
-static void trip_reset_timer_cb(TimerHandle_t xTimer)
+static void onTripResetTimer(TimerHandle_t xTimer)
 {
     // If button still low, reset trip
     if (gpio_get_level((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO) == 0)
@@ -45,7 +46,7 @@ static void trip_reset_timer_cb(TimerHandle_t xTimer)
         if (trip_set(trip_m) != ESP_OK)
         {
             ESP_LOGW(TAG, "Could not set trip_m in NVS");
-            interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+            itfBoard.smState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
             ESP_LOGW(__func__, "Entering degraded mode at line %lu", __LINE__);
         }
     }
@@ -55,7 +56,7 @@ static void trip_reset_timer_cb(TimerHandle_t xTimer)
 }
 
 // ISR: disable further interrupts and start the confirmation timer
-static void button_isr_handler(void *arg)
+static void onButtonIsr(void *arg)
 {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
@@ -82,7 +83,7 @@ static void button_isr_handler(void *arg)
 /// @brief Initialiser for the control GPIOs of the 5V supplies
 /// @param
 /// @return ESP_OK if all set up correctly. ESP_FAIL otherwise
-esp_err_t init_5V_ctrl(void)
+esp_err_t init5VCtrl(void)
 {
     esp_err_t ret = ESP_FAIL;
     ESP_LOGI(TAG, "Initializing 5V and 5V Aux control pins");
@@ -94,8 +95,8 @@ esp_err_t init_5V_ctrl(void)
     ret = gpio_pulldown_en((gpio_num_t)CONFIG_5V_AUX_EN_GPIO);
     ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 0);
     ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 0);
-    interface_board_st.EN_5_V_AUX_ST = false;
-    interface_board_st.EN_5_V_ST = false;
+    itfBoard.en5VAux = false;
+    itfBoard.en5V = false;
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "Issue setting up control pins for 5V outputs");
@@ -105,7 +106,7 @@ esp_err_t init_5V_ctrl(void)
 
 /// @brief Initialiser for fuel resistance sensing caliber GPIO
 /// @return ESP_OK if all set up correctly, ESP_FAIL otherwise
-esp_err_t init_fuel_sense_ctrl(void)
+esp_err_t initFuelSenseCtrl(void)
 {
     esp_err_t ret = ESP_FAIL;
     ESP_LOGI(TAG, "Initializing fuel sensing caliber control pin (GPIO %d)", CONFIG_SET_HIGH_CAL_GPIO);
@@ -113,7 +114,7 @@ esp_err_t init_fuel_sense_ctrl(void)
     ret = gpio_set_pull_mode((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, GPIO_PULLDOWN_ONLY);
     ret = gpio_pulldown_en((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO);
     ret = gpio_set_level((gpio_num_t)CONFIG_SET_HIGH_CAL_GPIO, 0);
-    interface_board_st.EN_hi_R_sense_ST = false;
+    itfBoard.hiRangeSense = false;
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "Issue setting up fuel sensing caliber pin");
@@ -124,19 +125,19 @@ esp_err_t init_fuel_sense_ctrl(void)
 /// @brief Enables (after initialisation) the main 5V power supply, necessary for CAN communication and RDB
 /// @param
 /// @return ESP_OK if all started OK, ESP_FAIL otherwise.
-esp_err_t enable_5V(void)
+esp_err_t enable5V(void)
 {
     esp_err_t ret = ESP_FAIL;
     ESP_LOGD(TAG, "Enabling 5V output.");
     ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 1);
     if (ret != ESP_OK)
     {
-        interface_board_st.EN_5_V_ST = false;
+        itfBoard.en5V = false;
         ESP_LOGW(TAG, "Could not enable 5V output, continuing.");
     }
     else
     {
-        interface_board_st.EN_5_V_ST = true;
+        itfBoard.en5V = true;
     }
     return ret;
 }
@@ -144,19 +145,19 @@ esp_err_t enable_5V(void)
 /// @brief Enables (after initialisation) the auxiliary 5V power supply, necessary for LDB
 /// @param
 /// @return ESP_OK if all started OK, ESP_FAIL otherwise.
-esp_err_t enable_5V_AUX(void)
+esp_err_t enable5VAux(void)
 {
     esp_err_t ret = ESP_FAIL;
     ESP_LOGD(TAG, "Enabling 5V auxiliary output.");
     ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 1);
     if (ret != ESP_OK)
     {
-        interface_board_st.EN_5_V_AUX_ST = false;
+        itfBoard.en5VAux = false;
         ESP_LOGW(TAG, "Could not enable 5V auxiliary output, continuing.");
     }
     else
     {
-        interface_board_st.EN_5_V_AUX_ST = true;
+        itfBoard.en5VAux = true;
     }
     return ret;
 }
@@ -164,19 +165,19 @@ esp_err_t enable_5V_AUX(void)
 /// @brief Disables the main 5V power supply. CAN and RDB will go off.
 /// @param
 /// @return
-esp_err_t disable_5V(void)
+esp_err_t disable5V(void)
 {
     esp_err_t ret = ESP_FAIL;
     ESP_LOGD(TAG, "Disabling 5V output.");
     ret = gpio_set_level((gpio_num_t)CONFIG_5V_EN_GPIO, 0);
     if (ret != ESP_OK)
     {
-        interface_board_st.EN_5_V_ST = true;
+        itfBoard.en5V = true;
         ESP_LOGW(TAG, "Could not disable 5V output, continuing.");
     }
     else
     {
-        interface_board_st.EN_5_V_ST = false;
+        itfBoard.en5V = false;
     }
     return ret;
 }
@@ -184,77 +185,108 @@ esp_err_t disable_5V(void)
 /// @brief Disables the auxiliary 5V power supply. LDB will go off.
 /// @param
 /// @return
-esp_err_t disable_5V_AUX(void)
+esp_err_t disable5VAux(void)
 {
     esp_err_t ret = ESP_FAIL;
     ESP_LOGD(TAG, "Disabling 5V auxiliary output.");
     ret = gpio_set_level((gpio_num_t)CONFIG_5V_AUX_EN_GPIO, 0);
     if (ret != ESP_OK)
     {
-        interface_board_st.EN_5_V_AUX_ST = true;
+        itfBoard.en5VAux = true;
         ESP_LOGW(TAG, "Could not disable 5V auxiliary output, continuing.");
     }
     else
     {
-        interface_board_st.EN_5_V_AUX_ST = false;
+        itfBoard.en5VAux = false;
     }
     return ret;
 }
 #pragma endregion
 
-#pragma region ECE R39 settings
-/// @brief Reads one ECE R39 key, writing the default when it is missing or out of range.
-/// @tparam T Stored integer type
-/// @param h Open handle on the "storage" namespace
-/// @param key NVS key
-/// @param[in,out] value Default on entry, stored value on return
-/// @param valid Range check of the stored value
-/// @param get nvs_get_* function for T
-/// @param set nvs_set_* function for T
-/// @return ESP_OK, or the error of the failed write or commit
-template <typename T>
-static esp_err_t r39_self_init_key(nvs_handle_t h, const char *key, T &value, bool (*valid)(T),
-                                   esp_err_t (*get)(nvs_handle_t, const char *, T *), esp_err_t (*set)(nvs_handle_t, const char *, T))
+#pragma region Calibration settings
+/// @brief Opens one settings namespace read-write, runs @p load on it and closes it.
+/// @return ESP_OK, or the first NVS error
+static esp_err_t withNamespace(const char *ns, esp_err_t (*load)(nvs_handle_t))
 {
-    const T def = value;
-    esp_err_t err = get(h, key, &value);
-    if (err == ESP_OK && valid(value))
-        return ESP_OK;
-    if (err == ESP_OK)
-        ESP_LOGW(TAG, "NVS: %s = %ld out of range, resetting to %ld", key, (long)value, (long)def);
-    else
-        ESP_LOGW(TAG, "NVS: %s not found (%s), initialising to %ld", key, esp_err_to_name(err), (long)def);
-    value = def;
-    err = set(h, key, value);
-    if (err == ESP_OK)
-        err = nvs_commit(h);
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(ns, NVS_READWRITE, &h);
+    if (err != ESP_OK)
+    {
+        ESP_LOGE(TAG, "Could not open NVS namespace %s: %s", ns, esp_err_to_name(err));
+        return err;
+    }
+    err = load(h);
+    nvs_close(h);
     return err;
 }
 
-/// @brief Loads the ECE R39 compliance settings into r39_params, self-initialising missing or out-of-range keys.
-/// @param h Open read-write handle on the "storage" namespace
-/// @return ESP_OK, or the first NVS write error (r39_params then holds the defaults for the failed keys)
-static esp_err_t load_r39_params(nvs_handle_t h)
+/// @brief Loads the fuel sender calibration, self-initialising missing keys.
+static esp_err_t loadFuelSettings(nvs_handle_t h)
 {
+    namespace k = vx::nvs::fuel;
+    uint8_t learnEn = fuelLearnEnabled ? 1 : 0;
+    esp_err_t ret = vx::nvs::loadOrInit<uint8_t>(h, k::LEARN_EN, learnEn, [](uint8_t v) { return v <= 1; });
+    fuelLearnEnabled = (learnEn != 0);
+    ESP_LOGI(TAG, "Fuel self-learning enabled: %s", fuelLearnEnabled ? "YES" : "NO");
+
+    esp_err_t err = vx::nvs::loadOrInit<uint16_t>(h, k::FULL_OHM, fuelFullOhm);
+    if (ret == ESP_OK)
+        ret = err;
+    ESP_LOGI(TAG, "Fuel full resistance: %u Ohm", fuelFullOhm);
+
+    err = vx::nvs::loadOrInit<uint16_t>(h, k::LOW_PCT, fuelLowPct);
+    if (ret == ESP_OK)
+        ret = err;
+    ESP_LOGI(TAG, "Low fuel threshold : %u pc", fuelLowPct);
+    return ret;
+}
+
+/// @brief Loads the coolant overtemperature threshold, self-initialising it when missing.
+static esp_err_t loadCoolantSettings(nvs_handle_t h)
+{
+    esp_err_t err = vx::nvs::loadOrInit<uint16_t>(h, vx::nvs::coolant::HOT_DEGC, coolantHotDegC);
+    ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", coolantHotDegC);
+    return err;
+}
+
+/// @brief Loads the ECE R39 compliance settings into r39Params, self-initialising missing or out-of-range keys.
+/// @return ESP_OK, or the first NVS write error (r39Params then holds the defaults for the failed keys)
+static esp_err_t loadR39Params(nvs_handle_t h)
+{
+    namespace k = vx::nvs::r39;
     r39::RawParams raw = r39::defaults();
     esp_err_t ret = ESP_OK;
     esp_err_t err;
 
-    err = r39_self_init_key<uint8_t>(h, r39::KEY_EN, raw.en, [](uint8_t v) { return v <= 1; }, nvs_get_u8, nvs_set_u8);
+    err = vx::nvs::loadOrInit<uint8_t>(h, k::EN, raw.en, [](uint8_t v) { return v <= 1; });
     if (err != ESP_OK && ret == ESP_OK)
         ret = err;
-    err = r39_self_init_key<uint16_t>(h, r39::KEY_A_BP, raw.a_bp, [](uint16_t v) { return v <= r39::A_BP_MAX; }, nvs_get_u16, nvs_set_u16);
+    err = vx::nvs::loadOrInit<uint16_t>(h, k::A_BP, raw.a_bp, [](uint16_t v) { return v <= r39::A_BP_MAX; });
     if (err != ESP_OK && ret == ESP_OK)
         ret = err;
-    err = r39_self_init_key<int16_t>(h, r39::KEY_B_CKPH, raw.b_ckph, [](int16_t v) { return v >= r39::B_CKPH_MIN && v <= r39::B_CKPH_MAX; }, nvs_get_i16, nvs_set_i16);
+    err = vx::nvs::loadOrInit<int16_t>(h, k::B_CKPH, raw.b_ckph, [](int16_t v) { return v >= r39::B_CKPH_MIN && v <= r39::B_CKPH_MAX; });
     if (err != ESP_OK && ret == ESP_OK)
         ret = err;
 
-    r39_params = raw.to_params(CONFIG_R39_BLEND_END_KPH);
-    if (r39_params.enabled)
-        ESP_LOGI(TAG, "ECE R39 mode: ON, A = %.4f (+%.2f %%), B = %.2f km/h, blend to %d km/h", r39_params.a, raw.a_pct(), r39_params.b_kph, CONFIG_R39_BLEND_END_KPH);
+    r39Params = raw.to_params(CONFIG_R39_BLEND_END_KPH);
+    if (r39Params.enabled)
+        ESP_LOGI(TAG, "ECE R39 mode: ON, A = %.4f (+%.2f %%), B = %.2f km/h, blend to %d km/h", r39Params.a, raw.a_pct(), r39Params.b_kph, CONFIG_R39_BLEND_END_KPH);
     else
         ESP_LOGI(TAG, "ECE R39 mode: OFF (stored A = +%.2f %%, B = %.2f km/h)", raw.a_pct(), raw.b_kph());
+    return ret;
+}
+
+/// @brief Loads every calibration setting of the default NVS partition (fuel, coolant, ECE R39).
+/// @return ESP_OK, or the first error; every setting is still loaded or defaulted
+static esp_err_t loadCalibration()
+{
+    esp_err_t ret = withNamespace(vx::nvs::fuel::NS, loadFuelSettings);
+    esp_err_t err = withNamespace(vx::nvs::coolant::NS, loadCoolantSettings);
+    if (ret == ESP_OK)
+        ret = err;
+    err = withNamespace(vx::nvs::r39::NS, loadR39Params);
+    if (ret == ESP_OK)
+        ret = err;
     return ret;
 }
 #pragma endregion
@@ -262,10 +294,10 @@ static esp_err_t load_r39_params(nvs_handle_t h)
 #pragma region Main App
 /// @brief Wrapper function to attempt a rollback
 /// @return ESP_OK if rollback scheduled, some NOT_OK error otherwise
-esp_err_t attemptRollBack()
+esp_err_t attemptRollback()
 {
-    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-    if (rollBackPossible)
+    itfBoard.smState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+    if (rollbackPossible)
     {
         ESP_LOGW(__func__, "Activating rollback on next reboot.");
         return esp_ota_mark_app_invalid_rollback();
@@ -317,8 +349,8 @@ esp_err_t sendAnimation()
 extern "C" void app_main(void)
 {
 #pragma region OTA pre-checks
-    rollBackPossible = esp_ota_check_rollback_is_possible();
-    ESP_LOGI(__func__, "Rollback Possible ? %u", rollBackPossible);
+    rollbackPossible = esp_ota_check_rollback_is_possible();
+    ESP_LOGI(__func__, "Rollback Possible ? %u", rollbackPossible);
     const esp_partition_t *runningPart = esp_ota_get_running_partition();
     esp_ota_img_states_t imageState;
     esp_ota_get_state_partition(runningPart, &imageState);
@@ -326,24 +358,24 @@ extern "C" void app_main(void)
     ESP_LOGI(__func__, "First boot ? %u", firstBoot);
 #pragma endregion
 
-    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_INIT_CHOICE;
+    itfBoard.smState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_INIT_CHOICE;
 
 #pragma region App metadata parse
-    // Allocate memory for app_metadata and fill it by reference
-    interface_board_st.app_metadata = (parsed_app_meta_t *)malloc(sizeof(parsed_app_meta_t));
-    if (interface_board_st.app_metadata)
+    // Allocate memory for appMeta and fill it by reference
+    itfBoard.appMeta = (parsed_app_meta_t *)malloc(sizeof(parsed_app_meta_t));
+    if (itfBoard.appMeta)
     {
-        esp_err_t meta_err = parse_app_metadata(interface_board_st.app_metadata);
+        esp_err_t meta_err = parse_app_metadata(itfBoard.appMeta);
         if (meta_err != ESP_OK)
         {
             ESP_LOGW(TAG, "Failed to parse app metadata");
-            attemptRollBack();
+            attemptRollback();
         }
     }
     else
     {
         ESP_LOGE(TAG, "Failed to allocate memory for app_metadata");
-        attemptRollBack();
+        attemptRollback();
     }
 
 #pragma endregion
@@ -361,7 +393,7 @@ extern "C" void app_main(void)
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "Issue during escape sequence GPIO setup, attempt rollback and reboot.");
-        if (rollBackPossible)
+        if (rollbackPossible)
             esp_ota_mark_app_invalid_rollback_and_reboot();
         else
             ESP_LOGE(TAG, "Rollback not possible");
@@ -386,32 +418,25 @@ extern "C" void app_main(void)
                     nvs_flash_erase();
                     nvs_flash_init();
                 }
-                nvs_handle_t h;
-                if (nvs_open("storage", NVS_READWRITE, &h) != ESP_OK)
+                vx::nvs::migrateLegacyKeys();
+                int8_t slot = -1;
+                if (strcmp("ota_0", runningPart->label) == 0)
                 {
-                    ESP_LOGE(__func__, "Cannot get into storage namespace of default NVS");
-                    interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
-                    attemptRollBack();
+                    ESP_LOGI(__func__, "Running partition is ota_0");
+                    slot = 0;
+                }
+                else if (strcmp("ota_1", runningPart->label) == 0)
+                {
+                    ESP_LOGI(__func__, "Running partition is ota_1");
+                    slot = 1;
                 }
                 else
+                    ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
+                if (vx::nvs::recordBootSlot(slot) != ESP_OK)
                 {
-                    if (strcmp("ota_0", runningPart->label) == 0)
-                    {
-                        ESP_LOGI(__func__, "Running partition is ota_0");
-                        nvs_set_i8(h, "lastPart", 0);
-                    }
-                    else if (strcmp("ota_1", runningPart->label) == 0)
-                    {
-                        ESP_LOGI(__func__, "Running partition is ota_1");
-                        nvs_set_i8(h, "lastPart", 1);
-                    }
-                    else
-                    {
-                        ESP_LOGW(__func__, "Current running partition could not be identified, defaulting to factory.");
-                        nvs_set_i8(h, "lastPart", -1);
-                    }
-                    nvs_commit(h);
-                    nvs_close(h);
+                    ESP_LOGE(__func__, "Cannot record the boot slot in NVS");
+                    itfBoard.smState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE;
+                    attemptRollback();
                 }
 
                 ESP_LOGW(TAG, "Setting target boot partition to factory app (updater)");
@@ -423,7 +448,7 @@ extern "C" void app_main(void)
                     if (err != ESP_OK)
                     {
                         ESP_LOGE(TAG, "Could not set factory partition as boot partition, wtf bro. Attempting rollback and reboot.");
-                        if (rollBackPossible)
+                        if (rollbackPossible)
                             esp_ota_mark_app_invalid_rollback_and_reboot();
                         else
                             ESP_LOGE(TAG, "Rollback not possible");
@@ -432,7 +457,7 @@ extern "C" void app_main(void)
                 else
                 {
                     ESP_LOGE(TAG, "Could not find factory partition. WTF ! Rollback and reboot.");
-                    if (rollBackPossible)
+                    if (rollbackPossible)
                         esp_ota_mark_app_invalid_rollback_and_reboot();
                     else
                         ESP_LOGE(TAG, "Rollback not possible");
@@ -447,32 +472,32 @@ extern "C" void app_main(void)
 
 #pragma region Setup Sequence
     // Start 5V Channels
-    if (init_5V_ctrl() != ESP_OK)
+    if (init5VCtrl() != ESP_OK)
     {
         ESP_LOGW(TAG, "Impossible to initialize 5V outputs. Continuing in invalid.");
-        attemptRollBack();
+        attemptRollback();
     }
-    if (enable_5V() != ESP_OK)
+    if (enable5V() != ESP_OK)
     {
         ESP_LOGW(TAG, "Could not fire up main 5V output. Continuing in Invalid.");
-        attemptRollBack();
+        attemptRollback();
     }
-    if (enable_5V_AUX() != ESP_OK)
+    if (enable5VAux() != ESP_OK)
     {
         ESP_LOGW(TAG, "Could not fire up secondary 5V output. Continuing in Invalid.");
-        attemptRollBack();
+        attemptRollback();
     }
-    if (init_fuel_sense_ctrl() != ESP_OK)
+    if (initFuelSenseCtrl() != ESP_OK)
     {
         ESP_LOGW(TAG, "Could not initialize fuel sense caliber pin. Continuing in Invalid.");
-        attemptRollBack();
+        attemptRollback();
     }
 
     // Start TWAI
     if (initCAN(&dispatchFrame) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not initialize TWAI daemon, marking invalid and rebooting.");
-        attemptRollBack();
+        attemptRollback();
     }
 
     // Initialize NVS and try to read persisted u32 values: odometer_m and trip_m
@@ -480,7 +505,7 @@ extern "C" void app_main(void)
     if (nvs_err != ESP_OK)
     {
         ESP_LOGW(TAG, "NVS init failed (%d). Continuing without persisted odometer/trip, invalidated and rollback on next boot.", nvs_err);
-        attemptRollBack();
+        attemptRollback();
     }
     else // Successfully initialized the odo NVS
     {
@@ -495,7 +520,7 @@ extern "C" void app_main(void)
             if (odometer_set(odometer_m) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not set odometer in NVS!");
-                attemptRollBack();
+                attemptRollback();
             }
         }
         // Look for trip
@@ -508,7 +533,7 @@ extern "C" void app_main(void)
             if (trip_set(trip_m) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not set trip in NVS!");
-                attemptRollBack();
+                attemptRollback();
             }
         }
         // Switch back to normal NVS and look for calibration values
@@ -522,114 +547,34 @@ extern "C" void app_main(void)
         if (nvs_err != ESP_OK)
         {
             ESP_LOGE(TAG, "Could not init normal NVS partition");
-            attemptRollBack();
+            attemptRollback();
         }
         else // Successfully entered base NVS
         {
-            nvs_handle_t nvs_h;
-            nvs_err = nvs_open("storage", NVS_READWRITE, &nvs_h);
-            if (nvs_err != ESP_OK)
+            vx::nvs::migrateLegacyKeys();
+            if (loadCalibration() != ESP_OK)
             {
-                ESP_LOGE(TAG, "Could not open normal NVS partition");
-                attemptRollBack();
-            }
-            else // "storage" namespace is open for business
-            {
-                // Fuel self-learning enable flag
-                uint8_t learn_en_u8 = fuel_learn_en ? 1 : 0;
-                nvs_err = nvs_get_u8(nvs_h, "fuel_learn_en", &learn_en_u8);
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
-                {
-                    ESP_LOGW(TAG, "Fuel learn enable flag not found in memory, initializing to true");
-                    learn_en_u8 = 1;
-                    nvs_err = nvs_set_u8(nvs_h, "fuel_learn_en", learn_en_u8);
-                    if (nvs_err != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Could not set fuel_learn_en in NVS");
-                        attemptRollBack();
-                    }
-                    else
-                        nvs_commit(nvs_h);
-                }
-                fuel_learn_en = (learn_en_u8 != 0);
-                ESP_LOGI(TAG, "Fuel self-learning enabled: %s", fuel_learn_en ? "YES" : "NO");
-
-                // Fuel full resistance (Ohms)
-                nvs_err = nvs_get_u16(nvs_h, "fuel_full_r", &fuel_full_r);
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
-                {
-                    ESP_LOGW(TAG, "Fuel full resistance not found in memory, initializing to %u Ohm", (uint16_t)COEFF_FUEL_FULL_R);
-                    fuel_full_r = (uint16_t)COEFF_FUEL_FULL_R;
-                    nvs_err = nvs_set_u16(nvs_h, "fuel_full_r", fuel_full_r);
-                    if (nvs_err != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Could not set fuel_full_r in NVS");
-                        attemptRollBack();
-                    }
-                    else
-                        nvs_commit(nvs_h);
-                }
-                ESP_LOGI(TAG, "Fuel full resistance: %u Ohm", fuel_full_r);
-
-                // Low fuel threshold
-                nvs_err = nvs_get_u16(nvs_h, "lo_fuel_thr", &fuel_low_level_threshold_pc); // Write if not found
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
-                {
-                    ESP_LOGW(TAG, "Fuel low threshold not found in memory, initializing");
-                    nvs_err = nvs_set_u16(nvs_h, "lo_fuel_thr", fuel_low_level_threshold_pc);
-                    if (nvs_err != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Could not set Fuel Low LVL in NVS");
-                        attemptRollBack();
-                    }
-                    else
-                        nvs_commit(nvs_h);
-                }
-
-                ESP_LOGI(TAG, "Low fuel threshold : %u pc", fuel_low_level_threshold_pc);
-                // Coolant overtemp threshold
-                nvs_err = nvs_get_u16(nvs_h, "overtemp_th", &coolant_overtemp_threshold_degC); // Write if not found
-                if (nvs_err == ESP_ERR_NVS_NOT_FOUND)
-                {
-                    ESP_LOGW(TAG, "Coolant overtemp threshold not found in memory, initializing");
-                    nvs_err = nvs_set_u16(nvs_h, "overtemp_th", coolant_overtemp_threshold_degC);
-                    if (nvs_err != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Could not set Overtmp in NVS");
-                        attemptRollBack();
-                    }
-                    else
-                        nvs_commit(nvs_h);
-                }
-
-                ESP_LOGI(TAG, "Coolant overtemp threshold: %u degC", coolant_overtemp_threshold_degC);
-
-                // ECE R39 speed compliance mode
-                if (load_r39_params(nvs_h) != ESP_OK)
-                {
-                    ESP_LOGE(TAG, "Could not initialise the ECE R39 settings in NVS");
-                    attemptRollBack();
-                }
-                nvs_close(nvs_h);
+                ESP_LOGE(TAG, "Could not initialise the calibration settings in NVS");
+                attemptRollback();
             }
         }
     }
 
     // Set up the capture channels
-    if (set_capture_channel(cap_chan_coolant, (gpio_num_t)CONFIG_COOLANT_PWM_CAP_GPIO, &pwm_cap_coolant) != ESP_OK)
+    if (set_capture_channel(capChanCoolant, (gpio_num_t)CONFIG_COOLANT_PWM_CAP_GPIO, &pwmCapCoolant) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set Coolant capture channel. Rollback on reboot");
-        attemptRollBack();
+        attemptRollback();
     }
-    if (set_capture_channel(cap_chan_rpm, (gpio_num_t)CONFIG_RPM_PWM_CAP_GPIO, &pwm_cap_rpm) != ESP_OK)
+    if (set_capture_channel(capChanRpm, (gpio_num_t)CONFIG_RPM_PWM_CAP_GPIO, &pwmCapRpm) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set RPM capture channel. Rollback on reboot");
-        attemptRollBack();
+        attemptRollback();
     }
-    if (set_capture_channel(cap_chan_speed, (gpio_num_t)CONFIG_SPEED_PWM_CAP_GPIO, &pwm_cap_speed) != ESP_OK)
+    if (set_capture_channel(capChanSpeed, (gpio_num_t)CONFIG_SPEED_PWM_CAP_GPIO, &pwmCapSpeed) != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not set Speed capture channel. Rollback on reboot");
-        attemptRollBack();
+        attemptRollback();
     }
 
     // Set up the IO Expander
@@ -637,49 +582,49 @@ extern "C" void app_main(void)
     if (i2cdev_init() != ESP_OK) // General I²C bus access
     {
         ESP_LOGE(TAG, "Could not start I²C bus, rollback on next reboot");
-        interface_board_st.expander_ST = false;
-        interface_board_st.adc_ST = false;
-        attemptRollBack();
+        itfBoard.expanderOk = false;
+        itfBoard.adcOk = false;
+        attemptRollback();
     }
     if (initialize_ADC_processor() != ESP_OK) // ADC processor
     {
         ESP_LOGE(TAG, "Could not start ADC processor");
-        interface_board_st.adc_ST = false;
+        itfBoard.adcOk = false;
         if (firstBoot)
-            attemptRollBack();
+            attemptRollback();
     }
     if (initialize_exp_active_hi_lo_proc() != ESP_OK) // Active hi/lo inputs processor
     {
         ESP_LOGE(TAG, "Could not start ActHiLo processor");
-        interface_board_st.expander_ST = false;
+        itfBoard.expanderOk = false;
         if (firstBoot)
-            attemptRollBack();
+            attemptRollback();
     }
 
-    if (twai_ops_init() != ESP_OK)
+    if (initTwaiOps() != ESP_OK)
     {
         ESP_LOGE(TAG, "Could not start TWAI operations fully");
-        attemptRollBack();
+        attemptRollback();
     }
 
-    if (mcpwm_processor_init() != ESP_OK)
+    if (initMcpwmProcessor() != ESP_OK)
     {
         ESP_LOGE(TAG, "MCPWM processor failed to init");
-        attemptRollBack();
+        attemptRollback();
     }
 
 #pragma region Register Button ISR and timer
     // Create the trip reset debounce/confirmation timer (one-shot 500 ms)
-    trip_reset_timer = xTimerCreate("trip_rst", pdMS_TO_TICKS(500), pdFALSE, NULL, trip_reset_timer_cb);
+    trip_reset_timer = xTimerCreate("trip_rst", pdMS_TO_TICKS(500), pdFALSE, NULL, onTripResetTimer);
     if (trip_reset_timer == NULL)
     {
         ESP_LOGW(TAG, "Could not create trip reset timer; button long-press will not reset trip");
-        attemptRollBack();
+        attemptRollback();
     }
     if (gpio_set_intr_type((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, GPIO_INTR_NEGEDGE) != ESP_OK)
     {
         ESP_LOGW(TAG, "Could not set Button IO interrupt type");
-        attemptRollBack();
+        attemptRollback();
     }
     else
     {
@@ -694,15 +639,15 @@ extern "C" void app_main(void)
             break;
         default:
             ESP_LOGE(TAG, "Could not start ISR service.");
-            attemptRollBack();
+            attemptRollback();
             break;
         }
         if (ret == ESP_OK || ret == ESP_ERR_INVALID_STATE)
         {
-            if (gpio_isr_handler_add((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, button_isr_handler, NULL) != ESP_OK)
+            if (gpio_isr_handler_add((gpio_num_t)CONFIG_BUTTON_IRQ_GPIO, onButtonIsr, NULL) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Could not add ISR handler for button to service");
-                attemptRollBack();
+                attemptRollback();
             }
         }
     }
@@ -710,9 +655,9 @@ extern "C" void app_main(void)
 #pragma endregion
 
 #pragma endregion
-    if (interface_board_st.internal_ST != BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE)
+    if (itfBoard.smState != BINOCAN_ITF_BOARD_ST_ITF_SM_ST_DEGRADED_CHOICE)
     {
-        interface_board_st.internal_ST = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_OK_CHOICE;
+        itfBoard.smState = BINOCAN_ITF_BOARD_ST_ITF_SM_ST_OK_CHOICE;
         if (firstBoot)
         {
             if (esp_ota_mark_app_valid_cancel_rollback() != ESP_OK)
@@ -729,14 +674,14 @@ extern "C" void app_main(void)
         ESP_LOGW(__func__, "Exit startup in degraded mode.");
 
 #ifdef CONFIG_ENABLE_RUNTIME_STATS_OUTPUT
-    xTaskCreate(print_system_stats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
+    xTaskCreate(printSystemStats, "RUNSTATS", 4096, NULL, 1, &print_runtime_stats_Hdl);
 #endif
 
-    while (!(LDB_ready && RDB_ready))
+    while (!(ldbReady && rdbReady))
     {
         vTaskDelay(pdMS_TO_TICKS(50));
     }
-    if (LDB_ready && RDB_ready && !animationDone)
+    if (ldbReady && rdbReady && !animationDone)
         sendAnimation();
 
     while (1)

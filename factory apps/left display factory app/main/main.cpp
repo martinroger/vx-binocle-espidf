@@ -5,6 +5,7 @@
 #include "freertos/task.h"
 #include "esp_system.h"
 #include "nvs_flash.h"
+#include "nvs_settings.hpp"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
@@ -263,15 +264,12 @@ static esp_err_t prevboot_get_handler(httpd_req_t *req)
 	const esp_partition_t *ota1Partition = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_1, "ota_1");
 	esp_ota_img_states_t ota0State, ota1State;
 
-	nvs_handle_t h;
-	nvs_open("storage", NVS_READONLY, &h);
 	// Defaulting to the factory app partition
 	int8_t prevBootID = -1;
-	esp_err_t nvs_err = nvs_get_i8(h, "lastPart", &prevBootID);
+	esp_err_t nvs_err = vx::nvs::readBootSlot(prevBootID);
 	if (nvs_err != ESP_OK)
-		ESP_LOGW(__func__, "Error reading lastPart : %s", esp_err_to_name(nvs_err));
+		ESP_LOGW(__func__, "Error reading the boot slot : %s", esp_err_to_name(nvs_err));
 
-	nvs_close(h);
 	// Prepare short buffers for the lastPartition and nextPartition
 	char lastPart[10];
 	char nextPart[10];

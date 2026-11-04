@@ -18,12 +18,12 @@ static int fader_step_delta = 0;
 static int fader_steps_remaining = 0;
 
 /// @brief Timer callback running in prvTimerTask (prio 1) to incrementally step backlight duty
-static void backlight_fader_timer_cb(TimerHandle_t xTimer)
+static void onBacklightFaderTimer(TimerHandle_t xTimer)
 {
     if (fader_steps_remaining <= 0 || current_fader_brightness == target_fader_brightness)
     {
         current_fader_brightness = target_fader_brightness;
-        if (display_board_st.displayHwReady)
+        if (displayBoard.displayHwReady)
         {
             display_hw_backlight_set((uint8_t)current_fader_brightness);
         }
@@ -43,7 +43,7 @@ static void backlight_fader_timer_cb(TimerHandle_t xTimer)
 
     current_fader_brightness = std::clamp(current_fader_brightness, 0, 100);
 
-    if (display_board_st.displayHwReady)
+    if (displayBoard.displayHwReady)
     {
         display_hw_backlight_set((uint8_t)current_fader_brightness);
     }
@@ -55,7 +55,7 @@ static void backlight_fader_timer_cb(TimerHandle_t xTimer)
 }
 
 /// @brief Initialize the FreeRTOS software timer for backlight fading
-inline void backlight_fader_init()
+inline void initBacklightFader()
 {
     if (backlight_fader_timer == NULL)
     {
@@ -64,7 +64,7 @@ inline void backlight_fader_init()
             pdMS_TO_TICKS(15),
             pdTRUE,
             NULL,
-            backlight_fader_timer_cb
+            onBacklightFaderTimer
         );
         if (backlight_fader_timer == NULL)
         {
@@ -74,13 +74,13 @@ inline void backlight_fader_init()
 }
 
 /// @brief Get the current in-flight or stable backlight brightness
-inline uint8_t get_current_backlight_brightness()
+inline uint8_t getBacklight()
 {
     return (uint8_t)std::clamp(current_fader_brightness, 0, 100);
 }
 
 /// @brief Set the initial tracking brightness without fading (e.g. at boot 0)
-inline void set_backlight_brightness_instant(uint8_t brightness)
+inline void setBacklightInstant(uint8_t brightness)
 {
     brightness = (uint8_t)std::clamp((int)brightness, 0, 100);
     if (backlight_fader_timer != NULL)
@@ -91,7 +91,7 @@ inline void set_backlight_brightness_instant(uint8_t brightness)
     target_fader_brightness = brightness;
     fader_steps_remaining = 0;
     fader_step_delta = 0;
-    if (display_board_st.displayHwReady)
+    if (displayBoard.displayHwReady)
     {
         display_hw_backlight_set(brightness);
     }
@@ -101,12 +101,12 @@ inline void set_backlight_brightness_instant(uint8_t brightness)
 /// @param target_brightness Target brightness percentage (0 - 100)
 /// @param duration_ms Total fade transition duration in milliseconds (default: 250)
 /// @param step_interval_ms Time between interpolation steps in milliseconds (default: 15)
-inline void set_backlight_brightness_smooth(uint8_t target_brightness, uint16_t duration_ms = 250, uint16_t step_interval_ms = 15)
+inline void setBacklightSmooth(uint8_t target_brightness, uint16_t duration_ms = 250, uint16_t step_interval_ms = 15)
 {
     target_brightness = (uint8_t)std::clamp((int)target_brightness, 0, 100);
     target_fader_brightness = target_brightness;
 
-    if (!display_board_st.displayHwReady)
+    if (!displayBoard.displayHwReady)
     {
         current_fader_brightness = target_brightness;
         return;
@@ -114,12 +114,12 @@ inline void set_backlight_brightness_smooth(uint8_t target_brightness, uint16_t 
 
     if (backlight_fader_timer == NULL)
     {
-        backlight_fader_init();
+        initBacklightFader();
     }
 
     if (duration_ms == 0 || step_interval_ms == 0 || current_fader_brightness == target_fader_brightness)
     {
-        set_backlight_brightness_instant(target_brightness);
+        setBacklightInstant(target_brightness);
         return;
     }
 

@@ -19,8 +19,8 @@ sequenceDiagram
     LDB->>LDB: Initialize LVGL & Display Panel
     RDB->>RDB: Initialize LVGL & Display Panel
     
-    LDB->>LDB: Initialize UI elements & Spawn updateUI_task (Core 1)
-    RDB->>RDB: Initialize UI elements & Spawn updateUI_task (Core 1)
+    LDB->>LDB: Initialize UI elements & Spawn updateUiTask (Core 1)
+    RDB->>RDB: Initialize UI elements & Spawn updateUiTask (Core 1)
 
     LDB->>LDB: Mark App Valid & Set State OK
     RDB->>RDB: Mark App Valid & Set State OK
@@ -33,8 +33,8 @@ sequenceDiagram
     ITF->>ITF: Suspend fast metrics & active hi/lo periodic tasks
     loop Central Startup Animation Sweep (Speed & RPM ramp, telltales ON)
         ITF->>CAN: Broadcast fullTellTales() [ITF_ACTIVE_HI_LO] & sendFastMetrics() [ITF_FAST_METRICS]
-        CAN-->>LDB: Ingest telemetry -> updateUI_task refreshes RPM arc & telltales
-        CAN-->>RDB: Ingest telemetry -> updateUI_task refreshes Speed arc & telltales
+        CAN-->>LDB: Ingest telemetry -> updateUiTask refreshes RPM arc & telltales
+        CAN-->>RDB: Ingest telemetry -> updateUiTask refreshes Speed arc & telltales
     end
     ITF->>ITF: Resume fast metrics & active hi/lo periodic tasks
 
@@ -43,8 +43,8 @@ sequenceDiagram
         ITF->>CAN: Broadcast ITF_SLOW_METRICS (500ms: Coolant, Fuel, Voltage)
         ITF->>CAN: Broadcast ITF_ACTIVE_HI_LO (200ms: Discrete telltales & switches)
         ITF->>CAN: Broadcast ITF_ODOMETER (250ms) / ITF_BOARD_ST (200ms) / ITF_BOARD_VERSION (1000ms)
-        CAN-->>LDB: Ingest CAN telemetry -> updateUI_task renders UI
-        CAN-->>RDB: Ingest CAN telemetry -> updateUI_task renders UI
+        CAN-->>LDB: Ingest CAN telemetry -> updateUiTask renders UI
+        CAN-->>RDB: Ingest CAN telemetry -> updateUiTask renders UI
     end
 ```
 
@@ -65,13 +65,13 @@ sequenceDiagram
     Note over CAN: Physical Cable Disconnection / Bus Error
     DSP->>DSP: Route watchdog timer expires (5x cycle time elapsed)
     DSP->>DSP: Handler TO callback marks CAN_RX_TimedOut = true
-    DSP->>DSP: updateUI_task illuminates telltales as failsafe indicator
+    DSP->>DSP: updateUiTask illuminates telltales as failsafe indicator
     
     Note over CAN: Bus Connection Restored
     ITF->>CAN: Resume CAN frame transmission
     CAN-->>DSP: Valid frame received by twai_daemon
     DSP->>DSP: Route timer reloaded & CAN_RX_TimedOut cleared
-    DSP->>DSP: updateUI_task restores normal gauge & telltale states
+    DSP->>DSP: updateUiTask restores normal gauge & telltale states
 ```
 
 ---
@@ -92,7 +92,7 @@ sequenceDiagram
     ITF->>CAN: Broadcast BINOCAN_ITF_ACTIVE_HI_LO (itf_over_temperature_tt = ON)
     CAN-->>LDB: Ingest frame -> overTemperatureOn = true
     
-    LDB->>LDB: updateUI_task illuminates over-temperature telltale icon
+    LDB->>LDB: updateUiTask illuminates over-temperature telltale icon
     opt Buzzer Enabled in Settings (overTemp_buzz == true)
         LDB->>BUZZ: display_hw_buzzer_set(true) (TCA9554 P7)
     end
@@ -102,7 +102,7 @@ sequenceDiagram
     ITF->>CAN: Broadcast BINOCAN_ITF_ACTIVE_HI_LO (itf_over_temperature_tt = OFF)
     CAN-->>LDB: Ingest frame -> overTemperatureOn = false
     LDB->>BUZZ: display_hw_buzzer_set(false) (TCA9554 P7)
-    LDB->>LDB: updateUI_task hides over-temperature telltale icon
+    LDB->>LDB: updateUiTask hides over-temperature telltale icon
 ```
 
 ---
@@ -118,7 +118,7 @@ sequenceDiagram
 
     Note over MASTER, DSP: ISO-TP First Frame (FF)
     MASTER->>CAN: UDS_REQ (0x10 + Total Image Size + Initial 2 Bytes)
-    CAN-->>DSP: OTAHandler parses First Frame (0x10)
+    CAN-->>DSP: handleOta parses First Frame (0x10)
     DSP->>DSP: esp_ota_begin(next_partition, image_size)
     DSP->>DSP: esp_ota_write() initial 2 bytes
     DSP->>CAN: UDS_RESP Flow Control (0x30, BlockSize, ST_min)
@@ -127,7 +127,7 @@ sequenceDiagram
     Note over MASTER, DSP: ISO-TP Consecutive Frames (CF)
     loop For each Consecutive Frame (CF: 0x20..0x2F with 7 data bytes)
         MASTER->>CAN: UDS_REQ (0x20 | SequenceNumber, 7 Bytes Chunk)
-        CAN-->>DSP: OTAHandler validates Sequence Number & esp_ota_write()
+        CAN-->>DSP: handleOta validates Sequence Number & esp_ota_write()
         DSP->>DSP: Update transfer progress (trip_km / fuelLevel_pc indicator)
         opt BlockCounter reached BlockSize
             DSP->>CAN: UDS_RESP Flow Control (0x30, BlockSize, ST_min)
@@ -159,7 +159,7 @@ sequenceDiagram
 
     Note over MASTER, DSP: Session 1 (Interrupted or Timed Out Transfer)
     MASTER->>CAN: UDS_REQ First Frame (0x10)
-    CAN-->>DSP: OTAHandler begins session (OTA_started = true)
+    CAN-->>DSP: handleOta begins session (OTA_started = true)
     DSP->>DSP: esp_ota_begin() (erasing flash sectors)
     opt Transfer Interrupted / Timeout on Sender
         MASTER->>MASTER: Timeout waiting for Flow Control (e.g. flash erase latency)
@@ -168,7 +168,7 @@ sequenceDiagram
 
     Note over MASTER, DSP: Session 2 (Operator Retries Flashing)
     MASTER->>CAN: UDS_REQ Fresh First Frame (0x10)
-    CAN-->>DSP: OTAHandler receives new First Frame while prior session active
+    CAN-->>DSP: handleOta receives new First Frame while prior session active
     DSP->>DSP: Detect active/stale session (OTA_started == true)
     DSP->>DSP: esp_ota_abort(ota_handle) prior session
     DSP->>DSP: reset_ota_state() & stop_ota_timer()
