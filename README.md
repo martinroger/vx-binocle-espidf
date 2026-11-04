@@ -172,5 +172,14 @@ Each preset keeps its `sdkconfig` in its build directory. After changing `sdkcon
 
 The display apps' `CMakeLists.txt` make `idf.py flash` write the app to `ota_0` and write a blank `otadata`, so the board still boots the factory app afterwards. Select the new image with `otatool.py switch_ota_partition --slot 0`, or switch partitions from the factory app.
 
+### Host tests
+
+`common/test` holds unit tests for the shared headers that build with the host compiler, no ESP-IDF needed. Run them from the repository root:
+
+```bash
+g++ -std=c++17 -Wall -Wextra -Werror -I common common/test/r39_compliance_test.cpp -o /tmp/r39_test && /tmp/r39_test
+g++ -std=c++17 -Wall -Wextra -Werror -I common -I common/test/stubs common/test/nvs_settings_test.cpp -o /tmp/nvs_test && /tmp/nvs_test
+```
+
 > [!TIP]
 > When modifying `Kconfig`, `Kconfig.projbuild`, or `sdkconfig.defaults`, always run a full clean build (`idf.py fullclean build` or pass `--clean` to `tools/build_main_apps.py` / `tools/build_deliveries.py`).

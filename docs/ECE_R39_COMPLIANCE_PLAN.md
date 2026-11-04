@@ -1,6 +1,6 @@
 # ECE R39 Speed Compliance Mode (Plan)
 
-Status: implemented and merged (#143), host test passes, validated on hardware 2026-11-02. The "Current state on `main`" section describes the code before this change. Decisions agreed (see [Decisions](#decisions)). Tracks issue #133.
+Status: implemented and merged (#143), host test passes, validated on hardware 2026-11-02. The "Current state on `main`" section describes the code before this change. Decisions agreed (see [Decisions](#decisions)). Tracks issue #133. Since #149 the three keys are `en`, `a_bp` and `b_ckph` in namespace `vx_r39` (see `common/nvs_keys.hpp`); the `storage` / `r39_*` names below are the original layout.
 
 ## Objective
 

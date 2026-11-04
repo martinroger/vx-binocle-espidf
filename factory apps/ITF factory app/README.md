@@ -7,7 +7,7 @@ The **ITF Factory App** provides a dedicated provisioning, calibration, and main
 - **Wi-Fi AP & mDNS**: Broadcasts `interface-board.local` (`ITF-XXXXXX` AP) for instant browser access.
 - **Gear Estimator Parameters**: Sub-tab of Setup & Calibration to edit, validate and store the `vx-gear-estimator` parameters (`vx_gear` NVS namespace) used by the interface board.
 - **ECE R39 Speed Compliance**: Sub-tab of Setup & Calibration to switch the compliance mode on or off and set the speed correction A (percent) and offset B (km/h) used by the interface board, with a preview and a live readout in IO & Bus Debug.
-- **NVS Provisioning & Calibration**: Auto-populates default constants if uninitialized; manages odometer/trip values, coolant overtemperature warning thresholds, low fuel threshold (`lo_fuel_thr`), fuel full resistance baseline (`fuel_full_r`), and fuel self-learning toggle (`fuel_learn_en`).
+- **NVS Provisioning & Calibration**: Auto-populates default constants if uninitialized; manages odometer/trip values, the coolant overtemperature warning threshold (`vx_coolant`/`hot_degc`), the low fuel threshold (`vx_fuel`/`low_pct`), the fuel full resistance baseline (`vx_fuel`/`full_ohm`) and the fuel self-learning toggle (`vx_fuel`/`learn_en`). Settings stored under their pre-`vx_*` names are copied to the new ones at boot.
 - **NVS Dynamic Inspection & Wipe**: Scans and displays all partitioned NVS keys/namespaces dynamically; provides safe full NVS storage wipe.
 - **Controlled Power-Down**: Gracefully turns off the 5V boost regulator prior to rebooting into the main application.
 - **OTA & Display Flashing**: Browser-based multipart OTA flashing for interface board partitions and segmented CAN flashing for Left/Right displays.

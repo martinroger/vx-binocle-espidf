@@ -108,3 +108,14 @@ The TWAI daemon broadcasts frames via zero-copy direct transmission. IDs and cyc
   - `DBG_ITF_ADC_raw` (`0x303`, 100 ms): Unfiltered supply rail voltages (3.3V $V_{dd}$ reference and 12V board rail).
   - `DBG_ITF_pulse_counts` (`0x304`, 100 ms): Cumulative monotonic pulse counts for RPM and vehicle speed signals.
   - `DBG_ITF_fuel` (`0x305`, 200 ms): Raw fuel sender voltage, unfiltered fuel percentage, active/learned $R_{full}$ baseline, and dynamic sender resistance ($\Omega$).
+
+---
+
+## 4. NVS Settings
+
+All namespaces and keys are declared in [`common/nvs_keys.hpp`](../common/nvs_keys.hpp); the full table with types and defaults is in the [ITF factory app TOO](../factory%20apps/ITF%20factory%20app/TOO.MD#2-nvs-calibration-schema--provisioning-flow).
+
+- **Default `nvs` partition**: `vx_fuel` (`learn_en`, `full_ohm`, `low_pct`), `vx_coolant` (`hot_degc`), `vx_r39` (`en`, `a_bp`, `b_ckph`) and `vx_gear` (gear estimator blob, owned by `vx-gear-estimator`). `loadCalibration()` reads them at boot with `vx::nvs::loadOrInit()`, which writes the default of a missing key (and of an out-of-range R39 key). A failure there calls `attemptRollback()`.
+- **`nvs_odo` partition**: namespace `storage`, keys `odometer_m` and `trip_m`. These names are frozen.
+- **Legacy names**: before the `vx_*` layout the settings sat in namespace `storage` of the default partition. `vx::nvs::migrateLegacyKeys()` runs before `loadCalibration()` and copies each old value to its new name when the new name is empty. Old entries are left in place for older images.
+- **Boot slot**: holding the button and full-beam inputs low for 1 s at power-up (escape sequence) records the running slot in `vx_sys`/`boot_slot` (and in the legacy `storage`/`lastPart` for older factory apps) with `vx::nvs::recordBootSlot()`, so the factory app knows which slot to return to.
