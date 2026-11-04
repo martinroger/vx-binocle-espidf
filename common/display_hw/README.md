@@ -33,6 +33,7 @@ All pins and bus speeds are macros in [`include/display_hw.h`](include/display_h
 - [`display_hw_buzzer_set()`](include/display_hw.h): buzzer on expander P7.
 - [`display_hw_lvgl_required_fbs()`](include/display_hw_lvgl.h), [`display_hw_lvgl_start()`](include/display_hw_lvgl.h): adapter init, display and touch registration, LVGL task start (tear mode `DOUBLE_DIRECT`, rotation 0).
 - [`display_hw_lvgl_lock()` / `display_hw_lvgl_unlock()`](include/display_hw_lvgl.h): recursive LVGL lock.
+- [`display_hw_lvgl_wait_frame()`](include/display_hw_lvgl.h): redraw the active screen and block until that frame is on the panel, used at boot to keep the backlight off until the UI is drawn.
 
 ## Configuration (`menuconfig` → Display hardware)
 

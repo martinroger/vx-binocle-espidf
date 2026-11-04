@@ -75,7 +75,8 @@ void app_main(void)
         display_hw_lvgl_unlock();
     }
 
-    // Backlight starts off; turn it on once the first frame is drawn
+    // Backlight starts off; turn it on once the first frame is on the panel
+    display_hw_lvgl_wait_frame(500);
     display_hw_backlight_set(80);
     display_hw_buzzer_set(false);
 }
@@ -85,6 +86,7 @@ Rules:
 
 - Call `display_hw_init()` then `display_hw_lvgl_start()` once, from `app_main`.
 - Wrap every LVGL call made outside the LVGL task in `display_hw_lvgl_lock()` / `display_hw_lvgl_unlock()`. LVGL event callbacks already run under the lock.
+- Call `display_hw_lvgl_wait_frame()` without holding the LVGL lock, otherwise the LVGL task cannot draw and the call times out.
 - Pass `display_hw_lvgl_required_fbs()` to `display_hw_init()` so the RGB panel allocates the framebuffers the adapter expects.
 
 ## Kconfig configuration matrix (`menuconfig` → Display hardware)

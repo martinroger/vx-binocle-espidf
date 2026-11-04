@@ -730,6 +730,12 @@ extern "C" void app_main()
         ESP_LOGI(__func__, "App image is valid.");
 
         forceUiRefresh();
+
+        // Keep the backlight off until a fully drawn frame is on the panel
+        constexpr int FIRST_FRAME_TIMEOUT_MS = 500;
+        if (!display_hw_lvgl_wait_frame(FIRST_FRAME_TIMEOUT_MS))
+            ESP_LOGW(__func__, "First frame not confirmed, turning the backlight on anyway.");
+
         if (displayBoard.themeLocked)
             switchTheme(!(displayBoard.themeLight), true, 400);
         if (displayBoard.themeLight)
